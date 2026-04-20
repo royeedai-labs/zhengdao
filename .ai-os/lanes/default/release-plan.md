@@ -8,9 +8,9 @@
 - [x] 当前代码主链路验证证据已存在：`npm test`、`npm run build`
 - [x] 项目原生静态校验证据已记录：`npm run build`
 - [x] 在线更新实现已接入并具备 GitHub Releases 兼容前提
-- [ ] 开源仓库核心文档与模板已补齐
-- [ ] 版本治理脚本与项目级 release skill 已补齐
-- [ ] Git 仓库已初始化并准备推送
+- [x] 开源仓库核心文档与模板已补齐
+- [x] 版本治理脚本与项目级 release skill 已补齐
+- [x] Git 仓库已初始化并准备推送
 - [ ] GitHub 远端仓库已创建
 - [ ] 首个 GitHub Release 已创建
 - [ ] macOS 签名 / 公证已完成
@@ -38,19 +38,19 @@
 
 ## 3. 发布步骤
 
-1. [AI 进行中] 重写仓库首页 README，明确当前能力、平台安装方式、应用内更新和开发说明
-2. [AI 待执行] 补齐开源治理文件与 issue / PR 模板
-3. [AI 待执行] 补 release 脚本与项目级 GitHub 发布 skill
-4. [AI 待执行] 初始化 Git 仓库，提交首版代码，创建 `v1.0.0` tag
-5. [AI 待执行] 通过 GitHub API 创建远端仓库并 push 默认分支
-6. [AI / GitHub Actions 待执行] 触发 Release 构建，确认 Release 中存在安装包、`latest.yml`、`latest-mac.yml`
-7. [需人工执行] 配置 macOS 签名 / notarization secrets，并在签名后验证 macOS 端自动更新
+1. [AI 已完成] 重写仓库首页 README，明确当前能力、平台安装方式、应用内更新和开发说明
+2. [AI 已完成] 补齐开源治理文件与 issue / PR 模板
+3. [AI 已完成] 补 release 脚本与项目级 GitHub 发布 skill
+4. [AI 已完成] 初始化 Git 仓库并提交首版代码到本地 `main`
+5. [AI 受阻] 通过 GitHub API 创建远端仓库并 push 默认分支；当前用户提供 token 返回 `401`
+6. [AI / GitHub Actions 待执行] 远端凭据恢复后，触发 Release 构建并确认 Release 中存在安装包、`latest.yml`、`latest-mac.yml`
+7. [需人工执行] 提供有效 GitHub token，并在签名后验证 macOS 端自动更新
 
 ## 4. 运行态验证
 
 - [x] `npm test` 通过
 - [x] `npm run build` 通过
-- [ ] `node scripts/release/prepare-release.mjs ... --dry-run` 通过
+- [x] `node scripts/release/prepare-release.mjs ... --dry-run` 通过
 - [ ] GitHub API 仓库创建成功
 - [ ] `git push` 成功
 - [ ] GitHub Release 首发成功
@@ -70,10 +70,10 @@
   - 在线更新基础链路与 GitHub Releases workflow 已接入
   - 正式安装包打包能力已验证
   - 本次开源首发与版本治理基线已落到工件
+  - 开源仓库文档、版本脚本、issue / PR 模板和项目级 release skill 已补齐
+  - 本地 Git 仓库已初始化并完成首个基线提交 `c52b72e`
 - AI 待完成：
-  - 仓库开源文档与模板
-  - 版本治理脚本和项目级 release skill
-  - Git 初始化、远端创建、首版推送和首个 Release
+  - 远端 GitHub 仓库创建、首版推送和首个 Release
 - 需人工执行：
   - 若当前 token 无效，提供一个具有 repo 创建 / push / release 权限的有效 GitHub token
   - 配置 macOS 签名与 notarization secrets

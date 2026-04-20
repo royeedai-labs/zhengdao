@@ -40,13 +40,15 @@ gates:
 
   - id: implementation-quality
     title: "实现质量门"
-    status: pending
+    status: completed
     checks:
       - "仓库文档、模板、LICENSE 和 package 元数据已补齐"
       - "版本治理脚本与项目级 release skill 已实现"
       - "项目原生静态校验已完成"
       - "最小 release 脚本验证已通过"
     evidence:
+      - "npm test"
+      - "npm run build"
       - "README.md"
       - "package.json"
       - "scripts/release/*"
@@ -76,7 +78,7 @@ gates:
 result:
   design_locked: passed
   logic_locked: passed
-  implementation_ready: pending
+  implementation_ready: passed
   delivery_ready: pending
   blockers:
     - "远端 GitHub 仓库创建与首版 release 仍依赖有效 token"

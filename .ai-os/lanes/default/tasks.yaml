@@ -84,7 +84,7 @@ tasks:
     title: "补齐开源仓库文档、模板、仓库元数据与发布说明"
     milestone: M2
     parent: null
-    status: in_progress
+    status: done
     owner: AI
     risk: medium
     priority: P0
@@ -139,7 +139,7 @@ tasks:
     title: "实现版本治理脚本与项目级 GitHub 发布 skill"
     milestone: M2
     parent: null
-    status: pending
+    status: done
     owner: AI
     risk: medium
     priority: P1
@@ -189,7 +189,7 @@ tasks:
     title: "初始化 Git 仓库、推送 GitHub 并发布首版"
     milestone: M3
     parent: null
-    status: pending
+    status: in_progress
     owner: AI
     risk: high
     priority: P0
