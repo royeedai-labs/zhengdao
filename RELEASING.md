@@ -69,8 +69,8 @@ npm run release:publish -- patch "简短发布摘要"
 
 ## 产物约定
 
-- Windows x64：`证道-<version>-x64-setup.exe`
-- macOS Apple Silicon：`证道-<version>-arm64.dmg`
+- Windows x64：`zhengdao-<version>-x64-setup.exe`
+- macOS Apple Silicon：`zhengdao-<version>-arm64.dmg`
 - 自动更新元数据：`latest.yml`、`latest-mac.yml`
 
 ## 发布后检查

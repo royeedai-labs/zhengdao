@@ -63,9 +63,9 @@
 
 正式安装包会发布在 GitHub Releases。常用下载建议如下：
 
-- Windows x64：`证道-<version>-x64-setup.exe`
-- Windows ARM64：`证道-<version>-arm64-setup.exe` 或等价 ARM64 安装包
-- macOS Apple Silicon：`证道-<version>-arm64.dmg`
+- Windows x64：`zhengdao-<version>-x64-setup.exe`
+- Windows ARM64：`zhengdao-<version>-arm64-setup.exe` 或等价 ARM64 安装包
+- macOS Apple Silicon：`zhengdao-<version>-arm64.dmg`
 
 如果你已经安装过正式版：
 

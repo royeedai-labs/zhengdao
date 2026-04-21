@@ -36,14 +36,14 @@ const config: Configuration = {
     : {}),
   mac: {
     icon: 'resources/icon.icns',
-    artifactName: '${productName}-${version}-${arch}.${ext}',
+    artifactName: 'zhengdao-${version}-${arch}.${ext}',
     target: ['dmg', 'zip'],
     category: 'public.app-category.productivity',
     darkModeSupport: true
   },
   win: {
     icon: 'resources/icon.ico',
-    artifactName: '${productName}-${version}-${arch}-setup.${ext}',
+    artifactName: 'zhengdao-${version}-${arch}-setup.${ext}',
     target: ['nsis']
   },
   nsis: {
@@ -57,7 +57,7 @@ const config: Configuration = {
   },
   linux: {
     icon: 'resources/icon.png',
-    artifactName: '${productName}-${version}.${ext}',
+    artifactName: 'zhengdao-${version}.${ext}',
     target: ['AppImage'],
     category: 'Office'
   }
