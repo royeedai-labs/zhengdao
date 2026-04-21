@@ -29,16 +29,28 @@ function expectCommandBefore(commands, beforeCommand, afterCommand) {
 }
 
 describe('release workflow native module ABI handling', () => {
-  for (const jobName of ['build-macos', 'build-windows']) {
-    it(`${jobName} restores Electron ABI before packaging`, () => {
-      const commands = extractJobCommands(jobName)
+  const jobs = [
+    {
+      name: 'build-macos',
+      rebuildCommand: 'node scripts/release/rebuild-electron-native.mjs arm64'
+    },
+    {
+      name: 'build-windows',
+      rebuildCommand: 'node scripts/release/rebuild-electron-native.mjs x64'
+    }
+  ]
+
+  for (const { name, rebuildCommand } of jobs) {
+    it(`${name} restores and verifies Electron ABI before packaging`, () => {
+      const commands = extractJobCommands(name)
 
       expectCommandBefore(commands, 'npm rebuild better-sqlite3', 'npm test')
       expectCommandBefore(commands, 'npm test', 'npm run build')
-      expectCommandBefore(commands, 'npm run build', 'npx electron-builder install-app-deps')
+      expectCommandBefore(commands, 'npm run build', rebuildCommand)
+      expectCommandBefore(commands, rebuildCommand, 'node scripts/release/verify-electron-native.mjs')
       expectCommandBefore(
         commands,
-        'npx electron-builder install-app-deps',
+        'node scripts/release/verify-electron-native.mjs',
         'npx electron-builder --config electron-builder.config.ts'
       )
     })

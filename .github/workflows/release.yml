@@ -28,7 +28,8 @@ jobs:
       - run: npm rebuild better-sqlite3
       - run: npm test
       - run: npm run build
-      - run: npx electron-builder install-app-deps
+      - run: node scripts/release/rebuild-electron-native.mjs arm64
+      - run: node scripts/release/verify-electron-native.mjs
       - run: npx electron-builder --config electron-builder.config.ts --mac dmg zip --publish always
 
   build-windows:
@@ -50,5 +51,6 @@ jobs:
       - run: npm rebuild better-sqlite3
       - run: npm test
       - run: npm run build
-      - run: npx electron-builder install-app-deps
+      - run: node scripts/release/rebuild-electron-native.mjs x64
+      - run: node scripts/release/verify-electron-native.mjs
       - run: npx electron-builder --config electron-builder.config.ts --win nsis --x64 --publish always
