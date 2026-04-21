@@ -25,6 +25,9 @@ npm run build
   - `APPLE_APP_SPECIFIC_PASSWORD`
   - `APPLE_TEAM_ID`
 
+当前 GitHub Actions 默认设置 `CSC_IDENTITY_AUTO_DISCOVERY=false`，用于产出未签名的公开测试包。
+配置完上述签名 / 公证凭据后，应再调整 release workflow 启用签名链路。
+
 ## 常用命令
 
 ### 仅准备版本号与 changelog
