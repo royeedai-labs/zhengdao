@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.2.5 - 2026-04-23
+
+### Release
+
+- Publish an AI assistant hardening and in-app update experience patch after `v1.2.4`.
+
+### Added
+
+- Add a global “应用设置 / 关于” modal that shows update metadata, release notes, download progress and install actions from both bookshelf and workspace.
+- Add provider status probing for Gemini API, OpenAI-compatible, Ollama and custom AI accounts alongside the existing Gemini CLI login/status flow.
+
+### Changed
+
+- Change packaged-app updates from automatic download to automatic check plus user-triggered download and install.
+- Route active AI entry points through the resolved global account chain so migrated accounts work consistently across assistant, summary, inline completion and analysis flows.
+- Make `smart_minimal` AI context include only mentioned characters, foreshadowings and plot nodes, while manual context chips can be explicitly selected.
+
+### Fixed
+
+- Allow users to stop in-flight AI generation without surfacing a failure state, while preserving received partial output.
+- Add install watchdog recovery so update install attempts can return to a retryable ready state if the app does not quit.
+- Replace the old title-bar-only update action with a reusable prompt and settings entry point.
+
+### Docs
+
+- Document the AI configuration unification and update experience redesign lanes, including release risks and regression guards.
+- Update README, SUPPORT and in-app help text for the new manual update flow.
+
 ## v1.2.4 - 2026-04-23
 
 ### Release
