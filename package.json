@@ -4,7 +4,7 @@
   "productName": "证道",
   "description": "证道 - 沉浸式桌面端网文创作软件",
   "author": "royeedai",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "homepage": "https://github.com/royeedai/zhengdao",
   "bugs": {
     "url": "https://github.com/royeedai/zhengdao/issues"
@@ -30,7 +30,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "engines": {
-    "node": ">=18",
+    "node": ">=20",
     "npm": ">=9"
   },
   "keywords": [
@@ -45,6 +45,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@google/gemini-cli": "0.38.2",
     "@tiptap/core": "^2.11.0",
     "@tiptap/extension-history": "^2.11.0",
     "@tiptap/extension-mention": "^2.11.0",

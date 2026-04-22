@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { AiConfig } from '@/utils/ai'
-import { aiComplete } from '@/utils/ai'
+import { aiComplete, isAiConfigReady } from '@/utils/ai'
 
 export const inlineCompleteKey = new PluginKey<InlineCompletePluginState>('inlineComplete')
 
@@ -161,7 +161,7 @@ export function createInlineCompleteExtension(
                   debounceTimer = null
                   void (async () => {
                     const cfg = getConfig()
-                    if (!cfg?.ai_api_key || !cfg.ai_api_endpoint) return
+                    if (!isAiConfigReady(cfg)) return
 
                     const aiCfg: AiConfig = {
                       ai_provider: cfg.ai_provider,

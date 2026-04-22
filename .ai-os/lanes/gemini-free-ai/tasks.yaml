@@ -1,0 +1,90 @@
+version: 1
+baseline_id: "CR-20260421-212847-gemini-free-ai"
+scope:
+  mode: "change"
+  focus: "gemini-free-ai"
+  quality_tier: "high-risk"
+
+tasks:
+  - id: TASK-AI-GEMINI-001
+    title: "同步 Gemini 双通道变更基线"
+    status: done
+    owner: AI
+    priority: P1
+    risk: high
+    requirement_refs: ["REQ-GEMINI-001", "REQ-GEMINI-002", "REQ-GEMINI-003", "REQ-GEMINI-004", "REQ-GEMINI-005"]
+    acceptance_refs: ["AC-GEMINI-001", "AC-GEMINI-002", "AC-GEMINI-003", "AC-GEMINI-004", "AC-GEMINI-005"]
+    outputs: ["MISSION.md", "baseline-log/CR-20260421-212847-gemini-free-ai.md", "specs/gemini-free-ai.spec.md", "acceptance.yaml", "risk-register.md"]
+    verification_required: ["artifact-review"]
+
+  - id: TASK-AI-GEMINI-002
+    title: "以失败测试锁定 provider routing 与配置校验"
+    status: done
+    owner: AI
+    priority: P0
+    risk: medium
+    requirement_refs: ["REQ-GEMINI-001", "REQ-GEMINI-002", "REQ-GEMINI-005"]
+    acceptance_refs: ["AC-GEMINI-001", "AC-GEMINI-005"]
+    outputs: ["src/renderer/src/utils/ai/__tests__/provider-routing.test.ts"]
+    verification_required: ["test-red", "test-green"]
+    evidence:
+      - "RED: npx vitest run src/renderer/src/utils/ai/__tests__/provider-routing.test.ts src/main/ai/__tests__/gemini-cli-service.test.ts failed with missing CLI service and old OpenAI-only config guard"
+      - "GREEN: focused vitest 2 files / 7 tests passed"
+
+  - id: TASK-AI-GEMINI-003
+    title: "实现 provider dispatcher 与 Gemini REST 接入"
+    status: done
+    owner: AI
+    priority: P0
+    risk: medium
+    requirement_refs: ["REQ-GEMINI-001", "REQ-GEMINI-002"]
+    acceptance_refs: ["AC-GEMINI-001"]
+    outputs: ["src/renderer/src/utils/ai/index.ts", "src/renderer/src/utils/ai/types.ts", "src/renderer/src/utils/ai/gemini-adapter.ts"]
+    verification_required: ["npm test", "npm run build"]
+    evidence:
+      - "npm test: 16 files / 52 tests passed"
+      - "npm run build: electron-vite main/preload/renderer build passed"
+
+  - id: TASK-AI-GEMINI-004
+    title: "实现 Gemini CLI 主进程服务与 IPC"
+    status: done
+    owner: AI
+    priority: P0
+    risk: high
+    approval_required: "high-risk-shell-boundary"
+    requirement_refs: ["REQ-GEMINI-002", "REQ-GEMINI-004", "REQ-GEMINI-005"]
+    acceptance_refs: ["AC-GEMINI-002", "AC-GEMINI-004", "AC-GEMINI-005"]
+    outputs: ["src/main/ai/gemini-cli-service.ts", "src/main/ipc-handlers.ts", "src/preload/index.ts"]
+    verification_required: ["test-red", "test-green", "security-review"]
+    evidence:
+      - "src/main/ai/__tests__/gemini-cli-service.test.ts passed"
+      - "security-review.md"
+
+  - id: TASK-AI-GEMINI-005
+    title: "更新项目设置 UI 与帮助文案"
+    status: done
+    owner: AI
+    priority: P1
+    risk: medium
+    requirement_refs: ["REQ-GEMINI-003"]
+    acceptance_refs: ["AC-GEMINI-003"]
+    outputs: ["src/renderer/src/components/modals/ProjectSettingsModal.tsx", "src/renderer/src/components/modals/HelpModal.tsx"]
+    verification_required: ["npm run build"]
+    evidence:
+      - "npm run build passed"
+
+  - id: TASK-AI-GEMINI-006
+    title: "新增 Gemini CLI 依赖与打包配置"
+    status: done
+    owner: AI
+    priority: P1
+    risk: high
+    requirement_refs: ["REQ-GEMINI-004"]
+    acceptance_refs: ["AC-GEMINI-004"]
+    outputs: ["package.json", "package-lock.json", "electron-builder.config.ts"]
+    verification_required: ["npm test", "npm run build", "package-smoke"]
+    evidence:
+      - "npm ls @google/gemini-cli --depth=0 -> @google/gemini-cli@0.38.2"
+      - "macOS dir package smoke passed"
+      - "packaged CLI version smoke output: 0.38.2"
+      - "Windows x64 cross package smoke blocked on macOS by node-pty native cross-compilation"

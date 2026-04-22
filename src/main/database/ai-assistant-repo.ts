@@ -1,0 +1,422 @@
+import { getDb } from './connection'
+
+export type AiDraftStatus = 'pending' | 'applied' | 'dismissed'
+
+const DEFAULT_PROFILE = {
+  style_guide: '',
+  genre_rules: '',
+  content_boundaries: '',
+  asset_rules: '',
+  rhythm_rules: '',
+  context_policy: 'smart_minimal'
+}
+
+function parseJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+function stringify(value: unknown): string {
+  return JSON.stringify(value ?? {})
+}
+
+function upsertAppState(key: string, value: string): void {
+  const db = getDb()
+  db.prepare(
+    `INSERT INTO app_state (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(key, value)
+}
+
+function getAppState(key: string): string {
+  const db = getDb()
+  const row = db.prepare('SELECT value FROM app_state WHERE key = ?').get(key) as { value?: string } | undefined
+  return row?.value || ''
+}
+
+function deleteAppState(key: string): void {
+  getDb().prepare('DELETE FROM app_state WHERE key = ?').run(key)
+}
+
+function resolveCredential(ref: string): string {
+  if (!ref) return ''
+  if (ref.startsWith('legacy-project-config:')) {
+    const bookId = Number(ref.slice('legacy-project-config:'.length))
+    if (!Number.isFinite(bookId)) return ''
+    const row = getDb().prepare('SELECT ai_api_key FROM project_config WHERE book_id = ?').get(bookId) as
+      | { ai_api_key?: string }
+      | undefined
+    return row?.ai_api_key || ''
+  }
+  if (ref.startsWith('app-state:')) {
+    return getAppState(ref.slice('app-state:'.length))
+  }
+  return ''
+}
+
+export function getAiAccounts() {
+  const db = getDb()
+  return db
+    .prepare(
+      `SELECT
+        id,
+        name,
+        provider,
+        api_endpoint,
+        model,
+        status,
+        is_default,
+        created_at,
+        updated_at,
+        CASE WHEN credential_ref <> '' THEN 1 ELSE 0 END AS has_secret
+       FROM ai_accounts
+       ORDER BY is_default DESC, id`
+    )
+    .all()
+}
+
+export function saveAiAccount(data: {
+  id?: number | null
+  name: string
+  provider: string
+  api_endpoint?: string
+  model?: string
+  api_key?: string
+  is_default?: number | boolean
+}) {
+  const db = getDb()
+  const isDefault = data.is_default ? 1 : 0
+  if (isDefault) db.prepare('UPDATE ai_accounts SET is_default = 0').run()
+
+  if (data.id) {
+    const existing = db.prepare('SELECT credential_ref FROM ai_accounts WHERE id = ?').get(data.id) as
+      | { credential_ref: string }
+      | undefined
+    const credentialRef = data.api_key
+      ? `app-state:ai_account_secret:${data.id}`
+      : existing?.credential_ref || ''
+    db.prepare(
+      `UPDATE ai_accounts SET
+        name = ?, provider = ?, api_endpoint = ?, model = ?, credential_ref = ?,
+        is_default = ?, updated_at = datetime('now','localtime')
+       WHERE id = ?`
+    ).run(
+      data.name.trim() || 'AI 账号',
+      data.provider || 'openai',
+      data.api_endpoint || '',
+      data.model || '',
+      credentialRef,
+      isDefault,
+      data.id
+    )
+    if (data.api_key) upsertAppState(`ai_account_secret:${data.id}`, data.api_key)
+    return db.prepare('SELECT * FROM ai_accounts WHERE id = ?').get(data.id)
+  }
+
+  const result = db
+    .prepare(
+      `INSERT INTO ai_accounts (name, provider, api_endpoint, model, credential_ref, is_default, status)
+       VALUES (?, ?, ?, ?, '', ?, 'unknown')`
+    )
+    .run(data.name.trim() || 'AI 账号', data.provider || 'openai', data.api_endpoint || '', data.model || '', isDefault)
+  const id = Number(result.lastInsertRowid)
+  const credentialRef = data.api_key ? `app-state:ai_account_secret:${id}` : ''
+  if (credentialRef) {
+    upsertAppState(`ai_account_secret:${id}`, data.api_key || '')
+    db.prepare('UPDATE ai_accounts SET credential_ref = ? WHERE id = ?').run(credentialRef, id)
+  }
+  return db.prepare('SELECT * FROM ai_accounts WHERE id = ?').get(id)
+}
+
+export function deleteAiAccount(id: number) {
+  const db = getDb()
+  const existing = db.prepare('SELECT credential_ref FROM ai_accounts WHERE id = ?').get(id) as
+    | { credential_ref?: string }
+    | undefined
+  const credentialRef = existing?.credential_ref || ''
+  if (credentialRef.startsWith('app-state:')) {
+    deleteAppState(credentialRef.slice('app-state:'.length))
+  }
+  db.prepare('UPDATE ai_work_profiles SET default_account_id = NULL WHERE default_account_id = ?').run(id)
+  db.prepare('DELETE FROM ai_accounts WHERE id = ?').run(id)
+}
+
+export function getAiSkillTemplates() {
+  return getDb().prepare('SELECT * FROM ai_skill_templates ORDER BY sort_order, key').all()
+}
+
+export function updateAiSkillTemplate(key: string, updates: Record<string, unknown>) {
+  const allowed = [
+    'name',
+    'description',
+    'system_prompt',
+    'user_prompt_template',
+    'context_policy',
+    'output_contract',
+    'enabled_surfaces'
+  ]
+  const fields: string[] = []
+  const values: unknown[] = []
+  for (const field of allowed) {
+    if (field in updates) {
+      fields.push(`${field} = ?`)
+      values.push(updates[field] ?? '')
+    }
+  }
+  if (fields.length === 0) return getDb().prepare('SELECT * FROM ai_skill_templates WHERE key = ?').get(key)
+  fields.push("updated_at = datetime('now','localtime')")
+  values.push(key)
+  getDb().prepare(`UPDATE ai_skill_templates SET ${fields.join(', ')} WHERE key = ?`).run(...values)
+  return getDb().prepare('SELECT * FROM ai_skill_templates WHERE key = ?').get(key)
+}
+
+export function getAiWorkProfile(bookId: number) {
+  const db = getDb()
+  let profile = db.prepare('SELECT * FROM ai_work_profiles WHERE book_id = ?').get(bookId)
+  if (!profile) {
+    db.prepare(
+      `INSERT INTO ai_work_profiles (
+        book_id, default_account_id, style_guide, genre_rules, content_boundaries,
+        asset_rules, rhythm_rules, context_policy
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      bookId,
+      null,
+      DEFAULT_PROFILE.style_guide,
+      DEFAULT_PROFILE.genre_rules,
+      DEFAULT_PROFILE.content_boundaries,
+      DEFAULT_PROFILE.asset_rules,
+      DEFAULT_PROFILE.rhythm_rules,
+      DEFAULT_PROFILE.context_policy
+    )
+    profile = db.prepare('SELECT * FROM ai_work_profiles WHERE book_id = ?').get(bookId)
+  }
+  return profile
+}
+
+export function saveAiWorkProfile(bookId: number, updates: Record<string, unknown>) {
+  getAiWorkProfile(bookId)
+  const allowed = [
+    'default_account_id',
+    'style_guide',
+    'genre_rules',
+    'content_boundaries',
+    'asset_rules',
+    'rhythm_rules',
+    'context_policy'
+  ]
+  const fields: string[] = []
+  const values: unknown[] = []
+  for (const field of allowed) {
+    if (field in updates) {
+      fields.push(`${field} = ?`)
+      values.push(updates[field] ?? (field === 'context_policy' ? 'smart_minimal' : ''))
+    }
+  }
+  if (fields.length > 0) {
+    fields.push("updated_at = datetime('now','localtime')")
+    values.push(bookId)
+    getDb().prepare(`UPDATE ai_work_profiles SET ${fields.join(', ')} WHERE book_id = ?`).run(...values)
+  }
+  return getAiWorkProfile(bookId)
+}
+
+export function getAiSkillOverrides(bookId: number) {
+  return getDb().prepare('SELECT * FROM ai_skill_overrides WHERE book_id = ? ORDER BY skill_key').all(bookId)
+}
+
+export function upsertAiSkillOverride(bookId: number, skillKey: string, updates: Record<string, unknown>) {
+  const payload = {
+    name: String(updates.name || ''),
+    description: String(updates.description || ''),
+    system_prompt: String(updates.system_prompt || ''),
+    user_prompt_template: String(updates.user_prompt_template || ''),
+    context_policy: String(updates.context_policy || ''),
+    output_contract: String(updates.output_contract || ''),
+    enabled_surfaces: String(updates.enabled_surfaces || '')
+  }
+  getDb()
+    .prepare(
+      `INSERT INTO ai_skill_overrides (
+        book_id, skill_key, name, description, system_prompt, user_prompt_template,
+        context_policy, output_contract, enabled_surfaces
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(book_id, skill_key) DO UPDATE SET
+        name = excluded.name,
+        description = excluded.description,
+        system_prompt = excluded.system_prompt,
+        user_prompt_template = excluded.user_prompt_template,
+        context_policy = excluded.context_policy,
+        output_contract = excluded.output_contract,
+        enabled_surfaces = excluded.enabled_surfaces,
+        updated_at = datetime('now','localtime')`
+    )
+    .run(
+      bookId,
+      skillKey,
+      payload.name,
+      payload.description,
+      payload.system_prompt,
+      payload.user_prompt_template,
+      payload.context_policy,
+      payload.output_contract,
+      payload.enabled_surfaces
+    )
+  return getDb()
+    .prepare('SELECT * FROM ai_skill_overrides WHERE book_id = ? AND skill_key = ?')
+    .get(bookId, skillKey)
+}
+
+export function deleteAiSkillOverride(bookId: number, skillKey: string) {
+  getDb().prepare('DELETE FROM ai_skill_overrides WHERE book_id = ? AND skill_key = ?').run(bookId, skillKey)
+}
+
+export function getOrCreateAiConversation(bookId: number) {
+  const db = getDb()
+  let row = db.prepare('SELECT * FROM ai_conversations WHERE book_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1').get(bookId)
+  if (!row) {
+    row = createAiConversation(bookId)
+  }
+  return row
+}
+
+export function createAiConversation(bookId: number) {
+  const db = getDb()
+  const result = db.prepare('INSERT INTO ai_conversations (book_id, title) VALUES (?, ?)').run(bookId, 'AI 对话')
+  return db.prepare('SELECT * FROM ai_conversations WHERE id = ?').get(result.lastInsertRowid)
+}
+
+export function getAiConversations(bookId: number) {
+  return getDb()
+    .prepare(
+      `SELECT
+        conversation.*,
+        COUNT(message.id) AS message_count
+       FROM ai_conversations conversation
+       LEFT JOIN ai_messages message ON message.conversation_id = conversation.id
+       WHERE conversation.book_id = ?
+       GROUP BY conversation.id
+       ORDER BY conversation.updated_at DESC, conversation.id DESC`
+    )
+    .all(bookId)
+}
+
+export function clearAiConversation(conversationId: number) {
+  const db = getDb()
+  const tx = db.transaction(() => {
+    db.prepare("DELETE FROM ai_drafts WHERE conversation_id = ? AND status = 'pending'").run(conversationId)
+    db.prepare('DELETE FROM ai_messages WHERE conversation_id = ?').run(conversationId)
+    db.prepare("UPDATE ai_conversations SET updated_at = datetime('now','localtime') WHERE id = ?").run(conversationId)
+  })
+  tx()
+}
+
+export function deleteAiConversation(conversationId: number) {
+  const db = getDb()
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM ai_drafts WHERE conversation_id = ?').run(conversationId)
+    db.prepare('DELETE FROM ai_messages WHERE conversation_id = ?').run(conversationId)
+    db.prepare('DELETE FROM ai_conversations WHERE id = ?').run(conversationId)
+  })
+  tx()
+}
+
+export function getAiMessages(conversationId: number) {
+  return getDb()
+    .prepare('SELECT * FROM ai_messages WHERE conversation_id = ? ORDER BY created_at, id')
+    .all(conversationId)
+    .map((row: any) => ({ ...row, metadata: parseJson(row.metadata, {}) }))
+}
+
+export function addAiMessage(conversationId: number, role: 'user' | 'assistant' | 'system', content: string, metadata?: unknown) {
+  const db = getDb()
+  const result = db
+    .prepare('INSERT INTO ai_messages (conversation_id, role, content, metadata) VALUES (?, ?, ?, ?)')
+    .run(conversationId, role, content, stringify(metadata))
+  db.prepare("UPDATE ai_conversations SET updated_at = datetime('now','localtime') WHERE id = ?").run(conversationId)
+  return db.prepare('SELECT * FROM ai_messages WHERE id = ?').get(result.lastInsertRowid)
+}
+
+export function getAiDrafts(
+  bookId: number,
+  status: AiDraftStatus | 'all' = 'pending',
+  conversationId?: number | null
+) {
+  const filters = ['book_id = ?']
+  const args: Array<number | string> = [bookId]
+  if (status !== 'all') {
+    filters.push('status = ?')
+    args.push(status)
+  }
+  if (conversationId != null) {
+    filters.push('conversation_id = ?')
+    args.push(conversationId)
+  }
+  return getDb()
+    .prepare(`SELECT * FROM ai_drafts WHERE ${filters.join(' AND ')} ORDER BY created_at DESC, id DESC`)
+    .all(...args)
+    .map((row: any) => ({ ...row, payload: parseJson(row.payload, {}) }))
+}
+
+export function createAiDraft(data: {
+  book_id: number
+  conversation_id?: number | null
+  message_id?: number | null
+  kind: string
+  title?: string
+  payload: unknown
+  target_ref?: string
+}) {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO ai_drafts (book_id, conversation_id, message_id, kind, title, payload, target_ref)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      data.book_id,
+      data.conversation_id ?? null,
+      data.message_id ?? null,
+      data.kind,
+      data.title || '',
+      stringify(data.payload),
+      data.target_ref || ''
+    )
+  const row = getDb().prepare('SELECT * FROM ai_drafts WHERE id = ?').get(result.lastInsertRowid) as any
+  return { ...row, payload: parseJson(row.payload, {}) }
+}
+
+export function setAiDraftStatus(id: number, status: AiDraftStatus) {
+  getDb()
+    .prepare("UPDATE ai_drafts SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?")
+    .run(status, id)
+}
+
+export function getResolvedAiConfigForBook(bookId: number) {
+  const db = getDb()
+  const profile = getAiWorkProfile(bookId) as { default_account_id?: number | null }
+  const account =
+    profile.default_account_id != null
+      ? (db.prepare('SELECT * FROM ai_accounts WHERE id = ?').get(profile.default_account_id) as any)
+      : (db.prepare('SELECT * FROM ai_accounts ORDER BY is_default DESC, id LIMIT 1').get() as any)
+
+  if (account) {
+    return {
+      ai_provider: account.provider || 'openai',
+      ai_api_key: resolveCredential(account.credential_ref || ''),
+      ai_api_endpoint: account.api_endpoint || '',
+      ai_model: account.model || ''
+    }
+  }
+
+  const legacy = db.prepare('SELECT * FROM project_config WHERE book_id = ?').get(bookId) as any
+  return {
+    ai_provider: legacy?.ai_provider || 'openai',
+    ai_api_key: legacy?.ai_api_key || '',
+    ai_api_endpoint: legacy?.ai_api_endpoint || '',
+    ai_model: legacy?.ai_model || ''
+  }
+}

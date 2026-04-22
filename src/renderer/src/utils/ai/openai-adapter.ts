@@ -20,7 +20,8 @@ export class OpenAIAdapter implements AiProviderAdapter {
     systemPrompt: string,
     userPrompt: string,
     maxTokens = 500,
-    temperature = 0.8
+    temperature = 0.8,
+    opts?: { signal?: AbortSignal }
   ): Promise<AiResponse> {
     const c = toOpenAIConfig(config)
     if (!c.ai_api_key?.trim()) {
@@ -42,7 +43,8 @@ export class OpenAIAdapter implements AiProviderAdapter {
           ],
           max_tokens: maxTokens,
           temperature
-        })
+        }),
+        signal: opts?.signal
       })
 
       if (!response.ok) {
@@ -70,7 +72,8 @@ export class OpenAIAdapter implements AiProviderAdapter {
     userPrompt: string,
     callbacks: AiStreamCallbacks,
     maxTokens = 500,
-    temperature = 0.8
+    temperature = 0.8,
+    opts?: { signal?: AbortSignal }
   ): Promise<void> {
     const c = toOpenAIConfig(config)
     if (!c.ai_api_key?.trim()) {
@@ -94,7 +97,8 @@ export class OpenAIAdapter implements AiProviderAdapter {
           max_tokens: maxTokens,
           temperature,
           stream: true
-        })
+        }),
+        signal: opts?.signal
       })
 
       if (!response.ok) {

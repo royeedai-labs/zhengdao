@@ -292,7 +292,11 @@ const HELP_SECTIONS: Section[] = [
     items: [
       {
         q: '如何配置多个 AI Provider？',
-        a: '打开「项目设置 → AI 配置」，可选择 OpenAI 兼容、Google Gemini 或本地 Ollama，分别填写 API Key、Endpoint 与模型名。'
+        a: '打开「AI 能力与作品配置」，在“全局账号”里管理 OpenAI 兼容、Gemini API Key、Gemini CLI（Google 登录）或本地 Ollama；作品级提示词、上下文和禁区在同一配置中心管理。'
+      },
+      {
+        q: 'Gemini 网页会员能直接当 API Key 免费用吗？',
+        a: '不能。Gemini API Key 使用 AI Studio / Gemini API 的免费层与计费体系；Google AI Pro / Ultra 账号权益应优先走 Gemini CLI 的 Google 登录路线。'
       },
       {
         q: 'AI 续写与行内补全有什么区别？',

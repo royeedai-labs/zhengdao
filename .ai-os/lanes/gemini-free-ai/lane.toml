@@ -1,0 +1,6 @@
+id = "gemini-free-ai"
+title = "Gemini 免费使用双通道整合"
+status = "active"
+baseline_id = "CR-20260421-212847-gemini-free-ai"
+quality_tier = "high-risk"
+risk_tier = "high"

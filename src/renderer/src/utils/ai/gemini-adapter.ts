@@ -42,7 +42,8 @@ export class GeminiAdapter implements AiProviderAdapter {
     systemPrompt: string,
     userPrompt: string,
     maxTokens = 500,
-    temperature = 0.8
+    temperature = 0.8,
+    opts?: { signal?: AbortSignal }
   ): Promise<AiResponse> {
     if (!config.ai_api_key?.trim()) {
       return { content: '', error: '请先在项目设置中配置 AI 助手 API' }
@@ -62,7 +63,8 @@ export class GeminiAdapter implements AiProviderAdapter {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: opts?.signal
       })
 
       if (!response.ok) {
@@ -87,7 +89,8 @@ export class GeminiAdapter implements AiProviderAdapter {
     userPrompt: string,
     callbacks: AiStreamCallbacks,
     maxTokens = 500,
-    temperature = 0.8
+    temperature = 0.8,
+    opts?: { signal?: AbortSignal }
   ): Promise<void> {
     if (!config.ai_api_key?.trim()) {
       callbacks.onError('请先在项目设置中配置 AI 助手 API')
@@ -108,7 +111,8 @@ export class GeminiAdapter implements AiProviderAdapter {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: opts?.signal
       })
 
       if (!response.ok) {

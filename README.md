@@ -137,4 +137,4 @@ npm run release:publish -- patch "简短发布摘要"
 
 ## 许可
 
-本项目采用 [MIT License](./LICENSE)。
+本项目采用 [GNU Affero General Public License v3.0](./LICENSE)（`AGPL-3.0-only`，强 copyleft 开源协议）。

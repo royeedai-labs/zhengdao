@@ -4,7 +4,7 @@ import { useUIStore } from '@/stores/ui-store'
 import { useConfigStore } from '@/stores/config-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useToastStore } from '@/stores/toast-store'
-import { aiAnalyzeStyle } from '@/utils/ai'
+import { aiAnalyzeStyle, isAiConfigReady } from '@/utils/ai'
 
 const METRIC_LABELS = [
   '句长均衡度',
@@ -78,7 +78,7 @@ export default function StyleAnalysisModal() {
 
   const runAnalyze = useCallback(async () => {
     const cfg = useConfigStore.getState().config
-    if (!cfg?.ai_api_key || !cfg.ai_api_endpoint) {
+    if (!isAiConfigReady(cfg)) {
       useToastStore.getState().addToast('warning', '请先在项目设置中配置 AI')
       return
     }

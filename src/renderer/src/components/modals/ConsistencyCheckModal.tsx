@@ -5,7 +5,7 @@ import { useCharacterStore } from '@/stores/character-store'
 import { useBookStore } from '@/stores/book-store'
 import { useConfigStore } from '@/stores/config-store'
 import { useToastStore } from '@/stores/toast-store'
-import { aiComplete } from '@/utils/ai'
+import { aiComplete, isAiConfigReady } from '@/utils/ai'
 import type { Character } from '@/types'
 
 function stripHtml(html: string): string {
@@ -35,7 +35,7 @@ export default function ConsistencyCheckModal() {
     if (!character) return
 
     const config = useConfigStore.getState().config
-    if (!config?.ai_api_key || !config.ai_api_endpoint) {
+    if (!isAiConfigReady(config)) {
       useToastStore.getState().addToast('warning', '请先配置 AI')
       return
     }

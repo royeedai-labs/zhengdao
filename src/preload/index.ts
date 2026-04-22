@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { UpdateSnapshot } from '../shared/update'
+import type { AiBridgeCompleteRequest, AiResponse, AiStreamCallbacks } from '../renderer/src/utils/ai/types'
+
+let aiStreamRequestSeq = 0
 
 const api = {
   // Books
@@ -153,6 +156,71 @@ const api = {
   authGetUser: () => ipcRenderer.invoke('auth:getUser'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   authGetAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
+
+  aiComplete: (request: AiBridgeCompleteRequest) =>
+    ipcRenderer.invoke('ai:complete', request) as Promise<AiResponse>,
+  aiStreamComplete: (request: AiBridgeCompleteRequest, callbacks: AiStreamCallbacks) => {
+    const requestId = `ai-stream-${Date.now()}-${aiStreamRequestSeq += 1}`
+    const cleanup = () => {
+      ipcRenderer.removeListener('ai:streamToken', handleToken)
+      ipcRenderer.removeListener('ai:streamComplete', handleComplete)
+      ipcRenderer.removeListener('ai:streamError', handleError)
+    }
+    const handleToken = (_event: unknown, incomingId: string, token: string) => {
+      if (incomingId === requestId) callbacks.onToken(token)
+    }
+    const handleComplete = (_event: unknown, incomingId: string, content: string) => {
+      if (incomingId !== requestId) return
+      cleanup()
+      callbacks.onComplete(content)
+    }
+    const handleError = (_event: unknown, incomingId: string, error: string) => {
+      if (incomingId !== requestId) return
+      cleanup()
+      callbacks.onError(error)
+    }
+
+    ipcRenderer.on('ai:streamToken', handleToken)
+    ipcRenderer.on('ai:streamComplete', handleComplete)
+    ipcRenderer.on('ai:streamError', handleError)
+    ipcRenderer.send('ai:streamComplete', requestId, request)
+    return cleanup
+  },
+  aiGetProviderStatus: (provider: string, options?: { probe?: boolean }) =>
+    ipcRenderer.invoke('ai:getProviderStatus', provider, options),
+  aiSetupGeminiCli: () => ipcRenderer.invoke('ai:setupGeminiCli'),
+  aiGetAccounts: () => ipcRenderer.invoke('ai:getAccounts'),
+  aiSaveAccount: (data: Record<string, unknown>) => ipcRenderer.invoke('ai:saveAccount', data),
+  aiDeleteAccount: (id: number) => ipcRenderer.invoke('ai:deleteAccount', id),
+  aiGetSkillTemplates: () => ipcRenderer.invoke('ai:getSkillTemplates'),
+  aiUpdateSkillTemplate: (key: string, updates: Record<string, unknown>) =>
+    ipcRenderer.invoke('ai:updateSkillTemplate', key, updates),
+  aiGetWorkProfile: (bookId: number) => ipcRenderer.invoke('ai:getWorkProfile', bookId),
+  aiSaveWorkProfile: (bookId: number, updates: Record<string, unknown>) =>
+    ipcRenderer.invoke('ai:saveWorkProfile', bookId, updates),
+  aiGetSkillOverrides: (bookId: number) => ipcRenderer.invoke('ai:getSkillOverrides', bookId),
+  aiUpsertSkillOverride: (bookId: number, skillKey: string, updates: Record<string, unknown>) =>
+    ipcRenderer.invoke('ai:upsertSkillOverride', bookId, skillKey, updates),
+  aiDeleteSkillOverride: (bookId: number, skillKey: string) =>
+    ipcRenderer.invoke('ai:deleteSkillOverride', bookId, skillKey),
+  aiGetOrCreateConversation: (bookId: number) => ipcRenderer.invoke('ai:getOrCreateConversation', bookId),
+  aiCreateConversation: (bookId: number) => ipcRenderer.invoke('ai:createConversation', bookId),
+  aiGetConversations: (bookId: number) => ipcRenderer.invoke('ai:getConversations', bookId),
+  aiClearConversation: (conversationId: number) => ipcRenderer.invoke('ai:clearConversation', conversationId),
+  aiDeleteConversation: (conversationId: number) => ipcRenderer.invoke('ai:deleteConversation', conversationId),
+  aiGetMessages: (conversationId: number) => ipcRenderer.invoke('ai:getMessages', conversationId),
+  aiAddMessage: (
+    conversationId: number,
+    role: 'user' | 'assistant' | 'system',
+    content: string,
+    metadata?: unknown
+  ) => ipcRenderer.invoke('ai:addMessage', conversationId, role, content, metadata),
+  aiGetDrafts: (bookId: number, status?: 'pending' | 'applied' | 'dismissed' | 'all', conversationId?: number | null) =>
+    ipcRenderer.invoke('ai:getDrafts', bookId, status, conversationId),
+  aiCreateDraft: (data: Record<string, unknown>) => ipcRenderer.invoke('ai:createDraft', data),
+  aiSetDraftStatus: (id: number, status: 'pending' | 'applied' | 'dismissed') =>
+    ipcRenderer.invoke('ai:setDraftStatus', id, status),
+  aiGetResolvedConfigForBook: (bookId: number) => ipcRenderer.invoke('ai:getResolvedConfigForBook', bookId),
 
   syncUploadBook: (bookId: number) => ipcRenderer.invoke('sync:uploadBook', bookId),
   syncListCloudBooks: () => ipcRenderer.invoke('sync:listCloudBooks'),

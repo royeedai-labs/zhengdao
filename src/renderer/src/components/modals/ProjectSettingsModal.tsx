@@ -6,7 +6,17 @@ import {
   type ReactNode,
   type SelectHTMLAttributes
 } from 'react'
-import { Database, FolderOpen, HardDrive, Keyboard, RefreshCw, RotateCcw, Settings, X, Save } from 'lucide-react'
+import {
+  Database,
+  FolderOpen,
+  HardDrive,
+  Keyboard,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Settings,
+  X
+} from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
 import { useConfigStore } from '@/stores/config-store'
@@ -31,23 +41,9 @@ type Tab = 'genre' | 'ai' | 'daily' | 'backup' | 'shortcuts'
 
 type BackupRow = { name: string; path: string; mtime: number; size: number }
 
-const AI_HELP = {
-  openai: {
-    endpointPh: '留空使用 https://api.openai.com/v1/chat/completions',
-    modelPh: 'gpt-4o-mini'
-  },
-  gemini: {
-    endpointPh: '留空使用 Google generativelanguage.googleapis.com/v1beta',
-    modelPh: 'gemini-2.0-flash'
-  },
-  ollama: {
-    endpointPh: '留空使用 http://localhost:11434（自动拼接 /api/chat）',
-    modelPh: 'llama3'
-  }
-} as const
-
 export default function ProjectSettingsModal() {
   const closeModal = useUIStore((s) => s.closeModal)
+  const openModal = useUIStore((s) => s.openModal)
   const bookId = useBookStore((s) => s.currentBookId)!
   const { config, loadConfig, saveConfig } = useConfigStore()
   const getChord = useShortcutStore((s) => s.getChord)
@@ -68,10 +64,6 @@ export default function ProjectSettingsModal() {
     )
   )
   const [dailyGoal, setDailyGoal] = useState(6000)
-  const [aiProvider, setAiProvider] = useState('openai')
-  const [aiKey, setAiKey] = useState('')
-  const [aiEndpoint, setAiEndpoint] = useState('')
-  const [aiModel, setAiModel] = useState('')
   const [sensitiveList, setSensitiveList] = useState('default')
 
   const [backupDir, setBackupDir] = useState('')
@@ -132,10 +124,6 @@ export default function ProjectSettingsModal() {
       )
     )
     setDailyGoal(config.daily_goal || 6000)
-    setAiProvider(config.ai_provider || 'openai')
-    setAiKey(config.ai_api_key || '')
-    setAiEndpoint(config.ai_api_endpoint || '')
-    setAiModel(config.ai_model || '')
     setSensitiveList(config.sensitive_list || 'default')
   }, [config])
 
@@ -166,21 +154,13 @@ export default function ProjectSettingsModal() {
     await saveConfig(bookId, {
       ...payload,
       daily_goal: dailyGoal,
-      sensitive_list: sensitiveList,
-      ai_provider: aiProvider,
-      ai_api_key: aiKey,
-      ai_api_endpoint: aiEndpoint,
-      ai_model: aiModel
+      sensitive_list: sensitiveList
     })
   }
 
-  const saveAiDaily = async () => {
+  const saveAiTabSettings = async () => {
     await saveConfig(bookId, {
       daily_goal: dailyGoal,
-      ai_provider: aiProvider,
-      ai_api_key: aiKey,
-      ai_api_endpoint: aiEndpoint,
-      ai_model: aiModel,
       sensitive_list: sensitiveList
     })
   }
@@ -246,7 +226,7 @@ export default function ProjectSettingsModal() {
           {(
             [
               ['genre', '题材模板'],
-              ['ai', 'AI 配置'],
+              ['ai', 'AI 入口'],
               ['daily', '日更目标'],
               ['shortcuts', '快捷键'],
               ['backup', '备份与迁移']
@@ -388,67 +368,25 @@ export default function ProjectSettingsModal() {
           )}
 
           {tab === 'ai' && (
-            <>
-              <div>
-                <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">AI 服务商</label>
-                <select
-                  value={aiProvider}
-                  onChange={(e) => setAiProvider(e.target.value)}
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
+            <div className="space-y-4">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-100">
+                <div className="font-bold text-emerald-300">AI 配置已拆分</div>
+                <p className="mt-1 text-emerald-100/80">
+                  账号、API Key、Gemini CLI 与 Ollama 属于全局账号；提示词、上下文、写作禁区和能力卡在“AI 能力与作品配置”中管理。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openModal('aiSettings')}
+                  className="mt-2 rounded border border-emerald-500/30 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/10"
                 >
-                  <option value="openai">OpenAI 兼容</option>
-                  <option value="gemini">Google Gemini</option>
-                  <option value="ollama">Ollama (本地)</option>
-                </select>
+                  打开 AI 能力与作品配置
+                </button>
               </div>
-              <div>
-                <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">
-                  {aiProvider === 'ollama' ? 'API Key（可选）' : 'API Key'}
-                </label>
-                <input
-                  type="password"
-                  value={aiKey}
-                  onChange={(e) => setAiKey(e.target.value)}
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
-                  placeholder={
-                    aiProvider === 'gemini'
-                      ? 'Gemini API Key'
-                      : aiProvider === 'ollama'
-                        ? '本地通常无需填写'
-                        : 'sk-...'
-                  }
-                  autoComplete="off"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">Endpoint</label>
-                <input
-                  value={aiEndpoint}
-                  onChange={(e) => setAiEndpoint(e.target.value)}
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
-                  placeholder={
-                    aiProvider === 'openai'
-                      ? AI_HELP.openai.endpointPh
-                      : aiProvider === 'gemini'
-                        ? AI_HELP.gemini.endpointPh
-                        : AI_HELP.ollama.endpointPh
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">模型名</label>
-                <input
-                  value={aiModel}
-                  onChange={(e) => setAiModel(e.target.value)}
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
-                  placeholder={
-                    aiProvider === 'openai'
-                      ? AI_HELP.openai.modelPh
-                      : aiProvider === 'gemini'
-                        ? AI_HELP.gemini.modelPh
-                        : AI_HELP.ollama.modelPh
-                  }
-                />
+              <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-secondary)]">
+                <div className="font-bold text-[var(--text-primary)]">旧项目级 AI Provider 表单已退场</div>
+                <p className="mt-1">
+                  当前作品不再单独保存 provider、API Key、Gemini CLI 登录或 Ollama 连接。上述能力统一在“AI 能力与作品配置 / 全局账号”中维护，这里只保留作品内的非账号设置。
+                </p>
               </div>
               <div>
                 <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">敏感词过滤</label>
@@ -464,7 +402,7 @@ export default function ProjectSettingsModal() {
                 </select>
                 <p className="text-[10px] text-[var(--text-muted)] mt-1">开启后，编辑器中的敏感词会以红色波浪线标注</p>
               </div>
-            </>
+            </div>
           )}
 
           {tab === 'daily' && (
@@ -751,7 +689,7 @@ export default function ProjectSettingsModal() {
               type="button"
               onClick={async () => {
                 if (tab === 'genre') await saveGenreConfig()
-                else await saveAiDaily()
+                else await saveAiTabSettings()
                 closeModal()
               }}
               className="flex items-center gap-1 px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded"

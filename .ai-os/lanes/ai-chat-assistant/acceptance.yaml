@@ -1,0 +1,73 @@
+baseline_id: "CR-20260422-084513-gemini-3-pro-streaming-experience"
+gates:
+  design_confirmation:
+    status: passed
+    evidence:
+      - "用户确认右下角 AI 助手、草稿篮确认、智能最小上下文、全局账号和作品能力配置方向"
+      - "用户确认旧 BottomPanel AI 入口不再需要，Gemini CLI 登录应迁入全局账号配置"
+  logic_confirmation:
+    status: passed
+    evidence:
+      - "specs/ai-chat-assistant.spec.md"
+      - "ai_drafts.kind 白名单已落库并在 renderer 解析处校验"
+      - "普通会话默认不强绑能力卡，显式能力卡仍按原 skill 执行"
+      - "会话切换已迁移到右侧列表；删除历史会话动作需二次确认"
+  implementation_quality:
+    status: passed
+    evidence:
+      - "RED npx vitest run src/renderer/src/utils/ai/__tests__/provider-routing.test.ts -> 新增同步完成 cleanup 用例失败，cleanup 调用次数为 0"
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/provider-routing.test.ts -> 1 file / 6 tests passed"
+      - "npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts src/renderer/src/utils/ai/__tests__/account-provider.test.ts src/renderer/src/components/ai/__tests__/streaming-message.test.ts -> 3 files / 20 tests passed"
+      - "npm rebuild better-sqlite3 -> rebuilt dependencies successfully"
+      - "npm test -> 27 files / 105 tests passed"
+      - "npm run build -> passed"
+      - "git diff --check -> passed"
+      - "RED npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts -> 新增用例失败，覆盖空模型未默认到 Gemini 3 Pro"
+      - "RED npx vitest run src/renderer/src/utils/ai/__tests__/account-provider.test.ts -> 新增断言失败，覆盖 Gemini CLI model placeholder 仍为旧提示"
+      - "RED npx vitest run src/renderer/src/components/ai/__tests__/streaming-message.test.ts -> 新增用例失败，覆盖 chunk queue 尚不存在"
+      - "npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts src/renderer/src/utils/ai/__tests__/account-provider.test.ts src/renderer/src/components/ai/__tests__/streaming-message.test.ts -> 3 files / 20 tests passed"
+      - "npm test -> 27 files / 104 tests passed"
+      - "npm run build -> passed"
+      - "git diff --check -> passed"
+      - "RED npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts -> 新增 2 个用例失败，覆盖 content parts 被吞和空响应静默完成"
+      - "RED npx vitest run src/renderer/src/utils/ai/__tests__/provider-routing.test.ts -> 新增 1 个用例失败，覆盖 Gemini CLI stream bridge 提前 resolve"
+      - "RED npx vitest run src/renderer/src/components/ai/__tests__/streaming-message.test.ts -> 新增 1 个用例失败，覆盖前端空回复缺少兜底"
+      - "npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts -> 1 file / 14 tests passed"
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/provider-routing.test.ts -> 1 file / 5 tests passed"
+      - "npx vitest run src/renderer/src/components/ai/__tests__/streaming-message.test.ts -> 1 file / 2 tests passed"
+      - "npm test -> 27 files / 102 tests passed"
+      - "npm run build -> passed"
+      - "git diff --check -> passed"
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/account-provider.test.ts -> 1 file / 2 tests passed"
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/assistant-workflow.test.ts src/renderer/src/components/ai/__tests__/draft-preview.test.ts src/renderer/src/components/ai/__tests__/panel-layout.test.ts -> 3 files / 15 tests passed"
+      - "npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts src/main/database/__tests__/ai-assistant-repo.test.ts src/renderer/src/components/ai/__tests__/streaming-message.test.ts src/renderer/src/components/ai/__tests__/message-display.test.ts src/renderer/src/utils/ai/__tests__/provider-routing.test.ts -> 5 files / 22 tests passed"
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/assistant-workflow.test.ts src/renderer/src/components/ai/__tests__/conversation-mode.test.ts -> 2 files / 12 tests passed"
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/assistant-workflow.test.ts src/renderer/src/components/ai/__tests__/conversation-mode.test.ts src/renderer/src/components/ai/__tests__/streaming-message.test.ts src/renderer/src/components/ai/__tests__/message-display.test.ts src/renderer/src/utils/ai/__tests__/provider-routing.test.ts src/main/ai/__tests__/gemini-cli-service.test.ts src/main/database/__tests__/ai-assistant-repo.test.ts -> 7 files / 34 tests passed"
+      - "npx vitest run src/main/database/__tests__/ai-assistant-repo.test.ts src/renderer/src/components/ai/__tests__/conversation-list.test.ts src/renderer/src/components/ai/__tests__/conversation-mode.test.ts src/renderer/src/components/ai/__tests__/streaming-message.test.ts src/renderer/src/components/ai/__tests__/message-display.test.ts src/renderer/src/utils/ai/__tests__/provider-routing.test.ts src/main/ai/__tests__/gemini-cli-service.test.ts -> 7 files / 27 tests passed"
+      - "npm test -> 27 files / 98 tests passed"
+      - "npm test -> 26 files / 95 tests passed"
+      - "npm run build -> passed"
+      - "git diff --check -> passed"
+  delivery_quality:
+    status: passed
+    evidence:
+      - "发布计划：.ai-os/lanes/ai-chat-assistant/release-plan.md"
+      - "Electron ABI 验证：node scripts/release/rebuild-electron-native.mjs -> Rebuild Complete for Electron 33.4.11 arm64；node scripts/release/verify-electron-native.mjs -> better-sqlite3 Electron ABI smoke passed"
+      - "运行态准备：node scripts/release/rebuild-electron-native.mjs -> Rebuild Complete for Electron 33.4.11 arm64"
+      - "待人工验证：Gemini CLI 空模型账号应使用 gemini-3-pro-preview；AI 对话首 token 前显示 Gemini 3 Pro 等待态，收到 provider delta 后按 chunk 逐段渲染"
+      - "运行态准备：node scripts/release/rebuild-electron-native.mjs -> Rebuild Complete for Electron 33.4.11 arm64"
+      - "待人工验证：Gemini CLI 普通对话输入“你有什么能力”应实时出现 token；若 CLI 返回不可解析空流，应显示明确错误且不保存空 assistant 消息"
+      - "人工回归：BottomPanel 旧 `生成章节` / `AI 补全` 按钮已消失，仅保留 `新建节点`"
+      - "人工回归：AI 能力与作品配置 -> 全局账号 选择 `Gemini CLI` 后显示状态提示、`检测` 和 `启动登录`"
+      - "自动验证：历史 assistant 消息中的结构化草稿 JSON 会渲染为可读草稿摘要；脏 JSON 不再原样暴露"
+      - "人工验证待执行：结构化草稿卡片展示、AI 面板拖动与缩放、刷新后位置尺寸恢复"
+      - "人工验证待执行：AI 新会话、切换会话、清空当前会话确认、真实 provider 流式输出"
+      - "自动验证：未选择能力卡时保持普通对话模式，不默认解析为续写正文草稿"
+      - "自动验证：右侧会话列表 helper 可生成选中态/消息数，删除当前会话后可选择 fallback 会话"
+      - "待人工验证：右侧会话列表可切换/删除历史会话，标题栏清空当前会话仍可用"
+risks:
+  - "Gemini 3 Pro 首 token 延迟由上游 Gemini CLI / 模型决定；应用侧只能提供等待态和真实 delta 队列渲染，不能让上游更早产出 token。"
+  - "Gemini CLI stream-json 的输出结构可能随上游 CLI 版本变化；本次修复需覆盖字符串 content 与 content parts 两种格式，并在无法解析正文时给出显式错误。"
+  - "真实 provider 输出结构化 JSON 的稳定性仍依赖模型；当前实现改为宽松提取 JSON，但仍可能遇到完全不可恢复的脏输出"
+  - "需要后续人工体验验证 AI 面板在不同窗口尺寸下与底部沙盘 / 伏笔提醒的相对位置，以及拖动/缩放后的观感"
+  - "旧 project_config AI 字段仍保留为兼容 fallback；若后续彻底移除需单独做迁移与回滚评估"

@@ -17,6 +17,7 @@ import SplitEditor from '@/components/editor/SplitEditor'
 import RightPanel from '@/components/sidebar-right/RightPanel'
 import BottomPanel from '@/components/bottom-panel/BottomPanel'
 import BlackRoomMode from '@/components/editor/BlackRoomMode'
+import AiAssistantDock from '@/components/ai/AiAssistantDock'
 import OnboardingTour, {
   completeOnboardingStorage,
   isOnboardingDone
@@ -25,7 +26,6 @@ import { decideWorkspaceEntry } from '@/utils/workspace-entry'
 
 export default function WorkspaceLayout() {
   const bookId = useBookStore((s) => s.currentBookId)!
-  const openModal = useUIStore((s) => s.openModal)
   const onboardingTourSignal = useUIStore((s) => s.onboardingTourSignal)
   const triggerOnboardingTour = useUIStore((s) => s.triggerOnboardingTour)
   const checkAchievements = useAchievementCheck()
@@ -36,11 +36,9 @@ export default function WorkspaceLayout() {
 
   useEffect(() => {
     try {
-      const overviewKey = `write_book_overview_${bookId}`
       const decision = decideWorkspaceEntry({
         onboardingDone: isOnboardingDone(),
-        pendingOnboarding: sessionStorage.getItem('write_pending_onboarding') === '1',
-        overviewShownInSession: sessionStorage.getItem(overviewKey) === '1'
+        pendingOnboarding: sessionStorage.getItem('write_pending_onboarding') === '1'
       })
 
       if (decision.markOnboardingDone) {
@@ -49,19 +47,13 @@ export default function WorkspaceLayout() {
       if (decision.clearPendingOnboarding) {
         sessionStorage.removeItem('write_pending_onboarding')
       }
-      if (decision.markOverviewShown) {
-        sessionStorage.setItem(overviewKey, '1')
-      }
       if (decision.showOnboarding) {
         triggerOnboardingTour()
-      }
-      if (decision.showOverview) {
-        openModal('bookOverview')
       }
     } catch {
       void 0
     }
-  }, [bookId, openModal, triggerOnboardingTour])
+  }, [bookId, triggerOnboardingTour])
 
   const { leftPanelOpen, rightPanelOpen, blackRoomMode, toggleRightPanel, splitView } = useUIStore()
   const warningCount = useForeshadowStore((s) => s.getWarningCount())
@@ -126,6 +118,7 @@ export default function WorkspaceLayout() {
         </div>
       </div>
       <BottomPanel />
+      <AiAssistantDock />
       {warningCount > 0 && !rightPanelOpen && (
         <button
           onClick={() => toggleRightPanel()}

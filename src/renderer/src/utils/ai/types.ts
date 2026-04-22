@@ -1,4 +1,4 @@
-export type AiProvider = 'openai' | 'gemini' | 'ollama' | 'custom'
+export type AiProvider = 'openai' | 'gemini' | 'gemini_cli' | 'ollama' | 'custom'
 
 export interface AiConfig {
   ai_provider: AiProvider
@@ -22,13 +22,27 @@ export interface AiStreamCallbacks {
   onError: (error: string) => void
 }
 
+export type AiFetchOpts = {
+  signal?: AbortSignal
+}
+
+export interface AiBridgeCompleteRequest {
+  provider: AiProvider
+  model: string
+  systemPrompt: string
+  userPrompt: string
+  maxTokens: number
+  temperature: number
+}
+
 export interface AiProviderAdapter {
   complete(
     config: AiConfig,
     systemPrompt: string,
     userPrompt: string,
     maxTokens?: number,
-    temperature?: number
+    temperature?: number,
+    opts?: AiFetchOpts
   ): Promise<AiResponse>
   stream(
     config: AiConfig,
@@ -36,6 +50,7 @@ export interface AiProviderAdapter {
     userPrompt: string,
     callbacks: AiStreamCallbacks,
     maxTokens?: number,
-    temperature?: number
+    temperature?: number,
+    opts?: AiFetchOpts
   ): Promise<void>
 }

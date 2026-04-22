@@ -1,0 +1,6 @@
+id = "license-policy"
+title = "开源许可证收紧与授权口径统一"
+status = "active"
+baseline_id = "CR-20260421-225658-oss-license-tightening"
+quality_tier = "high-risk"
+risk_tier = "high"

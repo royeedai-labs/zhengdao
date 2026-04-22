@@ -17,7 +17,7 @@ import { useForeshadowStore } from '@/stores/foreshadow-store'
 import { useConfigStore } from '@/stores/config-store'
 import { useToastStore } from '@/stores/toast-store'
 import { useUpdateStore } from '@/stores/update-store'
-import { aiSummarize } from '@/utils/ai'
+import { aiSummarize, isAiConfigReady } from '@/utils/ai'
 import { createInlineCompleteExtension } from '@/components/editor/InlineComplete'
 import { useDailyStats } from '@/hooks/useDailyStats'
 import { useAchievementCheck } from '@/hooks/useAchievements'
@@ -29,6 +29,8 @@ import { useShortcutStore } from '@/stores/shortcut-store'
 import { matchesShortcutChord } from '@/utils/shortcuts'
 import { TextReplaceExtension } from '@/components/editor/TextReplace'
 import { collectCharacterIdsFromContent } from '@/utils/character-association'
+import { setActiveEditor } from '@/components/editor/active-editor'
+import { buildAiAssistantSelectionSnapshot } from '@/components/editor/ai-selection'
 import MentionList from './MentionList'
 import type { MentionListRef } from './MentionList'
 
@@ -133,7 +135,15 @@ type PostSave = 'none' | 'syncOnly' | 'full'
 export default function EditorArea() {
   const { currentChapter, updateChapterContent, updateChapterSummary, getTotalWords, getCurrentChapterNumber } =
     useChapterStore()
-  const { bottomPanelOpen, toggleBottomPanel, openModal, focusMode, toggleFocusMode } = useUIStore()
+  const {
+    bottomPanelOpen,
+    toggleBottomPanel,
+    openModal,
+    focusMode,
+    toggleFocusMode,
+    openAiAssistant,
+    setAiAssistantSelection
+  } = useUIStore()
   const syncAppearances = useCharacterStore((s) => s.syncAppearances)
   const bookId = useBookStore((s) => s.currentBookId)!
   const checkAndUpgrade = useForeshadowStore((s) => s.checkAndUpgrade)
@@ -317,7 +327,7 @@ export default function EditorArea() {
       }),
       createInlineCompleteExtension(
         () => useConfigStore.getState().config,
-        () => Boolean(useConfigStore.getState().config?.ai_api_key)
+        () => isAiConfigReady(useConfigStore.getState().config)
       )
     ],
     editorProps: {
@@ -360,6 +370,15 @@ export default function EditorArea() {
       }, 800)
     }
   })
+
+  const syncAiAssistantSelection = useCallback(() => {
+    setAiAssistantSelection(
+      buildAiAssistantSelectionSnapshot({
+        currentChapterId: currentChapter?.id ?? null,
+        editor
+      })
+    )
+  }, [currentChapter?.id, editor, setAiAssistantSelection])
 
   const flushPendingSave = useCallback(
     async (postSave: PostSave = 'full') => {
@@ -487,7 +506,20 @@ export default function EditorArea() {
 
   useEffect(() => {
     if (!editor) return
+    setActiveEditor(editor)
+    return () => {
+      setActiveEditor(null)
+    }
+  }, [editor])
+
+  useEffect(() => {
+    syncAiAssistantSelection()
+  }, [syncAiAssistantSelection, currentChapter?.content])
+
+  useEffect(() => {
+    if (!editor) return
     const handleSelectionUpdate = () => {
+      syncAiAssistantSelection()
       const smart = useUIStore.getState().smartTypewriter
       if (smart && !isTypingRef.current) return
 
@@ -516,7 +548,7 @@ export default function EditorArea() {
     return () => {
       editor.off('selectionUpdate', handleSelectionUpdate)
     }
-  }, [editor])
+  }, [editor, syncAiAssistantSelection])
 
   const shortcutOverrides = useShortcutStore((s) => s.overrides)
 
@@ -561,7 +593,7 @@ export default function EditorArea() {
   const handleGenerateSummary = useCallback(async () => {
     if (!editor || !currentChapter) return
     const cfg = useConfigStore.getState().config
-    if (!cfg?.ai_api_key || !cfg.ai_api_endpoint) {
+    if (!isAiConfigReady(cfg)) {
       useToastStore.getState().addToast('warning', '请先在项目设置中配置 AI')
       return
     }
@@ -703,6 +735,14 @@ export default function EditorArea() {
             title="查看历史快照"
           >
             <History size={11} /> 快照
+          </button>
+          <button
+            type="button"
+            onClick={() => openAiAssistant('continue_writing')}
+            className="flex items-center gap-1 hover:text-emerald-400 transition"
+            title="打开 AI 续写助手"
+          >
+            <Sparkles size={11} /> 续写
           </button>
           <button
             type="button"

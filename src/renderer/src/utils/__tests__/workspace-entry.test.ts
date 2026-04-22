@@ -6,47 +6,38 @@ describe('decideWorkspaceEntry', () => {
     expect(
       decideWorkspaceEntry({
         onboardingDone: false,
-        pendingOnboarding: true,
-        overviewShownInSession: false
+        pendingOnboarding: true
       })
     ).toEqual({
       showOnboarding: true,
       markOnboardingDone: true,
-      clearPendingOnboarding: true,
-      showOverview: false,
-      markOverviewShown: false
+      clearPendingOnboarding: true
     })
   })
 
-  it('shows overview after onboarding is already done and session overview has not been shown', () => {
+  it('goes straight into the workspace after onboarding without auto-opening overview', () => {
     expect(
       decideWorkspaceEntry({
         onboardingDone: true,
-        pendingOnboarding: false,
-        overviewShownInSession: false
+        pendingOnboarding: false
       })
     ).toEqual({
       showOnboarding: false,
       markOnboardingDone: false,
-      clearPendingOnboarding: false,
-      showOverview: true,
-      markOverviewShown: true
+      clearPendingOnboarding: false
     })
   })
 
-  it('does nothing once onboarding is done and overview has already been shown in this session', () => {
+  it('keeps the post-onboarding path minimal', () => {
     expect(
       decideWorkspaceEntry({
         onboardingDone: true,
-        pendingOnboarding: false,
-        overviewShownInSession: true
+        pendingOnboarding: false
       })
     ).toEqual({
       showOnboarding: false,
       markOnboardingDone: false,
-      clearPendingOnboarding: false,
-      showOverview: false,
-      markOverviewShown: false
+      clearPendingOnboarding: false
     })
   })
 })

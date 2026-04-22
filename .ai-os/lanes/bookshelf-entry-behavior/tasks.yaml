@@ -1,0 +1,90 @@
+version: 1
+baseline_id: "CR-20260422-000838-bookshelf-entry-behavior"
+scope:
+  mode: "change"
+  focus: "bookshelf-entry"
+  baseline_source: "MISSION.md + specs/bookshelf-entry-behavior.spec.md"
+  quality_tier: "standard"
+
+tasks:
+  - id: TASK-ENTRY-001
+    title: "同步作品入口与总览触发变更基线"
+    status: completed
+    owner: AI
+    risk: low
+    priority: P2
+    execution_role: "design_mapper"
+    approval_required: "confirmed"
+    requirement_refs:
+      - "REQ-ENTRY-001"
+      - "REQ-ENTRY-002"
+      - "REQ-ENTRY-003"
+    acceptance_refs:
+      - "AC-ENTRY-001"
+      - "AC-ENTRY-002"
+      - "AC-ENTRY-003"
+    context_files:
+      - "MISSION.md"
+      - "specs/bookshelf-entry-behavior.spec.md"
+      - "acceptance.yaml"
+    outputs:
+      - "baseline-log/CR-20260422-000838-bookshelf-entry-behavior.md"
+      - "MISSION.md"
+      - "specs/bookshelf-entry-behavior.spec.md"
+      - "acceptance.yaml"
+    verification_required:
+      - "baseline-check"
+
+  - id: TASK-ENTRY-002
+    title: "以失败测试锁定工作区入口不再自动打开总览"
+    status: completed
+    owner: AI
+    risk: low
+    priority: P1
+    execution_role: "implementer"
+    approval_required: "confirmed"
+    depends_on:
+      - "TASK-ENTRY-001"
+    requirement_refs:
+      - "REQ-ENTRY-001"
+      - "REQ-ENTRY-003"
+    acceptance_refs:
+      - "AC-ENTRY-001"
+      - "AC-ENTRY-003"
+    context_files:
+      - "src/renderer/src/utils/workspace-entry.ts"
+      - "src/renderer/src/utils/__tests__/workspace-entry.test.ts"
+    outputs:
+      - "tests"
+    verification_required:
+      - "test-red"
+      - "test-green"
+
+  - id: TASK-ENTRY-003
+    title: "实现作品进入主路径收口并完成回归验证"
+    status: completed
+    owner: AI
+    risk: low
+    priority: P1
+    execution_role: "implementer"
+    approval_required: "confirmed"
+    depends_on:
+      - "TASK-ENTRY-002"
+    requirement_refs:
+      - "REQ-ENTRY-001"
+      - "REQ-ENTRY-002"
+      - "REQ-ENTRY-003"
+    acceptance_refs:
+      - "AC-ENTRY-001"
+      - "AC-ENTRY-002"
+      - "AC-ENTRY-003"
+    context_files:
+      - "src/renderer/src/utils/workspace-entry.ts"
+      - "src/renderer/src/components/layout/WorkspaceLayout.tsx"
+      - "src/renderer/src/components/layout/TopBar.tsx"
+    outputs:
+      - "renderer"
+      - "test-evidence"
+    verification_required:
+      - "test"
+      - "build"

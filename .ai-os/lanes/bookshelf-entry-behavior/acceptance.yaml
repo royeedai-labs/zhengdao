@@ -1,0 +1,66 @@
+version: 1
+baseline_id: "CR-20260422-000838-bookshelf-entry-behavior"
+scope:
+  mode: "change"
+  focus: "bookshelf-entry"
+  baseline_source: "MISSION.md + specs/bookshelf-entry-behavior.spec.md"
+  quality_tier: "standard"
+
+gates:
+  - id: design-confirmation
+    title: "设计确认门"
+    status: completed
+    checks:
+      - "用户已确认作品主体点击应进入作品，不应被总览弹窗拦截"
+      - "总览保留为显式触发，而非进入作品的自动步骤"
+    evidence:
+      - "CR-20260422-000838-bookshelf-entry-behavior"
+      - "MISSION.md"
+      - "specs/bookshelf-entry-behavior.spec.md"
+
+  - id: logic-confirmation
+    title: "逻辑确认门"
+    status: completed
+    checks:
+      - "根因已定位为工作区入口判定中的自动总览逻辑，而非书架卡片点击行为"
+      - "onboarding 优先级需要保留"
+    evidence:
+      - "src/renderer/src/components/layout/WorkspaceLayout.tsx"
+      - "src/renderer/src/utils/workspace-entry.ts"
+
+  - id: implementation-quality
+    title: "实现质量门"
+    status: completed
+    checks:
+      - "工作区入口行为有自动化测试覆盖"
+      - "进入作品不再自动弹出总览"
+      - "项目原生静态校验已完成"
+    evidence:
+      - "npm test -- src/renderer/src/utils/__tests__/workspace-entry.test.ts"
+      - "npm run build"
+      - "src/renderer/src/utils/workspace-entry.ts"
+      - "src/renderer/src/utils/__tests__/workspace-entry.test.ts"
+
+  - id: delivery-readiness
+    title: "交付质量门"
+    status: completed
+    checks:
+      - "已有作品进入工作区的主路径不再被模态打断"
+      - "显式总览入口仍可用"
+      - "首次创建作品的 onboarding 规则未回退"
+    evidence:
+      - "npm test -- src/renderer/src/utils/__tests__/workspace-entry.test.ts"
+      - "npm run build"
+      - "src/renderer/src/components/layout/TopBar.tsx"
+      - "src/renderer/src/components/layout/WorkspaceLayout.tsx"
+
+result:
+  design_locked: passed
+  logic_locked: passed
+  implementation_ready: passed
+  delivery_ready: passed
+  blockers: []
+  advisories:
+    - "本轮不重做作品首页与总览信息架构，只收口触发规则"
+    - "本次未单独跑 GUI 手工 smoke，交付证据来自入口行为测试、构建通过和显式总览入口代码仍在"
+  user_confirmation_blockers: []

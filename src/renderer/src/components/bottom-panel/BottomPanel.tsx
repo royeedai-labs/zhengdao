@@ -1,55 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Activity, Plus, Trash2, BookPlus, Sparkles, Loader2, Check, X as XIcon } from 'lucide-react'
+import { Activity, Plus, Trash2 } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
 import { usePlotStore } from '@/stores/plot-store'
 import { useCharacterStore } from '@/stores/character-store'
 import type { PlotNode } from '@/types'
 import PoisonWarning from './PoisonWarning'
-import { useChapterStore } from '@/stores/chapter-store'
-import { useConfigStore } from '@/stores/config-store'
-import { useToastStore } from '@/stores/toast-store'
-import { aiComplete } from '@/utils/ai'
-
-function escapePlainToHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-function descriptionToChapterHtml(description: string): string {
-  const d = description.trim()
-  if (!d) return '<p></p>'
-  if (d.includes('<')) return d
-  return `<p>${escapePlainToHtml(d)}</p>`
-}
-
-type ParsedPlotSuggestion = {
-  chapter_number: number
-  title: string
-  score: number
-  description: string
-}
-
-function parsePlotSuggestions(text: string): ParsedPlotSuggestion[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  const out: ParsedPlotSuggestion[] = []
-  for (const line of lines) {
-    const parts = line.split('|').map((p) => p.trim())
-    if (parts.length < 4) continue
-    const chapter_number = parseInt(parts[0], 10)
-    const score = parseInt(parts[2], 10)
-    if (Number.isNaN(chapter_number) || Number.isNaN(score)) continue
-    out.push({
-      chapter_number,
-      title: parts[1],
-      score: Math.max(-5, Math.min(5, score)),
-      description: parts.slice(3).join('|')
-    })
-  }
-  return out
-}
 
 const CHAPTER_PX = 15
 const INVISIBLE_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
@@ -65,13 +21,9 @@ export default function BottomPanel() {
   const updatePlotline = usePlotStore((s) => s.updatePlotline)
   const deletePlotline = usePlotStore((s) => s.deletePlotline)
   const updatePlotNode = usePlotStore((s) => s.updatePlotNode)
-  const createPlotNode = usePlotStore((s) => s.createPlotNode)
   const checkPoisonWarning = usePlotStore((s) => s.checkPoisonWarning)
   const characters = useCharacterStore((s) => s.characters)
   const openModal = useUIStore((s) => s.openModal)
-  const volumes = useChapterStore((s) => s.volumes)
-  const createChapter = useChapterStore((s) => s.createChapter)
-  const loadVolumes = useChapterStore((s) => s.loadVolumes)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const ignoreClickRef = useRef(false)
@@ -80,15 +32,6 @@ export default function BottomPanel() {
 
   const [hiddenPlotlineIds, setHiddenPlotlineIds] = useState<Set<number>>(new Set())
   const [managePlotlinesOpen, setManagePlotlinesOpen] = useState(false)
-
-  const [selectForChapterGen, setSelectForChapterGen] = useState(false)
-  const [selectedNodes, setSelectedNodes] = useState<Set<number>>(new Set())
-  const [generatingChapters, setGeneratingChapters] = useState(false)
-  const [aiFillLoading, setAiFillLoading] = useState(false)
-  const [aiFillPanelOpen, setAiFillPanelOpen] = useState(false)
-  const [aiFillError, setAiFillError] = useState<string | null>(null)
-  const [aiFillSuggestions, setAiFillSuggestions] = useState<ParsedPlotSuggestion[]>([])
-  const [aiFillGap, setAiFillGap] = useState<{ before: PlotNode; after: PlotNode } | null>(null)
 
   const [poisonWarning, setPoisonWarning] = useState<{
     show: boolean
@@ -210,161 +153,8 @@ export default function BottomPanel() {
     }, 80)
   }
 
-  const buildNodeChapterContent = async (description: string) => {
-    const base = descriptionToChapterHtml(description)
-    const config = useConfigStore.getState().config
-    if (!config?.ai_api_key || !config.ai_api_endpoint) return base
-    const res = await aiComplete(
-      {
-        ai_provider: config.ai_provider,
-        ai_api_key: config.ai_api_key,
-        ai_api_endpoint: config.ai_api_endpoint,
-        ai_model: config.ai_model || ''
-      },
-      '将下列剧情梗概扩写为可放在章首的 HTML 片段（仅使用 <p> 标签，2～5 段，可紧接在梗概之后作为扩写）：',
-      description.trim() || '（暂无梗概）'
-    )
-    if (res.error || !res.content.trim()) return base
-    const expanded = res.content.trim()
-    if (description.trim()) return `${base}\n${expanded}`
-    return expanded || base
-  }
-
-  const generateChaptersFromNodes = async () => {
-    if (!bookId) return
-    const sorted = plotNodes
-      .filter((n) => selectedNodes.has(n.id))
-      .sort((a, b) => a.chapter_number - b.chapter_number)
-    if (sorted.length === 0) {
-      useToastStore.getState().addToast('warning', '请先勾选剧情节点')
-      return
-    }
-    const volumeId = volumes[volumes.length - 1]?.id
-    if (!volumeId) {
-      useToastStore.getState().addToast('warning', '请先创建卷')
-      return
-    }
-    setGeneratingChapters(true)
-    try {
-      for (const node of sorted) {
-        const title = `第${node.chapter_number}章：${node.title}`
-        const html = await buildNodeChapterContent(node.description || '')
-        await createChapter(volumeId, title, html)
-      }
-      await loadVolumes(bookId)
-      useToastStore.getState().addToast('success', `已从 ${sorted.length} 个节点生成章节大纲`)
-      setSelectedNodes(new Set())
-      setSelectForChapterGen(false)
-    } catch (e) {
-      useToastStore.getState().addToast('error', e instanceof Error ? e.message : '生成失败')
-    } finally {
-      setGeneratingChapters(false)
-    }
-  }
-
-  const aiAutoFillPlot = async () => {
-    const sortedNodes = [...plotNodes].sort((a, b) => a.chapter_number - b.chapter_number)
-    if (sortedNodes.length < 2) {
-      useToastStore.getState().addToast('warning', '至少需要两个剧情节点')
-      return
-    }
-    let maxGap = 0
-    let gapStart = 0
-    let gapEnd = 1
-    for (let i = 1; i < sortedNodes.length; i++) {
-      const gap = sortedNodes[i].chapter_number - sortedNodes[i - 1].chapter_number
-      if (gap > maxGap) {
-        maxGap = gap
-        gapStart = i - 1
-        gapEnd = i
-      }
-    }
-    if (maxGap <= 1) {
-      useToastStore.getState().addToast(
-        'warning',
-        '相邻剧情节点之间没有可用的章号空隙，请先拉开章号间距'
-      )
-      return
-    }
-    const configEarly = useConfigStore.getState().config
-    if (!configEarly?.ai_api_key || !configEarly.ai_api_endpoint) {
-      useToastStore.getState().addToast('warning', '请先配置 AI')
-      return
-    }
-    const before = sortedNodes[gapStart]
-    const after = sortedNodes[gapEnd]
-    setAiFillGap({ before, after })
-    const config = configEarly
-    setAiFillLoading(true)
-    setAiFillError(null)
-    setAiFillSuggestions([])
-    setAiFillPanelOpen(true)
-    try {
-      const cfg = {
-        ai_provider: config.ai_provider,
-        ai_api_key: config.ai_api_key,
-        ai_api_endpoint: config.ai_api_endpoint,
-        ai_model: config.ai_model || ''
-      }
-      const result = await aiComplete(
-        cfg,
-        `在剧情"${before.title}"(情绪${before.score})和"${after.title}"(情绪${after.score})之间，建议插入2-3个过渡剧情节点。每个节点格式为：章节号|标题|情绪分(-5到5)|简述。章节号必须在 ${before.chapter_number} 与 ${after.chapter_number} 之间的整数。用换行分隔。`,
-        `已有节点：${sortedNodes.map((n) => `Ch${n.chapter_number}:${n.title}(${n.score})`).join(', ')}`
-      )
-      if (result.error) {
-        setAiFillError(result.error)
-        return
-      }
-      const parsed = parsePlotSuggestions(result.content).filter(
-        (s) =>
-          s.chapter_number > before.chapter_number &&
-          s.chapter_number < after.chapter_number
-      )
-      if (parsed.length === 0) {
-        setAiFillError('未能解析 AI 返回的节点，请重试或检查模型输出格式')
-        return
-      }
-      setAiFillSuggestions(parsed.sort((a, b) => a.chapter_number - b.chapter_number))
-    } catch (e) {
-      setAiFillError(e instanceof Error ? e.message : '请求失败')
-    } finally {
-      setAiFillLoading(false)
-    }
-  }
-
-  const acceptAiSuggestions = async () => {
-    if (!bookId || !aiFillGap || aiFillSuggestions.length === 0) return
-    try {
-      for (const s of aiFillSuggestions) {
-        await createPlotNode({
-          book_id: bookId,
-          chapter_number: s.chapter_number,
-          title: s.title,
-          score: s.score,
-          description: s.description,
-          node_type: 'main'
-        })
-      }
-      useToastStore.getState().addToast('success', `已插入 ${aiFillSuggestions.length} 个节点`)
-      setAiFillPanelOpen(false)
-      setAiFillSuggestions([])
-      setAiFillGap(null)
-    } catch (e) {
-      useToastStore.getState().addToast('error', e instanceof Error ? e.message : '写入失败')
-    }
-  }
-
   const handleNodeCardClick = (node: PlotNode) => {
     if (ignoreClickRef.current) return
-    if (selectForChapterGen) {
-      setSelectedNodes((prev) => {
-        const next = new Set(prev)
-        if (next.has(node.id)) next.delete(node.id)
-        else next.add(node.id)
-        return next
-      })
-      return
-    }
     openModal('plotNode', { ...node })
   }
 
@@ -431,58 +221,11 @@ export default function BottomPanel() {
             </span>
           </div>
           <button
-            type="button"
-            onClick={() => {
-              setSelectForChapterGen((v) => {
-                const next = !v
-                if (!next) setSelectedNodes(new Set())
-                return next
-              })
-            }}
-            className={`px-2 py-1 rounded flex items-center text-[10px] font-bold transition border ${
-              selectForChapterGen
-                ? 'bg-emerald-900/60 border-emerald-600 text-emerald-200'
-                : 'bg-slate-700 border-transparent hover:bg-emerald-600 text-white'
-            }`}
-            title="从剧情节点批量生成章节"
-          >
-            <BookPlus size={12} className="mr-1 shrink-0" /> 生成章节
-          </button>
-          {selectForChapterGen && (
-            <button
-              type="button"
-              disabled={generatingChapters}
-              onClick={() => void generateChaptersFromNodes()}
-              className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white px-2 py-1 rounded flex items-center text-[10px] font-bold transition"
-            >
-              {generatingChapters ? (
-                <Loader2 size={12} className="mr-1 animate-spin shrink-0" />
-              ) : (
-                <Check size={12} className="mr-1 shrink-0" />
-              )}
-              从选中节点生成大纲
-            </button>
-          )}
-          <button
-            type="button"
-            disabled={aiFillLoading}
-            onClick={() => void aiAutoFillPlot()}
-            className="bg-violet-800 hover:bg-violet-700 disabled:opacity-40 text-white px-2 py-1 rounded flex items-center text-[10px] font-bold transition"
-            title="让 AI 补齐过渡剧情节点"
-          >
-            {aiFillLoading ? (
-              <Loader2 size={12} className="mr-1 animate-spin shrink-0" />
-            ) : (
-              <Sparkles size={12} className="mr-1 shrink-0" />
-            )}
-            AI 补全
-          </button>
-          <button
             onClick={() => openModal('plotNode', { isNew: true })}
             className="bg-slate-700 hover:bg-emerald-600 text-white px-2 py-1 rounded flex items-center text-[10px] font-bold transition"
             title="新增剧情节点"
           >
-            <Plus size={12} className="mr-1" /> 补全新节点
+            <Plus size={12} className="mr-1" /> 新建节点
           </button>
         </div>
       </div>
@@ -618,32 +361,9 @@ export default function BottomPanel() {
                       handleNodeCardClick(node)
                     }
                   }}
-                  className={`group absolute w-36 p-2 rounded-lg border shadow-lg cursor-grab active:cursor-grabbing transition-all duration-200 z-10 hover:shadow-xl hover:-translate-y-0.5 bg-[var(--bg-secondary)] ${st.borderClass} ${
-                    selectForChapterGen && selectedNodes.has(node.id) ? 'ring-2 ring-emerald-500/80' : ''
-                  }`}
+                  className={`group absolute w-36 p-2 rounded-lg border shadow-lg cursor-grab active:cursor-grabbing transition-all duration-200 z-10 hover:shadow-xl hover:-translate-y-0.5 bg-[var(--bg-secondary)] ${st.borderClass}`}
                   style={{ left: `${xPos - 72}px`, top: `${yPos - (isHigh ? 60 : 0)}px`, ...st.borderStyle }}
                 >
-                  {selectForChapterGen && (
-                    <label
-                      className="absolute -top-2 -left-2 z-20 w-5 h-5 flex items-center justify-center rounded bg-[var(--bg-tertiary)] border border-[var(--border-secondary)] cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedNodes.has(node.id)}
-                        onChange={() => {
-                          setSelectedNodes((prev) => {
-                            const next = new Set(prev)
-                            if (next.has(node.id)) next.delete(node.id)
-                            else next.add(node.id)
-                            return next
-                          })
-                        }}
-                        className="accent-emerald-500 w-3.5 h-3.5"
-                      />
-                    </label>
-                  )}
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[9px] bg-[var(--bg-tertiary)] px-1 py-0.5 rounded text-[var(--text-primary)] font-mono">
                       Ch {node.chapter_number}
@@ -680,65 +400,6 @@ export default function BottomPanel() {
           </div>
         )}
       </div>
-      {aiFillPanelOpen && (
-        <div className="absolute bottom-11 right-4 z-30 w-[min(360px,calc(100%-2rem))] rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] shadow-2xl overflow-hidden flex flex-col max-h-[240px]">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]">
-            <span className="text-[11px] font-bold text-violet-300">AI 过渡节点建议</span>
-            <button
-              type="button"
-              onClick={() => {
-                setAiFillPanelOpen(false)
-                setAiFillError(null)
-                setAiFillSuggestions([])
-              }}
-              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"
-              aria-label="关闭"
-            >
-              <XIcon size={14} />
-            </button>
-          </div>
-          <div className="p-3 overflow-y-auto text-[11px] space-y-2">
-            {aiFillLoading && (
-              <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                <Loader2 size={14} className="animate-spin shrink-0" /> 请求中…
-              </div>
-            )}
-            {aiFillError && <p className="text-red-400">{aiFillError}</p>}
-            {!aiFillLoading &&
-              aiFillSuggestions.map((s, idx) => (
-                <div key={`${s.chapter_number}-${idx}`} className="rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2">
-                  <div className="font-mono text-emerald-400/90 mb-0.5">
-                    Ch{s.chapter_number} · {s.score > 0 ? `+${s.score}` : s.score}
-                  </div>
-                  <div className="text-[var(--text-primary)] font-medium">{s.title}</div>
-                  <div className="text-[var(--text-muted)] mt-1 line-clamp-3">{s.description}</div>
-                </div>
-              ))}
-          </div>
-          {!aiFillLoading && aiFillSuggestions.length > 0 && (
-            <div className="flex gap-2 px-3 py-2 border-t border-[var(--border-primary)] bg-[var(--bg-secondary)]">
-              <button
-                type="button"
-                onClick={() => void acceptAiSuggestions()}
-                className="flex-1 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition"
-              >
-                插入沙盘
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAiFillPanelOpen(false)
-                  setAiFillSuggestions([])
-                }}
-                className="px-3 py-1.5 rounded bg-[var(--bg-tertiary)] hover:brightness-110 text-[var(--text-primary)] text-[11px] transition"
-              >
-                取消
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {poisonWarning.show && (
         <PoisonWarning
           startCh={poisonWarning.startCh}

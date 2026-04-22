@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import {
   BookOpen,
+  Bot,
   Coffee,
   Download,
   FileUp,
@@ -46,7 +47,7 @@ export interface Command {
   action: () => void
 }
 
-const CATEGORY_ORDER = ['导航', '编辑', '视图', '主题']
+const CATEGORY_ORDER = ['导航', '编辑', 'AI', '视图', '主题']
 
 function fuzzyMatch(query: string, label: string): boolean {
   const q = query.trim().toLowerCase()
@@ -66,6 +67,7 @@ function useCommands(): Command[] {
   const toggleBottomPanel = useUIStore((s) => s.toggleBottomPanel)
   const setBlackRoomMode = useUIStore((s) => s.setBlackRoomMode)
   const setTheme = useUIStore((s) => s.setTheme)
+  const openAiAssistant = useUIStore((s) => s.openAiAssistant)
 
   return useMemo(
     () => [
@@ -141,6 +143,22 @@ function useCommands(): Command[] {
         icon: UserPlus,
         requiresBook: true,
         action: () => openModal('character', { isNew: true })
+      },
+      {
+        id: 'ai-assistant',
+        label: '打开 AI 创作助手',
+        category: 'AI',
+        icon: Bot,
+        requiresBook: true,
+        action: () => openAiAssistant()
+      },
+      {
+        id: 'ai-settings',
+        label: 'AI 能力与作品配置',
+        category: 'AI',
+        icon: SlidersHorizontal,
+        requiresBook: true,
+        action: () => openModal('aiSettings')
       },
       {
         id: 'view-left',
@@ -224,6 +242,7 @@ function useCommands(): Command[] {
     ],
     [
       openModal,
+      openAiAssistant,
       setBlackRoomMode,
       setTheme,
       toggleBottomPanel,

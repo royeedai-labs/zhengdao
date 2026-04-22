@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow, app, Notification } from 'electron'
-import { writeFileSync, readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs'
+import { writeFileSync, readFileSync, existsSync, mkdirSync, readdirSync, statSync, chmodSync } from 'fs'
 import { resolve, normalize, join } from 'path'
+import { spawn } from 'child_process'
 import * as bookRepo from './database/book-repo'
 import * as chapterRepo from './database/chapter-repo'
 import * as characterRepo from './database/character-repo'
@@ -12,6 +13,7 @@ import * as foreshadowRepo from './database/foreshadow-repo'
 import * as wikiRepo from './database/wiki-repo'
 import * as snapshotRepo from './database/snapshot-repo'
 import * as configRepo from './database/config-repo'
+import * as aiAssistantRepo from './database/ai-assistant-repo'
 import * as statsRepo from './database/stats-repo'
 import * as sessionRepo from './database/session-repo'
 import * as achievementRepo from './database/achievement-repo'
@@ -28,10 +30,72 @@ import { backupDatabaseFile, replaceDatabaseFromFile } from './database/connecti
 import { autoBackup } from './backup/auto-backup'
 import { readDocxPlainText } from './utils/read-docx-text'
 import { getUpdateState, installDownloadedUpdate } from './updater/service'
+import {
+  buildGeminiCliSetupScript,
+  createGeminiCliService,
+  ensureGeminiCliWorkspace,
+  getBundledGeminiCliEntry,
+  resolveGeminiCliRuntime,
+  type AiBridgeCompleteRequest
+} from './ai/gemini-cli-service'
 
 const googleAuth = new GoogleAuth()
 const driveSync = new DriveSync(googleAuth)
 const searchRepo = new SearchRepo()
+let geminiCliService: ReturnType<typeof createGeminiCliService> | null = null
+
+function getGeminiCliService(): ReturnType<typeof createGeminiCliService> {
+  if (!geminiCliService) {
+    geminiCliService = createGeminiCliService({
+      ensureWorkspace: async () => ensureGeminiCliWorkspace(app.getPath('userData'))
+    })
+  }
+  return geminiCliService
+}
+
+function launchGeminiCliSetup(): { ok: boolean; error?: string } {
+  const cliEntry = getBundledGeminiCliEntry()
+  if (!existsSync(cliEntry)) {
+    return { ok: false, error: '未找到 Gemini CLI 运行文件，请重新安装应用后再试。' }
+  }
+  const workspace = ensureGeminiCliWorkspace(app.getPath('userData'))
+  const runtime = resolveGeminiCliRuntime(process.env, process.execPath)
+
+  if (process.platform === 'win32') {
+    const scriptPath = join(workspace, 'gemini-login.cmd')
+    writeFileSync(
+      scriptPath,
+      [
+        '@echo off',
+        `cd /d "${workspace}"`,
+        'set NODE_OPTIONS=',
+        'set ELECTRON_RUN_AS_NODE=1',
+        `"${runtime}" "${cliEntry}"`,
+        'echo.',
+        'echo Gemini CLI 登录流程结束后可关闭此窗口。',
+        'pause'
+      ].join('\r\n')
+    )
+    const child = spawn('cmd.exe', ['/c', 'start', 'Gemini CLI Login', scriptPath], {
+      detached: true,
+      stdio: 'ignore'
+    })
+    child.unref()
+    return { ok: true }
+  }
+
+  const scriptPath = join(workspace, 'gemini-login.sh')
+  writeFileSync(scriptPath, buildGeminiCliSetupScript(runtime, cliEntry, workspace))
+  chmodSync(scriptPath, 0o755)
+  const args = process.platform === 'darwin' ? ['-a', 'Terminal', scriptPath] : [scriptPath]
+  const command = process.platform === 'darwin' ? 'open' : 'x-terminal-emulator'
+  const child = spawn(command, args, { detached: true, stdio: 'ignore' })
+  child.on('error', () => {
+    spawn(scriptPath, { detached: true, stdio: 'ignore' }).unref()
+  })
+  child.unref()
+  return { ok: true }
+}
 
 export function registerIpcHandlers(): void {
   // Books
@@ -46,6 +110,68 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('db:getCustomShortcuts', () => shortcutRepo.getAllCustomShortcuts())
   ipcMain.handle('db:setCustomShortcut', (_, action: string, keys: string) => {
     shortcutRepo.upsertCustomShortcut(action, keys)
+  })
+
+  ipcMain.handle('ai:getAccounts', () => aiAssistantRepo.getAiAccounts())
+  ipcMain.handle('ai:saveAccount', (_, data) => aiAssistantRepo.saveAiAccount(data))
+  ipcMain.handle('ai:deleteAccount', (_, id: number) => aiAssistantRepo.deleteAiAccount(id))
+  ipcMain.handle('ai:getSkillTemplates', () => aiAssistantRepo.getAiSkillTemplates())
+  ipcMain.handle('ai:updateSkillTemplate', (_, key: string, updates: Record<string, unknown>) =>
+    aiAssistantRepo.updateAiSkillTemplate(key, updates)
+  )
+  ipcMain.handle('ai:getWorkProfile', (_, bookId: number) => aiAssistantRepo.getAiWorkProfile(bookId))
+  ipcMain.handle('ai:saveWorkProfile', (_, bookId: number, updates: Record<string, unknown>) =>
+    aiAssistantRepo.saveAiWorkProfile(bookId, updates)
+  )
+  ipcMain.handle('ai:getSkillOverrides', (_, bookId: number) => aiAssistantRepo.getAiSkillOverrides(bookId))
+  ipcMain.handle('ai:upsertSkillOverride', (_, bookId: number, skillKey: string, updates: Record<string, unknown>) =>
+    aiAssistantRepo.upsertAiSkillOverride(bookId, skillKey, updates)
+  )
+  ipcMain.handle('ai:deleteSkillOverride', (_, bookId: number, skillKey: string) =>
+    aiAssistantRepo.deleteAiSkillOverride(bookId, skillKey)
+  )
+  ipcMain.handle('ai:getOrCreateConversation', (_, bookId: number) =>
+    aiAssistantRepo.getOrCreateAiConversation(bookId)
+  )
+  ipcMain.handle('ai:createConversation', (_, bookId: number) =>
+    aiAssistantRepo.createAiConversation(bookId)
+  )
+  ipcMain.handle('ai:getConversations', (_, bookId: number) =>
+    aiAssistantRepo.getAiConversations(bookId)
+  )
+  ipcMain.handle('ai:clearConversation', (_, conversationId: number) =>
+    aiAssistantRepo.clearAiConversation(conversationId)
+  )
+  ipcMain.handle('ai:deleteConversation', (_, conversationId: number) =>
+    aiAssistantRepo.deleteAiConversation(conversationId)
+  )
+  ipcMain.handle('ai:getMessages', (_, conversationId: number) => aiAssistantRepo.getAiMessages(conversationId))
+  ipcMain.handle(
+    'ai:addMessage',
+    (_, conversationId: number, role: 'user' | 'assistant' | 'system', content: string, metadata?: unknown) =>
+      aiAssistantRepo.addAiMessage(conversationId, role, content, metadata)
+  )
+  ipcMain.handle('ai:getDrafts', (_, bookId: number, status?: aiAssistantRepo.AiDraftStatus | 'all', conversationId?: number | null) =>
+    aiAssistantRepo.getAiDrafts(bookId, status || 'pending', conversationId)
+  )
+  ipcMain.handle('ai:createDraft', (_, data) => aiAssistantRepo.createAiDraft(data))
+  ipcMain.handle('ai:setDraftStatus', (_, id: number, status: aiAssistantRepo.AiDraftStatus) =>
+    aiAssistantRepo.setAiDraftStatus(id, status)
+  )
+  ipcMain.handle('ai:getResolvedConfigForBook', (_, bookId: number) =>
+    aiAssistantRepo.getResolvedAiConfigForBook(bookId)
+  )
+  ipcMain.on('ai:streamComplete', (event, requestId: string, request: AiBridgeCompleteRequest) => {
+    if (request.provider !== 'gemini_cli') {
+      event.sender.send('ai:streamError', requestId, '主进程暂只处理 Gemini CLI Provider')
+      return
+    }
+
+    void getGeminiCliService().stream(request, {
+      onToken: (token) => event.sender.send('ai:streamToken', requestId, token),
+      onComplete: (content) => event.sender.send('ai:streamComplete', requestId, content),
+      onError: (error) => event.sender.send('ai:streamError', requestId, error)
+    })
   })
 
   // Volumes
@@ -227,6 +353,23 @@ export function registerIpcHandlers(): void {
     await googleAuth.logout()
   })
   ipcMain.handle('auth:getAccessToken', async () => googleAuth.getAccessToken())
+
+  ipcMain.handle('ai:complete', async (_, request: AiBridgeCompleteRequest) => {
+    if (request.provider !== 'gemini_cli') {
+      return { content: '', error: '主进程暂只处理 Gemini CLI Provider' }
+    }
+    return getGeminiCliService().complete(request)
+  })
+  ipcMain.handle('ai:getProviderStatus', async (_, provider: string, options?: { probe?: boolean }) => {
+    if (provider === 'gemini_cli') return getGeminiCliService().getStatus(Boolean(options?.probe))
+    return {
+      provider,
+      available: true,
+      needsSetup: false,
+      message: '当前 Provider 由项目设置直接配置。'
+    }
+  })
+  ipcMain.handle('ai:setupGeminiCli', async () => launchGeminiCliSetup())
 
   ipcMain.handle('sync:uploadBook', async (_, bookId: number) => {
     await driveSync.syncBook(bookId)

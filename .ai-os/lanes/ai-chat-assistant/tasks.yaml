@@ -1,0 +1,66 @@
+baseline_id: "CR-20260422-084513-gemini-3-pro-streaming-experience"
+tasks:
+  - id: TASK-AI-CHAT-001
+    title: "新增 AI 助手数据库迁移与默认能力卡"
+    status: completed
+    acceptance: ["AC-AI-002", "AC-AI-003"]
+  - id: TASK-AI-CHAT-002
+    title: "新增能力合成、上下文裁剪和草稿解析测试"
+    status: completed
+    acceptance: ["AC-AI-003", "AC-AI-005"]
+  - id: TASK-AI-CHAT-003
+    title: "新增 IPC / preload / repository 契约"
+    status: completed
+    acceptance: ["AC-AI-002", "AC-AI-004"]
+  - id: TASK-AI-CHAT-004
+    title: "实现右下角 AI 助手和草稿篮"
+    status: completed
+    acceptance: ["AC-AI-001", "AC-AI-004", "AC-AI-005"]
+  - id: TASK-AI-CHAT-005
+    title: "实现 AI 能力与作品配置面板"
+    status: completed
+    acceptance: ["AC-AI-002", "AC-AI-003"]
+  - id: TASK-AI-CHAT-006
+    title: "执行回归验证"
+    status: completed
+    acceptance: ["AC-AI-001", "AC-AI-002", "AC-AI-003", "AC-AI-004", "AC-AI-005"]
+  - id: TASK-AI-CHAT-007
+    title: "下线 BottomPanel legacy AI 入口与旧项目 AI 表单"
+    status: completed
+    acceptance: ["AC-AI-006"]
+  - id: TASK-AI-CHAT-008
+    title: "将 Gemini CLI 状态检测与登录迁入全局账号配置并回归验证"
+    status: completed
+    acceptance: ["AC-AI-007"]
+  - id: TASK-AI-CHAT-009
+    title: "修复 Gemini CLI 检测/登录可观测性、作品账号路由和 AI 输入回车行为"
+    status: completed
+    acceptance: ["AC-AI-002", "AC-AI-007"]
+  - id: TASK-AI-CHAT-010
+    title: "修复开发态 Gemini CLI 误用 Electron runtime 导致的检测/登录失败"
+    status: completed
+    acceptance: ["AC-AI-007"]
+  - id: TASK-AI-CHAT-011
+    title: "修复结构化草稿解析与可读展示，并为 AI 面板补充拖拽缩放"
+    status: completed
+    acceptance: ["AC-AI-008", "AC-AI-009", "AC-AI-010"]
+  - id: TASK-AI-CHAT-012
+    title: "新增 AI 会话管理、清空当前会话与流式输出渲染"
+    status: completed
+    acceptance: ["AC-AI-011", "AC-AI-012", "AC-AI-013"]
+  - id: TASK-AI-CHAT-013
+    title: "新增 AI 普通会话模式，避免未选能力卡时误触发续写正文"
+    status: completed
+    acceptance: ["AC-AI-014"]
+  - id: TASK-AI-CHAT-014
+    title: "将 AI 会话切换改为右侧列表，并支持删除历史会话"
+    status: completed
+    acceptance: ["AC-AI-015"]
+  - id: TASK-AI-CHAT-015
+    title: "修复 Gemini CLI stream-json 内容片段解析与空响应静默完成"
+    status: completed
+    acceptance: ["AC-AI-013", "AC-AI-014"]
+  - id: TASK-AI-CHAT-016
+    title: "将 Gemini CLI 空模型默认到 Gemini 3 Pro，并优化真实 delta 队列流式体验"
+    status: completed
+    acceptance: ["AC-AI-013"]

@@ -1,0 +1,6 @@
+id = "bookshelf-entry-behavior"
+title = "作品入口与总览触发收口"
+status = "active"
+baseline_id = "CR-20260422-000838-bookshelf-entry-behavior"
+quality_tier = "standard"
+risk_tier = "low"

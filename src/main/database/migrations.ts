@@ -260,6 +260,274 @@ const migrations: Migration[] = [
       if (cols.some((col) => col.name === 'auto_suppressed')) return
       db.exec(`ALTER TABLE foreshadowings ADD COLUMN auto_suppressed INTEGER NOT NULL DEFAULT 0`)
     }
+  },
+  {
+    version: 15,
+    description: 'AI assistant accounts, skills, profiles, conversations, messages, drafts',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ai_accounts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          provider TEXT NOT NULL DEFAULT 'openai',
+          api_endpoint TEXT NOT NULL DEFAULT '',
+          model TEXT NOT NULL DEFAULT '',
+          credential_ref TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'unknown',
+          is_default INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_skill_templates (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          system_prompt TEXT NOT NULL DEFAULT '',
+          user_prompt_template TEXT NOT NULL DEFAULT '',
+          context_policy TEXT NOT NULL DEFAULT 'smart_minimal',
+          output_contract TEXT NOT NULL DEFAULT 'plain_text',
+          enabled_surfaces TEXT NOT NULL DEFAULT 'assistant',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_builtin INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_work_profiles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id INTEGER NOT NULL UNIQUE,
+          default_account_id INTEGER,
+          style_guide TEXT NOT NULL DEFAULT '',
+          genre_rules TEXT NOT NULL DEFAULT '',
+          content_boundaries TEXT NOT NULL DEFAULT '',
+          asset_rules TEXT NOT NULL DEFAULT '',
+          rhythm_rules TEXT NOT NULL DEFAULT '',
+          context_policy TEXT NOT NULL DEFAULT 'smart_minimal',
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+          FOREIGN KEY (default_account_id) REFERENCES ai_accounts(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_skill_overrides (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id INTEGER NOT NULL,
+          skill_key TEXT NOT NULL,
+          name TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          system_prompt TEXT NOT NULL DEFAULT '',
+          user_prompt_template TEXT NOT NULL DEFAULT '',
+          context_policy TEXT NOT NULL DEFAULT '',
+          output_contract TEXT NOT NULL DEFAULT '',
+          enabled_surfaces TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          UNIQUE(book_id, skill_key),
+          FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_conversations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id INTEGER NOT NULL,
+          title TEXT NOT NULL DEFAULT 'AI 对话',
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          conversation_id INTEGER NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
+          content TEXT NOT NULL DEFAULT '',
+          metadata TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_drafts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id INTEGER NOT NULL,
+          conversation_id INTEGER,
+          message_id INTEGER,
+          kind TEXT NOT NULL CHECK(kind IN ('insert_text','replace_text','create_chapter','update_chapter_summary','create_character','create_wiki_entry','create_plot_node','create_foreshadowing')),
+          title TEXT NOT NULL DEFAULT '',
+          payload TEXT NOT NULL DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','dismissed')),
+          target_ref TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+          FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE SET NULL,
+          FOREIGN KEY (message_id) REFERENCES ai_messages(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ai_accounts_default ON ai_accounts(is_default);
+        CREATE INDEX IF NOT EXISTS idx_ai_work_profiles_book ON ai_work_profiles(book_id);
+        CREATE INDEX IF NOT EXISTS idx_ai_skill_overrides_book ON ai_skill_overrides(book_id);
+        CREATE INDEX IF NOT EXISTS idx_ai_conversations_book ON ai_conversations(book_id, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation ON ai_messages(conversation_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_ai_drafts_book_status ON ai_drafts(book_id, status, created_at);
+      `)
+
+      const seed = db.prepare(`
+        INSERT INTO ai_skill_templates (
+          key, name, description, system_prompt, user_prompt_template,
+          context_policy, output_contract, enabled_surfaces, sort_order, is_builtin
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(key) DO NOTHING
+      `)
+
+      const skills: Array<[string, string, string, string, string, string, string, string, number]> = [
+        [
+          'continue_writing',
+          '续写正文',
+          '根据当前章节、选中文本和相关资产自然续写。',
+          '你是网文续写助手。保持作者现有文风、视角、人物设定和节奏。只给可直接采纳的正文，不解释。',
+          '请根据用户要求续写：{{input}}',
+          'smart_minimal',
+          'plain_text',
+          'assistant,editor',
+          1
+        ],
+        [
+          'create_chapter',
+          '创建章节',
+          '生成新章节标题和正文草稿。',
+          '你是长篇网文章节策划和正文助手。输出必须适合进入草稿篮，不能直接声称已写入小说。',
+          '请生成章节草稿：{{input}}',
+          'smart_minimal',
+          '{"drafts":[{"kind":"create_chapter","title":"章节标题","content":"<p>章节正文</p>"}]}',
+          'assistant',
+          2
+        ],
+        [
+          'review_chapter',
+          '审核本章',
+          '检查剧情、节奏、人物一致性和毒点风险。',
+          '你是网文编辑审核助手。指出问题和可执行修改建议，不直接改正文。',
+          '请审核当前内容：{{input}}',
+          'smart_minimal',
+          'plain_text',
+          'assistant,editor',
+          3
+        ],
+        [
+          'polish_text',
+          '润色改写',
+          '将选中文本改得更顺但保留原意。',
+          '你是网文润色助手。保留剧情事实和人物口吻，只改善表达。',
+          '请润色或改写：{{input}}',
+          'smart_minimal',
+          '{"drafts":[{"kind":"replace_text","content":"改写后的文本"}]}',
+          'assistant,editor',
+          4
+        ],
+        [
+          'create_character',
+          '生成角色',
+          '生成角色档案草稿。',
+          '你是网文角色设定助手。角色必须服务当前作品冲突和爽点节奏。',
+          '请生成角色：{{input}}',
+          'smart_minimal',
+          '{"drafts":[{"kind":"create_character","name":"角色名","faction":"neutral","status":"active","description":"角色简介","custom_fields":{}}]}',
+          'assistant',
+          5
+        ],
+        [
+          'create_wiki_entry',
+          '生成设定',
+          '生成世界观、道具、势力或规则设定草稿。',
+          '你是设定维基助手。设定要可长期维护，并避免和已有内容冲突。',
+          '请生成设定条目：{{input}}',
+          'smart_minimal',
+          '{"drafts":[{"kind":"create_wiki_entry","category":"分类","title":"设定标题","content":"设定内容"}]}',
+          'assistant',
+          6
+        ],
+        [
+          'create_foreshadowing',
+          '整理伏笔',
+          '从正文或想法中整理伏笔草稿。',
+          '你是伏笔管理助手。只提取值得追踪、后续需要回收的线索。',
+          '请整理伏笔：{{input}}',
+          'smart_minimal',
+          '{"drafts":[{"kind":"create_foreshadowing","text":"伏笔描述","expected_chapter":null,"expected_word_count":null}]}',
+          'assistant,editor',
+          7
+        ],
+        [
+          'create_plot_node',
+          '剧情节点建议',
+          '生成剧情节点和情绪节奏建议。',
+          '你是网文剧情沙盘助手。节点要推动冲突和爽点，不做空泛总结。',
+          '请生成剧情节点：{{input}}',
+          'smart_minimal',
+          '{"drafts":[{"kind":"create_plot_node","chapter_number":0,"title":"节点标题","score":0,"node_type":"main","description":"节点说明"}]}',
+          'assistant',
+          8
+        ]
+      ]
+
+      for (const skill of skills) seed.run(...skill)
+
+      const hasAccount = (db.prepare('SELECT COUNT(*) as count FROM ai_accounts').get() as { count: number }).count > 0
+      if (!hasAccount) {
+        db.prepare(`
+          INSERT INTO ai_accounts (name, provider, api_endpoint, model, credential_ref, is_default, status)
+          SELECT
+            '默认 AI 账号',
+            COALESCE(NULLIF(ai_provider, ''), 'openai'),
+            COALESCE(ai_api_endpoint, ''),
+            COALESCE(ai_model, ''),
+            CASE WHEN COALESCE(ai_api_key, '') <> '' THEN 'legacy-project-config:' || book_id ELSE '' END,
+            1,
+            'unknown'
+          FROM project_config
+          WHERE COALESCE(ai_provider, '') <> ''
+            OR COALESCE(ai_api_key, '') <> ''
+            OR COALESCE(ai_api_endpoint, '') <> ''
+            OR COALESCE(ai_model, '') <> ''
+          ORDER BY book_id
+          LIMIT 1
+        `).run()
+      }
+
+      db.prepare(`
+        INSERT OR IGNORE INTO ai_work_profiles (book_id, default_account_id, context_policy)
+        SELECT
+          pc.book_id,
+          (SELECT id FROM ai_accounts ORDER BY is_default DESC, id LIMIT 1),
+          'smart_minimal'
+        FROM project_config pc
+      `).run()
+    }
+  },
+  {
+    version: 16,
+    description: 'Normalize blank AI work profiles to follow the global default account',
+    up: (db) => {
+      db.exec(`
+        UPDATE ai_work_profiles
+        SET
+          default_account_id = NULL,
+          updated_at = datetime('now','localtime')
+        WHERE id IN (
+          SELECT profile.id
+          FROM ai_work_profiles profile
+          JOIN ai_accounts account ON account.id = profile.default_account_id
+          WHERE COALESCE(profile.style_guide, '') = ''
+            AND COALESCE(profile.genre_rules, '') = ''
+            AND COALESCE(profile.content_boundaries, '') = ''
+            AND COALESCE(profile.asset_rules, '') = ''
+            AND COALESCE(profile.rhythm_rules, '') = ''
+            AND COALESCE(profile.context_policy, 'smart_minimal') = 'smart_minimal'
+            AND account.credential_ref LIKE 'legacy-project-config:%'
+        );
+      `)
+    }
   }
 ]
 

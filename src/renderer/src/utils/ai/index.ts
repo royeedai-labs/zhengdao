@@ -1,337 +1,347 @@
-export interface AiConfig {
-  ai_provider?: string
-  ai_api_key: string
-  ai_api_endpoint: string
-  ai_model: string
+import { GeminiAdapter } from './gemini-adapter'
+import { OllamaAdapter } from './ollama-adapter'
+import { OpenAIAdapter } from './openai-adapter'
+import type {
+  AiBridgeCompleteRequest,
+  AiCallerConfig,
+  AiConfig,
+  AiFetchOpts,
+  AiProvider,
+  AiProviderAdapter,
+  AiResponse,
+  AiStreamCallbacks
+} from './types'
+
+export type {
+  AiBridgeCompleteRequest,
+  AiCallerConfig,
+  AiConfig,
+  AiFetchOpts,
+  AiProvider,
+  AiResponse,
+  AiStreamCallbacks
+} from './types'
+
+const PROVIDERS = new Set<AiProvider>(['openai', 'gemini', 'gemini_cli', 'ollama', 'custom'])
+const openaiAdapter = new OpenAIAdapter()
+const geminiAdapter = new GeminiAdapter()
+const ollamaAdapter = new OllamaAdapter()
+
+type PromptRequest = {
+  systemPrompt: string
+  userPrompt: string
+  maxTokens: number
+  temperature: number
 }
 
-export interface AiResponse {
-  content: string
-  error?: string
+function normalizeProvider(provider?: string): AiProvider {
+  if (provider && PROVIDERS.has(provider as AiProvider)) return provider as AiProvider
+  return 'openai'
 }
 
-export interface AiStreamCallbacks {
-  onToken: (token: string) => void
-  onComplete: (fullText: string) => void
-  onError: (error: string) => void
-}
-
-type AiFetchOpts = {
-  signal?: AbortSignal
-}
-
-function missingConfig(config: AiConfig): AiResponse | null {
-  if (!config.ai_api_key || !config.ai_api_endpoint) {
-    return { content: '', error: '请先在项目设置中配置 AI 助手 API' }
+function normalizeConfig(config: AiCallerConfig): AiConfig {
+  return {
+    ai_provider: normalizeProvider(config.ai_provider),
+    ai_api_key: config.ai_api_key || '',
+    ai_api_endpoint: config.ai_api_endpoint || '',
+    ai_model: config.ai_model || ''
   }
+}
+
+function adapterFor(provider: AiProvider): AiProviderAdapter | null {
+  if (provider === 'gemini') return geminiAdapter
+  if (provider === 'ollama') return ollamaAdapter
+  if (provider === 'openai' || provider === 'custom') return openaiAdapter
   return null
 }
 
-async function parseJsonResponse(response: Response): Promise<{ content: string; error?: string }> {
-  try {
-    const data = await response.json()
-    const text = data?.choices?.[0]?.message?.content ?? ''
-    return { content: typeof text === 'string' ? text : String(text) }
-  } catch {
-    return { content: '', error: '无法解析 AI 响应' }
+export function isAiConfigReady(config?: Partial<AiCallerConfig> | null): boolean {
+  if (!config) return false
+  const provider = normalizeProvider(config.ai_provider)
+  if (provider === 'gemini_cli' || provider === 'ollama') return true
+  return Boolean(config.ai_api_key?.trim())
+}
+
+function bridgeComplete(request: AiBridgeCompleteRequest): Promise<AiResponse> {
+  if (typeof window === 'undefined' || !window.api?.aiComplete) {
+    return Promise.resolve({
+      content: '',
+      error: '当前运行环境不支持 Gemini CLI 调用'
+    })
   }
+  return window.api.aiComplete(request) as Promise<AiResponse>
+}
+
+async function bridgeStreamComplete(request: AiBridgeCompleteRequest, callbacks: AiStreamCallbacks): Promise<boolean> {
+  if (typeof window === 'undefined' || !window.api?.aiStreamComplete) return false
+  await new Promise<void>((resolve) => {
+    let cleanup: (() => void) | void
+    let settled = false
+    const runCleanup = () => {
+      cleanup?.()
+      cleanup = undefined
+    }
+    const finish = () => {
+      if (settled) return
+      settled = true
+      runCleanup()
+      resolve()
+    }
+    cleanup = window.api.aiStreamComplete(request, {
+      onToken: callbacks.onToken,
+      onComplete: (content) => {
+        callbacks.onComplete(content)
+        finish()
+      },
+      onError: (error) => {
+        callbacks.onError(error)
+        finish()
+      }
+    }) as (() => void) | void
+    if (settled) runCleanup()
+  })
+  return true
+}
+
+async function completeWithProvider(
+  config: AiCallerConfig,
+  request: PromptRequest,
+  opts?: AiFetchOpts
+): Promise<AiResponse> {
+  const normalized = normalizeConfig(config)
+  if (!isAiConfigReady(normalized)) {
+    return { content: '', error: '请先在项目设置中配置 AI 助手 API' }
+  }
+
+  if (normalized.ai_provider === 'gemini_cli') {
+    return bridgeComplete({
+      provider: 'gemini_cli',
+      model: normalized.ai_model,
+      systemPrompt: request.systemPrompt,
+      userPrompt: request.userPrompt,
+      maxTokens: request.maxTokens,
+      temperature: request.temperature
+    })
+  }
+
+  const adapter = adapterFor(normalized.ai_provider)
+  if (!adapter) {
+    return { content: '', error: '暂不支持当前 AI Provider' }
+  }
+  return adapter.complete(
+    normalized,
+    request.systemPrompt,
+    request.userPrompt,
+    request.maxTokens,
+    request.temperature,
+    opts
+  )
+}
+
+async function streamWithProvider(
+  config: AiCallerConfig,
+  request: PromptRequest,
+  callbacks: AiStreamCallbacks,
+  opts?: AiFetchOpts
+): Promise<void> {
+  const normalized = normalizeConfig(config)
+  if (!isAiConfigReady(normalized)) {
+    callbacks.onError('请先在项目设置中配置 AI 助手 API')
+    return
+  }
+
+  if (normalized.ai_provider === 'gemini_cli') {
+    const bridgeRequest = {
+      provider: 'gemini_cli',
+      model: normalized.ai_model,
+      systemPrompt: request.systemPrompt,
+      userPrompt: request.userPrompt,
+      maxTokens: request.maxTokens,
+      temperature: request.temperature
+    } satisfies AiBridgeCompleteRequest
+    if (await bridgeStreamComplete(bridgeRequest, callbacks)) return
+    const result = await bridgeComplete(bridgeRequest)
+    if (result.error) {
+      callbacks.onError(result.error)
+      return
+    }
+    callbacks.onToken(result.content)
+    callbacks.onComplete(result.content)
+    return
+  }
+
+  const adapter = adapterFor(normalized.ai_provider)
+  if (!adapter) {
+    callbacks.onError('暂不支持当前 AI Provider')
+    return
+  }
+  await adapter.stream(
+    normalized,
+    request.systemPrompt,
+    request.userPrompt,
+    callbacks,
+    request.maxTokens,
+    request.temperature,
+    opts
+  )
 }
 
 export async function aiComplete(
-  config: AiConfig,
+  config: AiCallerConfig,
   prompt: string,
   context: string,
   opts?: AiFetchOpts
 ): Promise<AiResponse> {
-  const missing = missingConfig(config)
-  if (missing) return missing
+  return completeWithProvider(
+    config,
+    {
+      systemPrompt:
+        '你是一位优秀的网文作家助手。请根据已有内容自然地续写，保持风格一致。只输出续写内容，不要解释。',
+      userPrompt: `${prompt}\n\n已有内容：\n${context}`,
+      maxTokens: 500,
+      temperature: 0.8
+    },
+    opts
+  )
+}
 
-  try {
-    const response = await fetch(config.ai_api_endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.ai_api_key}`
-      },
-      body: JSON.stringify({
-        model: config.ai_model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              '你是一位优秀的网文作家助手。请根据已有内容自然地续写，保持风格一致。只输出续写内容，不要解释。'
-          },
-          { role: 'user', content: `${prompt}\n\n已有内容：\n${context}` }
-        ],
-        max_tokens: 500,
-        temperature: 0.8
-      }),
-      signal: opts?.signal
-    })
+export async function aiPrompt(
+  config: AiCallerConfig,
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens = 1200,
+  temperature = 0.7,
+  opts?: AiFetchOpts
+): Promise<AiResponse> {
+  return completeWithProvider(
+    config,
+    {
+      systemPrompt,
+      userPrompt,
+      maxTokens,
+      temperature
+    },
+    opts
+  )
+}
 
-    if (!response.ok) {
-      return { content: '', error: `AI 请求失败: HTTP ${response.status}` }
-    }
-    return parseJsonResponse(response)
-  } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { content: '', error: undefined }
-    }
-    return { content: '', error: `AI 请求失败: ${(err as Error).message}` }
-  }
+export async function aiPromptStream(
+  config: AiCallerConfig,
+  systemPrompt: string,
+  userPrompt: string,
+  callbacks: AiStreamCallbacks,
+  maxTokens = 1200,
+  temperature = 0.7,
+  opts?: AiFetchOpts
+): Promise<void> {
+  await streamWithProvider(
+    config,
+    {
+      systemPrompt,
+      userPrompt,
+      maxTokens,
+      temperature
+    },
+    callbacks,
+    opts
+  )
 }
 
 export async function aiCompleteStream(
-  config: AiConfig,
+  config: AiCallerConfig,
   prompt: string,
   context: string,
   callbacks: AiStreamCallbacks,
   opts?: AiFetchOpts
 ): Promise<void> {
-  const missing = missingConfig(config)
-  if (missing) {
-    callbacks.onError(missing.error || '配置缺失')
-    return
-  }
-
-  let full = ''
-  try {
-    const response = await fetch(config.ai_api_endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.ai_api_key}`
-      },
-      body: JSON.stringify({
-        model: config.ai_model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              '你是一位优秀的网文作家助手。请根据已有内容自然地续写，保持风格一致。只输出续写内容，不要解释。'
-          },
-          { role: 'user', content: `${prompt}\n\n已有内容：\n${context}` }
-        ],
-        max_tokens: 500,
-        temperature: 0.8,
-        stream: true
-      }),
-      signal: opts?.signal
-    })
-
-    if (!response.ok || !response.body) {
-      callbacks.onError(`AI 请求失败: HTTP ${response.status}`)
-      return
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (payload === '[DONE]') continue
-        try {
-          const json = JSON.parse(payload)
-          const piece = json?.choices?.[0]?.delta?.content as string | undefined
-          if (piece) {
-            full += piece
-            callbacks.onToken(piece)
-          }
-        } catch {
-          void 0
-        }
-      }
-    }
-
-    callbacks.onComplete(full)
-  } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      callbacks.onComplete(full)
-      return
-    }
-    callbacks.onError(`AI 请求失败: ${(err as Error).message}`)
-  }
+  await streamWithProvider(
+    config,
+    {
+      systemPrompt:
+        '你是一位优秀的网文作家助手。请根据已有内容自然地续写，保持风格一致。只输出续写内容，不要解释。',
+      userPrompt: `${prompt}\n\n已有内容：\n${context}`,
+      maxTokens: 500,
+      temperature: 0.8
+    },
+    callbacks,
+    opts
+  )
 }
 
 export async function aiSummarize(
-  config: AiConfig,
+  config: AiCallerConfig,
   chapterContent: string,
   opts?: AiFetchOpts
 ): Promise<AiResponse> {
-  const missing = missingConfig(config)
-  if (missing) return missing
-
-  try {
-    const response = await fetch(config.ai_api_endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.ai_api_key}`
-      },
-      body: JSON.stringify({
-        model: config.ai_model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              '你是编辑助理。请用两三句话概括本章剧情要点与情绪走向，客观中立，不要评价文笔。只输出摘要正文。'
-          },
-          {
-            role: 'user',
-            content: `请为下列章节正文生成摘要：\n\n${chapterContent}`
-          }
-        ],
-        max_tokens: 400,
-        temperature: 0.5
-      }),
-      signal: opts?.signal
-    })
-
-    if (!response.ok) {
-      return { content: '', error: `AI 请求失败: HTTP ${response.status}` }
-    }
-    return parseJsonResponse(response)
-  } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { content: '', error: undefined }
-    }
-    return { content: '', error: `AI 请求失败: ${(err as Error).message}` }
-  }
+  return completeWithProvider(
+    config,
+    {
+      systemPrompt:
+        '你是编辑助理。请用两三句话概括本章剧情要点与情绪走向，客观中立，不要评价文笔。只输出摘要正文。',
+      userPrompt: `请为下列章节正文生成摘要：\n\n${chapterContent}`,
+      maxTokens: 400,
+      temperature: 0.5
+    },
+    opts
+  )
 }
 
 export async function aiAnalyzeStyle(
-  config: AiConfig,
+  config: AiCallerConfig,
   text: string,
   opts?: AiFetchOpts
 ): Promise<AiResponse> {
-  const missing = missingConfig(config)
-  if (missing) return missing
-
-  try {
-    const response = await fetch(config.ai_api_endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.ai_api_key}`
-      },
-      body: JSON.stringify({
-        model: config.ai_model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              '你是文学风格分析师。阅读给定小说文本，输出一个 JSON 对象（不要 markdown 代码围栏），键为：句长均衡度、对话叙事比、用词丰富度、节奏感、画面感、情感张力，值均为 1-10 的整数；另含 "summary" 字符串键，为 2-4 句中文简评。只输出 JSON。'
-          },
-          { role: 'user', content: text.slice(0, 120000) }
-        ],
-        max_tokens: 600,
-        temperature: 0.4
-      }),
-      signal: opts?.signal
-    })
-
-    if (!response.ok) {
-      return { content: '', error: `AI 请求失败: HTTP ${response.status}` }
-    }
-    return parseJsonResponse(response)
-  } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { content: '', error: undefined }
-    }
-    return { content: '', error: `AI 请求失败: ${(err as Error).message}` }
-  }
+  return completeWithProvider(
+    config,
+    {
+      systemPrompt:
+        '你是文学风格分析师。阅读给定小说文本，输出一个 JSON 对象（不要 markdown 代码围栏），键为：句长均衡度、对话叙事比、用词丰富度、节奏感、画面感、情感张力，值均为 1-10 的整数；另含 "summary" 字符串键，为 2-4 句中文简评。只输出 JSON。',
+      userPrompt: text.slice(0, 120000),
+      maxTokens: 600,
+      temperature: 0.4
+    },
+    opts
+  )
 }
 
-export async function aiPolish(config: AiConfig, text: string, opts?: AiFetchOpts): Promise<AiResponse> {
-  const missing = missingConfig(config)
-  if (missing) return missing
-
-  try {
-    const response = await fetch(config.ai_api_endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.ai_api_key}`
-      },
-      body: JSON.stringify({
-        model: config.ai_model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              '你是一位网文编辑，请润色以下文字，保持原意和风格，使文笔更加流畅生动。只输出润色后的文字。'
-          },
-          { role: 'user', content: text }
-        ],
-        max_tokens: 1000,
-        temperature: 0.6
-      }),
-      signal: opts?.signal
-    })
-
-    if (!response.ok) {
-      return { content: '', error: `AI 请求失败: HTTP ${response.status}` }
-    }
-    return parseJsonResponse(response)
-  } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { content: '', error: undefined }
-    }
-    return { content: '', error: `AI 请求失败: ${(err as Error).message}` }
-  }
+export async function aiPolish(
+  config: AiCallerConfig,
+  text: string,
+  opts?: AiFetchOpts
+): Promise<AiResponse> {
+  return completeWithProvider(
+    config,
+    {
+      systemPrompt:
+        '你是一位网文编辑，请润色以下文字，保持原意和风格，使文笔更加流畅生动。只输出润色后的文字。',
+      userPrompt: text,
+      maxTokens: 1000,
+      temperature: 0.6
+    },
+    opts
+  )
 }
 
 export async function aiGenerateNames(
-  config: AiConfig,
+  config: AiCallerConfig,
   genre: string,
   faction: string,
   count = 5,
   opts?: AiFetchOpts
 ): Promise<string[]> {
-  if (!config.ai_api_key || !config.ai_api_endpoint) return []
-
-  try {
-    const response = await fetch(config.ai_api_endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.ai_api_key}`
-      },
-      body: JSON.stringify({
-        model: config.ai_model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: '你是一位小说命名专家。请生成角色名字。只输出名字，每行一个，不要编号。'
-          },
-          {
-            role: 'user',
-            content: `请为一部${genre}题材的小说生成${count}个${faction}角色名字。`
-          }
-        ],
-        max_tokens: 200,
-        temperature: 0.9
-      }),
-      signal: opts?.signal
-    })
-
-    const data = await response.json()
-    const text = data?.choices?.[0]?.message?.content || ''
-    return text
-      .split('\n')
-      .map((n: string) => n.trim())
-      .filter(Boolean)
-  } catch {
-    return []
-  }
+  const result = await completeWithProvider(
+    config,
+    {
+      systemPrompt: '你是一位小说命名专家。请生成角色名字。只输出名字，每行一个，不要编号。',
+      userPrompt: `请为一部${genre}题材的小说生成${count}个${faction}角色名字。`,
+      maxTokens: 200,
+      temperature: 0.9
+    },
+    opts
+  )
+  if (result.error) return []
+  return result.content
+    .split('\n')
+    .map((n) => n.trim())
+    .filter(Boolean)
 }

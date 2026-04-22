@@ -10,6 +10,9 @@ const config: Configuration = {
     buildResources: 'resources',
     output: 'dist'
   },
+  asarUnpack: [
+    'node_modules/@google/gemini-cli/**'
+  ],
   extraResources: [
     {
       from: 'resources/icon.png',

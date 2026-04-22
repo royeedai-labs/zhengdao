@@ -19,7 +19,8 @@ export class OllamaAdapter implements AiProviderAdapter {
     systemPrompt: string,
     userPrompt: string,
     maxTokens = 500,
-    temperature = 0.8
+    temperature = 0.8,
+    opts?: { signal?: AbortSignal }
   ): Promise<AiResponse> {
     const url = resolveChatUrl(config.ai_api_endpoint)
 
@@ -35,7 +36,8 @@ export class OllamaAdapter implements AiProviderAdapter {
           ],
           stream: false,
           options: { num_predict: maxTokens, temperature }
-        })
+        }),
+        signal: opts?.signal
       })
 
       if (!response.ok) {
@@ -63,7 +65,8 @@ export class OllamaAdapter implements AiProviderAdapter {
     userPrompt: string,
     callbacks: AiStreamCallbacks,
     maxTokens = 500,
-    temperature = 0.8
+    temperature = 0.8,
+    opts?: { signal?: AbortSignal }
   ): Promise<void> {
     const url = resolveChatUrl(config.ai_api_endpoint)
 
@@ -79,7 +82,8 @@ export class OllamaAdapter implements AiProviderAdapter {
           ],
           stream: true,
           options: { num_predict: maxTokens, temperature }
-        })
+        }),
+        signal: opts?.signal
       })
 
       if (!response.ok) {

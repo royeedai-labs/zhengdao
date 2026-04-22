@@ -1,0 +1,110 @@
+version: 1
+baseline_id: "CR-20260421-225658-oss-license-tightening"
+scope:
+  mode: "change"
+  focus: "repo-license-policy"
+  baseline_source: "MISSION.md + specs/license-policy.spec.md"
+  quality_tier: "high-risk"
+
+milestones:
+  - id: M1
+    title: "License Baseline Locked"
+    goal: "许可证收紧的范围、风险与验收口径已同步到工件"
+    scope: "mission / spec / acceptance / release-plan / baseline-log"
+    acceptance_goal: "设计确认门与逻辑确认门可进入待确认状态"
+    target_window: "2026-04-21"
+  - id: M2
+    title: "License Metadata Updated"
+    goal: "LICENSE、README 与 npm 元数据已统一为 AGPL-3.0-only"
+    scope: "repo-top-level-files"
+    acceptance_goal: "实现质量门通过"
+    target_window: "2026-04-21"
+
+tasks:
+  - id: TASK-LIC-001
+    title: "同步许可证收紧的变更基线"
+    milestone: M1
+    parent: null
+    status: done
+    owner: AI
+    risk: high
+    priority: P1
+    wave: 1
+    execution_role: "design_mapper"
+    approval_required: "user_confirmed_change"
+    depends_on: []
+    requirement_refs:
+      - "REQ-LIC-001"
+      - "REQ-LIC-002"
+      - "REQ-LIC-003"
+    acceptance_refs:
+      - "AC-LIC-001"
+      - "AC-LIC-002"
+      - "AC-LIC-003"
+    context_files:
+      - "MISSION.md"
+      - "specs/license-policy.spec.md"
+      - "acceptance.yaml"
+      - "release-plan.md"
+      - "baseline-log/CR-20260421-225658-oss-license-tightening.md"
+    outputs:
+      - "baseline-log/CR-20260421-225658-oss-license-tightening.md"
+      - "MISSION.md"
+      - "specs/license-policy.spec.md"
+      - "acceptance.yaml"
+      - "release-plan.md"
+    affected_components:
+      - "baseline"
+      - "license-policy"
+    verification_required:
+      - "baseline-review"
+    measurable_outcome:
+      - "许可证变更边界、风险与验收口径已经明确"
+    definition_of_done:
+      - "用户收到最新基线摘要并可确认或驳回"
+    evidence_required:
+      - "baseline-record"
+
+  - id: TASK-LIC-002
+    title: "更新顶层许可证与元数据"
+    milestone: M2
+    parent: null
+    status: done
+    owner: AI
+    risk: high
+    priority: P0
+    wave: 2
+    execution_role: "implementer"
+    approval_required: "confirmed"
+    depends_on:
+      - "TASK-LIC-001"
+    requirement_refs:
+      - "REQ-LIC-001"
+      - "REQ-LIC-002"
+    acceptance_refs:
+      - "AC-LIC-001"
+      - "AC-LIC-002"
+    context_files:
+      - "LICENSE"
+      - "README.md"
+      - "package.json"
+      - "package-lock.json"
+    outputs:
+      - "LICENSE"
+      - "README.md"
+      - "package.json"
+      - "package-lock.json"
+    affected_components:
+      - "repo-metadata"
+      - "legal-notice"
+    verification_required:
+      - "metadata-check"
+      - "build"
+    measurable_outcome:
+      - "仓库顶层授权声明统一为 AGPL-3.0-only"
+    definition_of_done:
+      - "LICENSE 已替换"
+      - "README 与 npm 元数据已统一"
+    evidence_required:
+      - "file-diff"
+      - "verification-log"

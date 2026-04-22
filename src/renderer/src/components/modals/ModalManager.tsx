@@ -23,6 +23,7 @@ import StatsModal from './StatsModal'
 import TextAnalysisModal from './TextAnalysisModal'
 import BookOverviewModal from './BookOverviewModal'
 import ConsistencyCheckModal from './ConsistencyCheckModal'
+import AiSettingsModal from './AiSettingsModal'
 
 function renderModal(type: ModalType) {
   switch (type) {
@@ -49,6 +50,7 @@ function renderModal(type: ModalType) {
     case 'textAnalysis': return <TextAnalysisModal />
     case 'bookOverview': return <BookOverviewModal />
     case 'consistencyCheck': return <ConsistencyCheckModal />
+    case 'aiSettings': return <AiSettingsModal />
     default: return null
   }
 }

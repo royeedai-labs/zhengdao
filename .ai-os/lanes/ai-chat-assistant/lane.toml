@@ -1,0 +1,6 @@
+id = "ai-chat-assistant"
+title = "AI 创作助手与写作能力配置"
+status = "active"
+baseline_id = "CR-20260421-221000-ai-chat-assistant"
+quality_tier = "high-risk"
+risk_tier = "high"

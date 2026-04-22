@@ -1,9 +1,15 @@
 import { create } from 'zustand'
 import type { ModalType } from '@/types'
 import { THEME_IDS } from '@/utils/themes'
+import {
+  clampAiAssistantPanelRect,
+  createDefaultAiAssistantPanelRect,
+  type AiAssistantPanelRect
+} from '@/components/ai/panel-layout'
 
 const THEME_STORAGE_KEY = 'write-ui-theme'
 const BOTTOM_PANEL_HEIGHT_STORAGE_KEY = 'write-bottom-panel-height'
+const AI_ASSISTANT_PANEL_RECT_STORAGE_KEY = 'write-ai-assistant-panel-rect'
 
 function clampBottomPanelHeight(height: number): number {
   if (typeof window === 'undefined') {
@@ -37,6 +43,38 @@ function readStoredBottomPanelHeight(): number {
   }
 }
 
+function readStoredAiAssistantPanelRect(): AiAssistantPanelRect {
+  if (typeof window === 'undefined') {
+    return { x: 16, y: 16, width: 420, height: 680 }
+  }
+
+  try {
+    const raw = localStorage.getItem(AI_ASSISTANT_PANEL_RECT_STORAGE_KEY)
+    if (!raw) return createDefaultAiAssistantPanelRect(window.innerWidth, window.innerHeight)
+    const parsed = JSON.parse(raw) as Partial<AiAssistantPanelRect>
+    if (
+      typeof parsed.x !== 'number' ||
+      typeof parsed.y !== 'number' ||
+      typeof parsed.width !== 'number' ||
+      typeof parsed.height !== 'number'
+    ) {
+      return createDefaultAiAssistantPanelRect(window.innerWidth, window.innerHeight)
+    }
+    return clampAiAssistantPanelRect(parsed as AiAssistantPanelRect, window.innerWidth, window.innerHeight)
+  } catch {
+    return createDefaultAiAssistantPanelRect(window.innerWidth, window.innerHeight)
+  }
+}
+
+function persistAiAssistantPanelRect(rect: AiAssistantPanelRect): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(AI_ASSISTANT_PANEL_RECT_STORAGE_KEY, JSON.stringify(rect))
+  } catch {
+    void 0
+  }
+}
+
 if (typeof document !== 'undefined') {
   document.documentElement.dataset.theme = initialTheme
 }
@@ -63,6 +101,14 @@ interface UIStore {
   splitView: boolean
   splitChapterId: number | null
 
+  aiAssistantOpen: boolean
+  aiAssistantSkillKey: string | null
+  aiAssistantPanelRect: AiAssistantPanelRect
+  aiAssistantSelectionText: string
+  aiAssistantSelectionChapterId: number | null
+  aiAssistantSelectionFrom: number | null
+  aiAssistantSelectionTo: number | null
+
   activeModal: ModalType
   modalData: Record<string, unknown> | null
   modalStack: ModalEntry[]
@@ -81,6 +127,17 @@ interface UIStore {
 
   toggleSplitView: () => void
   setSplitChapterId: (id: number | null) => void
+
+  openAiAssistant: (skillKey?: string | null) => void
+  closeAiAssistant: () => void
+  setAiAssistantSkillKey: (skillKey: string | null) => void
+  setAiAssistantPanelRect: (rect: AiAssistantPanelRect) => void
+  setAiAssistantSelection: (data: {
+    text: string
+    chapterId: number | null
+    from: number | null
+    to: number | null
+  }) => void
 
   theme: string
   setTheme: (theme: string) => void
@@ -107,6 +164,14 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   splitView: false,
   splitChapterId: null,
+
+  aiAssistantOpen: false,
+  aiAssistantSkillKey: null,
+  aiAssistantPanelRect: readStoredAiAssistantPanelRect(),
+  aiAssistantSelectionText: '',
+  aiAssistantSelectionChapterId: null,
+  aiAssistantSelectionFrom: null,
+  aiAssistantSelectionTo: null,
 
   activeModal: null,
   modalData: null,
@@ -147,6 +212,37 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   toggleSplitView: () => set((s) => ({ splitView: !s.splitView })),
   setSplitChapterId: (id) => set({ splitChapterId: id }),
+
+  openAiAssistant: (skillKey = null) =>
+    set((state) => {
+      const rect =
+        typeof window === 'undefined'
+          ? state.aiAssistantPanelRect
+          : clampAiAssistantPanelRect(state.aiAssistantPanelRect, window.innerWidth, window.innerHeight)
+      persistAiAssistantPanelRect(rect)
+      return {
+        aiAssistantOpen: true,
+        aiAssistantSkillKey: skillKey,
+        aiAssistantPanelRect: rect
+      }
+    }),
+  closeAiAssistant: () => set({ aiAssistantOpen: false }),
+  setAiAssistantSkillKey: (skillKey) => set({ aiAssistantSkillKey: skillKey }),
+  setAiAssistantPanelRect: (rect) => {
+    const next =
+      typeof window === 'undefined'
+        ? rect
+        : clampAiAssistantPanelRect(rect, window.innerWidth, window.innerHeight)
+    persistAiAssistantPanelRect(next)
+    set({ aiAssistantPanelRect: next })
+  },
+  setAiAssistantSelection: ({ text, chapterId, from, to }) =>
+    set({
+      aiAssistantSelectionText: text,
+      aiAssistantSelectionChapterId: chapterId,
+      aiAssistantSelectionFrom: from,
+      aiAssistantSelectionTo: to
+    }),
 
   theme: initialTheme,
   setTheme: (theme) => {
