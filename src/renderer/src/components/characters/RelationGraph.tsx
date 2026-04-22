@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Character, CharacterRelation } from '@/types'
 import { relationColor } from '@/constants/relation-types'
 
@@ -112,31 +112,36 @@ export default function RelationGraph({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const nodesRef = useRef<SimNode[]>([])
   const dragRef = useRef<{ id: number; offX: number; offY: number } | null>(null)
-  const [layoutKey, setLayoutKey] = useState(0)
   const [size, setSize] = useState({ w: 640, h: 420 })
 
   useEffect(() => {
     const el = containerRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect()
-      setSize({ w: Math.floor(r.width), h: Math.floor(r.height) || 420 })
+    const updateSize = (width: number, height: number) => {
+      const next = {
+        w: Math.max(200, Math.floor(width) || 640),
+        h: Math.max(200, Math.floor(height) || 420)
+      }
+      setSize((prev) => (prev.w === next.w && prev.h === next.h ? prev : next))
+    }
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      updateSize(entry.contentRect.width, entry.contentRect.height)
     })
     ro.observe(el)
-    const r = el.getBoundingClientRect()
-    setSize({ w: Math.floor(r.width) || 640, h: Math.floor(r.height) || 420 })
+    updateSize(el.clientWidth, el.clientHeight)
     return () => ro.disconnect()
   }, [])
 
+  const layoutNodes = useMemo(
+    () => (characters.length === 0 ? [] : simulateLayout(characters, relations, size.w, size.h)),
+    [characters, relations, size.w, size.h]
+  )
+
   useEffect(() => {
-    if (characters.length === 0) {
-      nodesRef.current = []
-      setLayoutKey((k) => k + 1)
-      return
-    }
-    nodesRef.current = simulateLayout(characters, relations, size.w, size.h)
-    setLayoutKey((k) => k + 1)
-  }, [characters, relations, size.w, size.h])
+    nodesRef.current = layoutNodes
+  }, [layoutNodes])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -211,7 +216,7 @@ export default function RelationGraph({
 
   useEffect(() => {
     draw()
-  }, [draw, layoutKey])
+  }, [draw, layoutNodes])
 
   const pickNode = (cx: number, cy: number): number | null => {
     const nodes = nodesRef.current
@@ -266,10 +271,10 @@ export default function RelationGraph({
   }
 
   return (
-    <div ref={containerRef} className="relative w-full min-h-[420px] rounded-lg border border-[#333] overflow-hidden">
+    <div ref={containerRef} className="relative w-full h-[420px] rounded-lg border border-[#333] overflow-hidden">
       <canvas
         ref={canvasRef}
-        className="block w-full h-full min-h-[420px] cursor-grab active:cursor-grabbing"
+        className="absolute inset-0 block w-full h-full cursor-grab active:cursor-grabbing"
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={endDrag}

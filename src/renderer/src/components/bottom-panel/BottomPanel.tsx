@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Activity, Plus, Trash2 } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
@@ -33,24 +33,13 @@ export default function BottomPanel() {
   const [hiddenPlotlineIds, setHiddenPlotlineIds] = useState<Set<number>>(new Set())
   const [managePlotlinesOpen, setManagePlotlinesOpen] = useState(false)
 
-  const [poisonWarning, setPoisonWarning] = useState<{
-    show: boolean
-    startCh: number
-    endCh: number
-  }>({ show: false, startCh: 0, endCh: 0 })
-
-  useEffect(() => {
-    const result = checkPoisonWarning()
-    if (result.triggered) {
-      setPoisonWarning({
-        show: true,
-        startCh: result.startCh,
-        endCh: result.endCh
-      })
-    } else {
-      setPoisonWarning((prev) => ({ ...prev, show: false }))
-    }
-  }, [plotNodes, checkPoisonWarning])
+  const [dismissedPoisonKey, setDismissedPoisonKey] = useState<string | null>(null)
+  const poisonStatus = useMemo(() => checkPoisonWarning(), [checkPoisonWarning])
+  const poisonWarningKey = poisonStatus.triggered
+    ? `${poisonStatus.startCh}:${poisonStatus.endCh}`
+    : null
+  const poisonWarningVisible =
+    poisonStatus.triggered && poisonWarningKey !== dismissedPoisonKey
 
   const togglePlotlineVisibility = useCallback((id: number) => {
     setHiddenPlotlineIds((prev) => {
@@ -94,20 +83,20 @@ export default function BottomPanel() {
       return {
         borderClass: 'border',
         borderStyle: { borderColor: lineColor } as CSSProperties,
-        scoreClass: isHigh ? 'text-emerald-400' : isLow ? 'text-red-400' : 'text-yellow-400',
+        scoreClass: isHigh ? 'text-[var(--success-primary)]' : isLow ? 'text-[var(--danger-primary)]' : 'text-[var(--warning-primary)]',
         dotStyle: { backgroundColor: lineColor } as CSSProperties
       }
     }
     return {
       borderClass: isHigh
-        ? 'border-emerald-900/50 hover:border-emerald-500/50'
+        ? 'border-[var(--success-border)] hover:border-[var(--success-primary)]'
         : isLow
-          ? 'border-red-900/50 hover:border-red-500/50'
-          : 'border-yellow-900/50 hover:border-yellow-500/50',
+          ? 'border-[var(--danger-border)] hover:border-[var(--danger-primary)]'
+          : 'border-[var(--warning-border)] hover:border-[var(--warning-primary)]',
       borderStyle: {} as CSSProperties,
-      scoreClass: isHigh ? 'text-emerald-400' : isLow ? 'text-red-400' : 'text-yellow-400',
+      scoreClass: isHigh ? 'text-[var(--success-primary)]' : isLow ? 'text-[var(--danger-primary)]' : 'text-[var(--warning-primary)]',
       dotStyle: {} as CSSProperties,
-      dotClass: isHigh ? 'bg-emerald-500' : isLow ? 'bg-red-500' : 'bg-yellow-500'
+      dotClass: isHigh ? 'bg-[var(--success-primary)]' : isLow ? 'bg-[var(--danger-primary)]' : 'bg-[var(--warning-primary)]'
     }
   }
 
@@ -201,28 +190,28 @@ export default function BottomPanel() {
         <span className="h-1 w-14 rounded-full bg-[var(--border-secondary)]" />
       </button>
       <div className="h-10 bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex items-center px-6 justify-between shrink-0 shadow-sm">
-        <div className="flex items-center space-x-2 text-emerald-400 font-bold text-sm tracking-wide">
+        <div className="flex items-center space-x-2 text-[var(--accent-secondary)] font-bold text-sm tracking-wide">
           <Activity size={16} />
           <span>创世沙盘 &amp; 爽点心电图</span>
         </div>
         <div className="flex space-x-3 items-center">
           <div className="flex items-center text-[10px] text-[var(--text-secondary)] mr-4 space-x-3">
             <span className="flex items-center">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1" />
+              <div className="w-1.5 h-1.5 bg-[var(--success-primary)] rounded-full mr-1" />
               爽点区 (+1~+5)
             </span>
             <span className="flex items-center">
-              <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full mr-1" />
+              <div className="w-1.5 h-1.5 bg-[var(--warning-primary)] rounded-full mr-1" />
               平稳区 (0)
             </span>
             <span className="flex items-center">
-              <div className="w-1.5 h-1.5 bg-red-500 rounded-full mr-1" />
+              <div className="w-1.5 h-1.5 bg-[var(--danger-primary)] rounded-full mr-1" />
               毒点区 (-1~-5)
             </span>
           </div>
           <button
             onClick={() => openModal('plotNode', { isNew: true })}
-            className="bg-slate-700 hover:bg-emerald-600 text-white px-2 py-1 rounded flex items-center text-[10px] font-bold transition"
+            className="bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-[var(--accent-contrast)] px-2 py-1 rounded flex items-center text-[10px] font-bold transition"
             title="新增剧情节点"
           >
             <Plus size={12} className="mr-1" /> 新建节点
@@ -253,7 +242,7 @@ export default function BottomPanel() {
           type="button"
           onClick={handleNewPlotline}
           disabled={!bookId}
-          className="text-[10px] px-2 py-0.5 rounded border border-dashed border-[var(--border-secondary)] text-[var(--text-secondary)] hover:text-emerald-400 hover:border-emerald-600/50 transition disabled:opacity-40"
+          className="text-[10px] px-2 py-0.5 rounded border border-dashed border-[var(--border-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-secondary)] hover:border-[var(--accent-border)] transition disabled:opacity-40"
         >
           + 新建线
         </button>
@@ -273,7 +262,7 @@ export default function BottomPanel() {
           ) : (
             plotlines.map((pl) => (
               <PlotlineManageRow
-                key={pl.id}
+                key={`${pl.id}:${pl.name}:${pl.color}`}
                 plotline={pl}
                 onUpdate={(name, color) => void updatePlotline(pl.id, name, color)}
                 onDelete={() =>
@@ -293,7 +282,7 @@ export default function BottomPanel() {
       <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-hidden relative bg-[var(--bg-primary)]">
         {plotNodes.length === 0 ? (
           <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">
-            <button onClick={() => openModal('plotNode', { isNew: true })} className="hover:text-emerald-400 transition">
+            <button onClick={() => openModal('plotNode', { isNew: true })} className="hover:text-[var(--accent-secondary)] transition">
               点击 + 添加第一个剧情节点
             </button>
           </div>
@@ -319,13 +308,13 @@ export default function BottomPanel() {
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                className="drop-shadow-[0_0_8px_rgba(63,111,159,0.18)]"
               />
               <defs>
                 <linearGradient id="ekg-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" />
-                  <stop offset="50%" stopColor="#eab308" />
-                  <stop offset="100%" stopColor="#ef4444" />
+                  <stop offset="0%" stopColor="var(--success-primary)" />
+                  <stop offset="50%" stopColor="var(--warning-primary)" />
+                  <stop offset="100%" stopColor="var(--danger-primary)" />
                 </linearGradient>
               </defs>
             </svg>
@@ -400,11 +389,11 @@ export default function BottomPanel() {
           </div>
         )}
       </div>
-      {poisonWarning.show && (
+      {poisonWarningVisible && (
         <PoisonWarning
-          startCh={poisonWarning.startCh}
-          endCh={poisonWarning.endCh}
-          onClose={() => setPoisonWarning((p) => ({ ...p, show: false }))}
+          startCh={poisonStatus.startCh}
+          endCh={poisonStatus.endCh}
+          onClose={() => setDismissedPoisonKey(poisonWarningKey)}
         />
       )}
     </div>
@@ -422,11 +411,6 @@ function PlotlineManageRow({
 }) {
   const [name, setName] = useState(plotline.name)
   const [color, setColor] = useState(plotline.color)
-
-  useEffect(() => {
-    setName(plotline.name)
-    setColor(plotline.color)
-  }, [plotline.name, plotline.color])
 
   return (
     <div className="flex items-center gap-2 text-[11px]">
@@ -447,13 +431,13 @@ function PlotlineManageRow({
         onBlur={() => {
           if (name.trim() && name !== plotline.name) onUpdate(name.trim(), color)
         }}
-        className="flex-1 min-w-0 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
+        className="flex-1 min-w-0 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
       />
       <button
         type="button"
         onClick={onDelete}
         title="删除剧情线"
-        className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-950/30 shrink-0"
+        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--danger-primary)] hover:bg-[var(--danger-surface)] shrink-0"
         aria-label="删除剧情线"
       >
         <Trash2 size={14} />

@@ -1,0 +1,48 @@
+impact_rules:
+  - when: "ai-os-framework-upgrade"
+    run:
+      - "node /tmp/ai-os-v9-inspect-20260422/bin/create-ai-os.js doctor . --json"
+      - "lane artifact completeness check"
+      - "git diff --check"
+      - "npm run build"
+  - when: "desktop-shell-change"
+    run:
+      - "npm test"
+      - "npm run build"
+      - "Windows package smoke or explicit manual blocker"
+  - when: "v1.2.4-release-local-changes"
+    run:
+      - "npm test"
+      - "npm run build"
+      - "git diff --check"
+      - "GitHub Release body and asset check"
+
+failure_modes:
+  - id: FM-DEF-001
+    scenario: "AI-OS v9 migration leaves non-default lanes in old acceptance.yaml-only shape"
+    expected: "Every existing lane has v9 DESIGN, risk-register, release-plan, verification-matrix, design-pack and evals"
+    guard: ".ai-os/lanes/* artifact completeness check"
+  - id: FM-DEF-002
+    scenario: "AI-OS upgrade accidentally touches business source files"
+    expected: "Only AI-OS framework artifacts and IDE pointers change in this task"
+    guard: "git status --short with path review"
+  - id: FM-DEF-003
+    scenario: "Windows shell appears complete in code but still needs runtime visual verification"
+    expected: "Ship notes separate code state from Windows real-device visual state"
+    guard: ".ai-os/lanes/default/STATE.md pending manual Windows validation"
+  - id: FM-DEF-004
+    scenario: "Relation graph canvas height feeds back into ResizeObserver and makes character labels drift downward"
+    expected: "Graph container has stable layout height and canvas resizing cannot change the measured container height"
+    guard: "npm run build plus RelationGraph sizing code review"
+  - id: FM-DEF-005
+    scenario: "A new release is tagged before the large dirty worktree is grouped, documented, and validated"
+    expected: "v1.2.4 has a baseline CR, changelog, risk entry, release plan, tests, build, and final release verification"
+    guard: ".ai-os/lanes/default/baseline-log/CR-20260423-001100-v1.2.4-release-local-changes.md plus npm test/build logs"
+  - id: FM-DEF-006
+    scenario: "GitHub Release contains assets but no changelog or release notes"
+    expected: "Release body contains changelog, package list, update metadata, notes, validation state, and rollback guidance"
+    guard: "scripts/release/update-github-release-notes.mjs plus remote Release body check"
+
+guards:
+  - ".ai-os/lanes/default/evals/ai-os-v9-lane-normalization.md"
+  - ".ai-os/lanes/default/STATE.md"

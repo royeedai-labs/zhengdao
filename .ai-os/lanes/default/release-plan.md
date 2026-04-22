@@ -1,3 +1,60 @@
+# 证道发布计划
+
+## v1.2.4 本地未提交改动发布收口
+
+> 本节记录 2026-04-23 的 `v1.2.4` patch release。该版本纳入当前已验证的本地未提交改动：AI-OS v9 交付治理迁移、工作区与主题视觉收口、AI 助手入口拖动、关系图谱布局修复和发布说明补齐。
+
+### 1. 交付前检查
+
+- [x] 用户明确要求发新版 Release
+- [x] high-risk 发布 CR 已记录：`CR-20260423-001100-v1.2.4-release-local-changes`
+- [x] 风险登记已补：大量 dirty worktree 发布、Release 正文缺失风险
+- [x] 版本号已准备升至 `1.2.4`
+- [x] `CHANGELOG.md` 已补 `v1.2.4` 更新日志
+- [x] `npm test` 已通过：32 files / 125 tests
+- [x] `npm run build` 已通过
+- [x] `npm run lint` 已通过
+- [x] `git diff --check` 已通过
+- [ ] Git commit 已创建
+- [ ] `v1.2.4` tag 已创建并推送
+- [ ] GitHub Actions release workflow 已通过
+- [ ] GitHub Release 正文和 8 个发布资产已远端复核
+
+### 2. 本次发布范围
+
+- AI-OS v9 canonical layout：根共享 `.ai-os/MISSION.md` / `.ai-os/memory.md` + lane 工件，旧 `.agents/` / `.cursor/` 分发工件移除。
+- 默认跟随系统主题、冷白浅色、低饱和深色和语义色 token。
+- 工作区顶栏工具折叠、左右栏宽度、右侧 tab、本地 UI 偏好持久化。
+- 核心弹窗、侧栏、底栏、AI 助手等 UI 表面接入主题变量。
+- AI 助手悬浮入口可拖动，展开态移除独立浮动关闭按钮。
+- 关系图谱 canvas 尺寸反馈循环修复。
+
+### 3. 发布步骤
+
+1. [AI 已执行] 审计本地 dirty worktree 并按变更组归类。
+2. [AI 已执行] 补 high-risk CR、risk register、verification matrix、release plan。
+3. [AI 已执行] 更新 `package.json`、`package-lock.json`、`CHANGELOG.md` 到 `v1.2.4`。
+4. [AI 已执行] 运行 `npm test` 与 `npm run build`。
+5. [AI 已执行] 运行 `npm run lint` 与 `git diff --check`。
+6. [AI 待执行] 提交 `release: v1.2.4`。
+7. [AI 待执行] 创建并推送 `v1.2.4` tag。
+8. [AI 待执行] 等待 GitHub Actions release workflow 产出安装包与自动更新元数据。
+9. [AI 待执行] 复核 GitHub Release 正文和资产清单。
+
+### 4. 回滚触发条件
+
+- `npm test` 或 `npm run build` 失败且无法在本次范围内修复。
+- GitHub Actions release workflow 未产出 Windows installer、macOS dmg / zip 或 `latest*.yml`。
+- GitHub Release 正文缺少更新日志、安装包清单、自动更新元数据、验证状态或回滚提示。
+- 新版安装包启动失败或自动更新元数据明显异常。
+
+### 5. 需人工执行
+
+- 撤销或轮换此前在对话中暴露的 GitHub token。
+- 在真实 Windows 安装环境确认顶栏、DPI、开始菜单 / 快捷方式图标和安装器观感。
+
+---
+
 # 证道 Windows 壳层 / 图标收口发布计划
 
 > 当前文件聚焦 Windows 安装版的桌面壳层和品牌图标收口。目标是让 Windows 正式包看起来像正式客户端，而不是默认 Electron 样例程序。

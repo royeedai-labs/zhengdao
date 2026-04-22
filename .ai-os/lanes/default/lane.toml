@@ -1,6 +1,6 @@
 id = "default"
 title = "默认交付线"
 status = "active"
-baseline_id = "BL-20260420-034329-initial-baseline"
+baseline_id = "CR-20260421-000000-windows-shell-brand-polish"
 quality_tier = "standard"
 risk_tier = "medium"

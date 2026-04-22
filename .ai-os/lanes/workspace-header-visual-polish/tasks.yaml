@@ -1,0 +1,62 @@
+version: 1
+baseline_id: "CR-20260422-visual-header-polish"
+scope:
+  mode: "change"
+  focus: "workspace-header-core-modals"
+  quality_tier: "standard"
+
+tasks:
+  - id: TASK-VIS-001
+    title: "建立视觉收口 lane 工件"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    requirement_refs:
+      - "REQ-VIS-001"
+      - "REQ-VIS-002"
+      - "REQ-VIS-003"
+      - "REQ-VIS-004"
+    verification_required:
+      - "artifact-review"
+
+  - id: TASK-VIS-002
+    title: "收口主题强调色与品牌头"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "renderer-theme"
+      - "brand-header"
+    verification_required:
+      - "npm run build"
+
+  - id: TASK-VIS-003
+    title: "统一 TopBar 核心工具入口"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "renderer-topbar"
+    verification_required:
+      - "npm run build"
+
+  - id: TASK-VIS-004
+    title: "统一核心弹窗头部与强调色"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "characters-modal"
+      - "wiki-modal"
+      - "stats-modal"
+    verification_required:
+      - "npm run build"
+      - "npm test or targeted tests"

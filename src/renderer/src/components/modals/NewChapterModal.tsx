@@ -50,23 +50,23 @@ export default function NewChapterModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#1a1a1a] border border-[#333] w-[440px] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="h-12 border-b border-[#2a2a2a] bg-[#141414] flex items-center justify-between px-5 shrink-0">
-          <div className="flex items-center space-x-2 text-emerald-400 font-bold">
+      <div className="bg-[var(--surface-elevated)] border border-[var(--border-primary)] w-[440px] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="h-12 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-between px-5 shrink-0">
+          <div className="flex items-center space-x-2 text-[var(--accent-secondary)] font-bold">
             <FileText size={18} />
             <span>新建章节</span>
           </div>
-          <button onClick={closeModal} className="text-slate-500 hover:text-slate-300 transition">
+          <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
             <X size={20} />
           </button>
         </div>
         <div className="p-6 space-y-4 overflow-y-auto">
           <div>
-            <label className="block text-[11px] text-slate-500 uppercase mb-1">所属卷</label>
+            <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">所属卷</label>
             <select
               value={volumeId}
               onChange={(e) => setVolumeId(Number(e.target.value))}
-              className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 text-sm"
+              className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] text-sm"
             >
               {volumes.map((v) => (
                 <option key={v.id} value={v.id}>{v.title}</option>
@@ -74,22 +74,22 @@ export default function NewChapterModal() {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] text-slate-500 uppercase mb-1">章节标题</label>
+            <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">章节标题</label>
             <input
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500"
+              className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
               placeholder="例如：第 1 章 归来"
             />
           </div>
           <div>
-            <label className="block text-[11px] text-slate-500 uppercase mb-1">章节模板</label>
+            <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">章节模板</label>
             <select
               value={templateKey}
               onChange={(e) => setTemplateKey(e.target.value)}
-              className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 text-sm"
+              className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] text-sm"
             >
               <optgroup label="内置">
                 {BUILTIN_TEMPLATES.map((t) => (
@@ -106,23 +106,23 @@ export default function NewChapterModal() {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] text-slate-500 uppercase mb-1">内容预览</label>
+            <label className="block text-[11px] text-[var(--text-muted)] uppercase mb-1">内容预览</label>
             <div
-              className="w-full bg-[#0d0d0d] border border-[#333] rounded px-3 py-2 text-xs text-slate-400 max-h-[160px] overflow-y-auto prose prose-invert prose-sm max-w-none"
+              className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-xs text-[var(--text-secondary)] max-h-[160px] overflow-y-auto prose prose-sm max-w-none"
               dangerouslySetInnerHTML={{
                 __html: previewContent || '<p class="text-slate-600">（空白）</p>'
               }}
             />
           </div>
         </div>
-        <div className="h-14 border-t border-[#2a2a2a] bg-[#141414] flex items-center justify-end px-5 gap-3 shrink-0">
-          <button onClick={closeModal} className="px-4 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition">
+        <div className="h-14 border-t border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-end px-5 gap-3 shrink-0">
+          <button onClick={closeModal} className="px-4 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
             取消
           </button>
           <button
             onClick={() => void handleSubmit()}
             disabled={!title.trim() || !volumeId}
-            className="flex items-center gap-1 px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded"
+            className="flex items-center gap-1 px-4 py-1.5 text-xs bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 text-[var(--accent-contrast)] rounded"
           >
             <Save size={14} /> 创建并打开
           </button>

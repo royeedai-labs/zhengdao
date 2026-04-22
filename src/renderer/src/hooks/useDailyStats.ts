@@ -32,10 +32,27 @@ export function useDailyStats() {
   )
 
   useEffect(() => {
-    refresh()
-    const interval = setInterval(refresh, 60_000)
-    return () => clearInterval(interval)
-  }, [refresh])
+    let cancelled = false
 
-  return { todayWords, refresh, addWords }
+    const refreshDailyStats = async () => {
+      if (!bookId) return
+      const today = getToday()
+      const stats = await window.api.getDailyStats(bookId, today)
+      const count = (stats as { word_count: number })?.word_count || 0
+      if (cancelled) return
+      todayWordsRef.current = count
+      setTodayWords(count)
+    }
+
+    void refreshDailyStats()
+    const interval = setInterval(() => {
+      void refreshDailyStats()
+    }, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [bookId])
+
+  return { todayWords: bookId ? todayWords : 0, refresh, addWords }
 }

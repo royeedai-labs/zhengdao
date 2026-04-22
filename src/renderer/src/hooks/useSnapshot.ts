@@ -32,5 +32,5 @@ export function useSnapshot() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [currentChapter?.id])
+  }, [currentChapter, currentChapter?.id])
 }

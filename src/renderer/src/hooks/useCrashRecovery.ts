@@ -5,7 +5,9 @@ function clearDraftKeys(drafts: { key: string }[]) {
   for (const { key } of drafts) {
     try {
       localStorage.removeItem(key)
-    } catch {}
+    } catch {
+      return
+    }
   }
 }
 

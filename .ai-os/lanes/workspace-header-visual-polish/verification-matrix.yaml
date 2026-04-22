@@ -1,0 +1,27 @@
+impact_rules:
+  - when: "workspace-header-visual-polish"
+    run:
+      - "npm run build"
+      - "npm test or explicit blocker note"
+      - "git diff --check"
+
+failure_modes:
+  - id: FM-VIS-001
+    scenario: "TopBar action buttons keep competing high-saturation colors"
+    expected: "Core tool actions share one low-saturation visual treatment"
+    guard: "TopBar class review plus build"
+  - id: FM-VIS-002
+    scenario: "Theme accent change turns semantic success/warning states into brand color"
+    expected: "Status colors remain explicit where they carry meaning"
+    guard: "Theme and component code review"
+  - id: FM-VIS-003
+    scenario: "Visual-only changes regress wiki editing or stats async behavior"
+    expected: "Existing local logic changes remain intact"
+    guard: "Diff review plus build"
+  - id: FM-VIS-004
+    scenario: "Left sidebar wiki tab mounts WikiList after visual changes and crashes the renderer"
+    expected: "Clicking the left sidebar wiki tab keeps the workspace mounted and shows wiki entries"
+    guard: "Electron dev smoke plus npm run build"
+
+guards:
+  - ".ai-os/lanes/workspace-header-visual-polish/evals/header-modal-visual-polish.md"

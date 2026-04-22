@@ -48,8 +48,31 @@ export default function TrashModal() {
   }, [currentBookId])
 
   useEffect(() => {
-    void reload()
-  }, [reload])
+    let cancelled = false
+
+    const loadTrash = async () => {
+      if (!currentBookId) {
+        if (!cancelled) {
+          setBundle(null)
+          setLoading(false)
+        }
+        return
+      }
+
+      setLoading(true)
+      try {
+        const data = (await window.api.getTrashItems(currentBookId)) as TrashBundle
+        if (!cancelled) setBundle(data)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadTrash()
+    return () => {
+      cancelled = true
+    }
+  }, [currentBookId])
 
   const onRestore = async (kind: TrashKind, id: number) => {
     await window.api.restoreItem(kind, id)
@@ -108,7 +131,7 @@ export default function TrashModal() {
             type="button"
             onClick={() => void onRestore(kind, id)}
             title="还原"
-            className="text-xs px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+            className="text-xs px-3 py-1.5 rounded-md border border-[var(--success-border)] text-[var(--success-primary)] hover:bg-[var(--success-surface)]"
           >
             还原
           </button>
@@ -123,7 +146,7 @@ export default function TrashModal() {
                 }
               })}
             title="永久删除"
-            className="text-xs px-3 py-1.5 rounded-md border border-red-500/40 text-red-400 hover:bg-red-500/10"
+            className="text-xs px-3 py-1.5 rounded-md border border-[var(--danger-border)] text-[var(--danger-primary)] hover:bg-[var(--danger-surface)]"
           >
             永久删除
           </button>
@@ -145,7 +168,7 @@ export default function TrashModal() {
               <button
                 type="button"
                 onClick={onEmptyTrash}
-                className="text-xs px-3 py-1.5 rounded-md border border-orange-500/40 text-orange-300 hover:bg-orange-500/10"
+                className="text-xs px-3 py-1.5 rounded-md border border-[var(--warning-border)] text-[var(--warning-primary)] hover:bg-[var(--warning-surface)]"
               >
                 清空回收站
               </button>

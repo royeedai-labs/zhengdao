@@ -65,7 +65,7 @@ export default function SplitEditor() {
       Placeholder.configure({ placeholder: '' }),
       Mention.configure({
         HTMLAttributes: {
-          class: 'mention-node bg-red-900/30 text-red-300 rounded cursor-default'
+          class: 'mention-node bg-[var(--danger-surface)] text-[var(--danger-primary)] rounded cursor-default'
         },
         suggestion: {
           char: '@',
@@ -85,7 +85,7 @@ export default function SplitEditor() {
     content: '<p></p>',
     editorProps: {
       attributes: {
-        class: `${widthClass} mx-auto tracking-wide focus:outline-none min-h-[60vh] text-[#94a3b8] opacity-95`,
+        class: `${widthClass} mx-auto tracking-wide focus:outline-none min-h-[60vh] text-[var(--text-secondary)] opacity-95`,
         style: `font-family: ${editorFont}; font-size: ${editorFontSize}px; line-height: ${editorLineHeight}`
       }
     }
@@ -103,7 +103,7 @@ export default function SplitEditor() {
         ...editor.options.editorProps,
         attributes: {
           ...editor.options.editorProps?.attributes,
-          class: `${widthClass} mx-auto tracking-wide focus:outline-none min-h-[60vh] text-[#94a3b8] opacity-95`,
+          class: `${widthClass} mx-auto tracking-wide focus:outline-none min-h-[60vh] text-[var(--text-secondary)] opacity-95`,
           style: `font-family: ${editorFont}; font-size: ${editorFontSize}px; line-height: ${editorLineHeight}`
         }
       }
@@ -113,15 +113,15 @@ export default function SplitEditor() {
   const title = displayChapter?.title ?? '对照章节'
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[#181818]">
-      <header className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-[#2a2a2a] bg-[#1a1a1a]">
+    <div className="flex flex-col h-full min-h-0 bg-[var(--bg-editor)]">
+      <header className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-[var(--border-primary)] bg-[var(--bg-secondary)]">
         <select
           value={splitChapterId ?? ''}
           onChange={(e) => {
             const v = e.target.value
             setSplitChapterId(v ? Number(v) : null)
           }}
-          className="flex-1 min-w-0 bg-[#111] border border-[#333] rounded px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-600"
+          className="flex-1 min-w-0 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
         >
           <option value="">选择章节</option>
           {chapterOptions.map((c) => (
@@ -130,13 +130,13 @@ export default function SplitEditor() {
             </option>
           ))}
         </select>
-        <span className="text-xs text-slate-500 truncate max-w-[120px]" title={title}>
+        <span className="text-xs text-[var(--text-muted)] truncate max-w-[120px]" title={title}>
           {title}
         </span>
         <button
           type="button"
           onClick={() => toggleSplitView()}
-          className="shrink-0 p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition"
+          className="shrink-0 p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition"
           title="关闭分屏"
         >
           <X size={16} />

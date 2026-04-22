@@ -133,7 +133,7 @@ function buildDecorations(doc: any, words: string[]): DecorationSet {
 type PostSave = 'none' | 'syncOnly' | 'full'
 
 export default function EditorArea() {
-  const { currentChapter, updateChapterContent, updateChapterSummary, getTotalWords, getCurrentChapterNumber } =
+  const { currentChapter, volumes, updateChapterContent, updateChapterSummary, getTotalWords, getCurrentChapterNumber } =
     useChapterStore()
   const {
     bottomPanelOpen,
@@ -318,7 +318,7 @@ export default function EditorArea() {
       TextReplaceExtension,
       Mention.configure({
         HTMLAttributes: {
-          class: 'mention-node bg-red-900/30 text-red-300 rounded cursor-pointer'
+          class: 'mention-node bg-[var(--danger-surface)] text-[var(--danger-primary)] rounded cursor-pointer'
         },
         suggestion: mentionSuggestion,
         renderLabel({ node }) {
@@ -483,7 +483,7 @@ export default function EditorArea() {
     return () => {
       cancelled = true
     }
-  }, [currentChapter?.id, editor])
+  }, [currentChapter, editor])
 
   useEffect(() => {
     if (!editor) return
@@ -656,8 +656,31 @@ export default function EditorArea() {
 
   if (!currentChapter) {
     return (
-      <div className="flex-1 flex flex-col bg-[var(--bg-editor)] relative items-center justify-center">
-        <p className="text-[var(--text-muted)] text-lg">从左侧选择或新建一个章节开始创作</p>
+      <div className="flex-1 flex flex-col bg-[var(--bg-editor)] relative items-center justify-center px-8 text-center">
+        <div className="max-w-md rounded-xl border border-[var(--border-primary)] bg-[var(--surface-primary)] px-8 py-7 shadow-sm">
+          <p className="text-[var(--text-primary)] text-lg font-semibold">选择章节，开始写作</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+            左侧大纲是写作主导航。你可以选中已有章节，或直接创建新的卷章。
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => openModal('newVolume', { book_id: bookId })}
+              className="primary-btn"
+            >
+              新建卷
+            </button>
+            {volumes.length > 0 && (
+              <button
+                type="button"
+                onClick={() => openModal('newChapter', { volume_id: volumes[volumes.length - 1].id })}
+                className="secondary-btn"
+              >
+                新建章
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     )
   }
@@ -678,17 +701,17 @@ export default function EditorArea() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="查找..."
-            className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1 text-sm text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 w-48"
+            className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] w-48"
           />
           <input
             value={replaceQuery}
             onChange={(e) => setReplaceQuery(e.target.value)}
             placeholder="替换为..."
-            className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1 text-sm text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 w-48"
+            className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] w-48"
           />
           <button
             onClick={handleFindReplace}
-            className="px-3 py-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded transition"
+            className="primary-btn"
           >
             全部替换
           </button>
@@ -724,14 +747,14 @@ export default function EditorArea() {
           <button
             type="button"
             onClick={toggleFocusMode}
-            className={`flex items-center gap-1 transition ${focusMode ? 'text-emerald-400' : 'hover:text-sky-400'}`}
+            className={`flex items-center gap-1 transition ${focusMode ? 'text-[var(--accent-secondary)]' : 'hover:text-[var(--info-primary)]'}`}
             title="段落聚焦模式"
           >
             <Crosshair size={11} /> 聚焦
           </button>
           <button
             onClick={() => openModal('snapshot')}
-            className="flex items-center gap-1 hover:text-sky-400 transition"
+            className="flex items-center gap-1 hover:text-[var(--info-primary)] transition"
             title="查看历史快照"
           >
             <History size={11} /> 快照
@@ -739,7 +762,7 @@ export default function EditorArea() {
           <button
             type="button"
             onClick={() => openAiAssistant('continue_writing')}
-            className="flex items-center gap-1 hover:text-emerald-400 transition"
+            className="flex items-center gap-1 hover:text-[var(--accent-secondary)] transition"
             title="打开 AI 续写助手"
           >
             <Sparkles size={11} /> 续写
@@ -747,7 +770,7 @@ export default function EditorArea() {
           <button
             type="button"
             onClick={() => void handleGenerateSummary()}
-            className="flex items-center gap-1 hover:text-purple-400 transition"
+            className="flex items-center gap-1 hover:text-[var(--accent-secondary)] transition"
             title="AI 生成本章摘要"
           >
             <Sparkles size={11} /> 摘要
@@ -755,7 +778,7 @@ export default function EditorArea() {
           <button
             type="button"
             onClick={() => openModal('styleAnalysis', {})}
-            className="flex items-center gap-1 hover:text-purple-400 transition"
+            className="flex items-center gap-1 hover:text-[var(--accent-secondary)] transition"
             title="写作风格分析"
           >
             <Palette size={11} /> 风格
@@ -770,8 +793,8 @@ export default function EditorArea() {
           onClick={toggleBottomPanel}
           className={`bottom-panel-trigger p-3 rounded-full shadow-xl flex items-center transition-all duration-300 border ${
             bottomPanelOpen
-              ? 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
-              : 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+              ? 'bg-[var(--surface-elevated)] border-[var(--border-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+              : 'bg-[var(--accent-primary)] border-[var(--accent-border)] text-[var(--accent-contrast)] hover:bg-[var(--accent-secondary)] shadow-[0_10px_24px_rgba(63,111,159,0.18)]'
           }`}
           title="呼出创世沙盘 (Ctrl+`)"
         >
@@ -821,7 +844,7 @@ export default function EditorArea() {
                   openModal('textAnalysis', { scope: 'chapter' })
                   setContextMenu(null)
                 }}
-                className="w-full px-3 py-1.5 text-left text-cyan-400 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--info-primary)] hover:bg-[var(--info-surface)] transition"
               >
                 文本分析（本章）
               </button>
@@ -861,7 +884,7 @@ export default function EditorArea() {
                   openModal('foreshadow', { selectedText: contextMenu.selectedText })
                   setContextMenu(null)
                 }}
-                className="w-full px-3 py-1.5 text-left text-orange-400 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--warning-primary)] hover:bg-[var(--warning-surface)] transition"
               >
                 设为伏笔
               </button>
@@ -871,7 +894,7 @@ export default function EditorArea() {
                   openModal('textAnalysis', { text: contextMenu.selectedText, scope: 'selection' })
                   setContextMenu(null)
                 }}
-                className="w-full px-3 py-1.5 text-left text-cyan-400 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--info-primary)] hover:bg-[var(--info-surface)] transition"
               >
                 文本分析
               </button>
@@ -881,7 +904,7 @@ export default function EditorArea() {
                   openModal('styleAnalysis', { text: contextMenu.selectedText })
                   setContextMenu(null)
                 }}
-                className="w-full px-3 py-1.5 text-left text-purple-400 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] transition"
               >
                 写作风格分析
               </button>
@@ -896,7 +919,7 @@ export default function EditorArea() {
                   setAnnotationDraft({ x: coords.left, y: coords.bottom + 4, textAnchor })
                   setContextMenu(null)
                 }}
-                className="w-full px-3 py-1.5 text-left text-amber-400 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--brand-primary)] hover:bg-[var(--brand-surface)] transition"
               >
                 添加批注
               </button>
@@ -922,7 +945,7 @@ export default function EditorArea() {
                 setContextMenu(null)
               })()
             }}
-            className="w-full px-3 py-1.5 text-left text-emerald-400 hover:bg-slate-800 transition"
+            className="w-full px-3 py-1.5 text-left text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] transition"
           >
             从当前章节创建模板
           </button>
@@ -949,7 +972,7 @@ export default function EditorArea() {
             onChange={(e) => setAnnotationBody(e.target.value)}
             placeholder="批注内容..."
             rows={4}
-            className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500 resize-none"
+            className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand-primary)] resize-none"
             onKeyDown={(e) => {
               if (e.key === 'Escape') setAnnotationDraft(null)
             }}
@@ -983,7 +1006,7 @@ export default function EditorArea() {
                   useToastStore.getState().addToast('success', '已添加批注')
                 })()
               }}
-              className="px-3 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded"
+              className="px-3 py-1 text-xs rounded bg-[var(--brand-primary)] text-[var(--accent-contrast)] hover:brightness-105"
             >
               保存
             </button>

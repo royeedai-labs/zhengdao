@@ -55,7 +55,7 @@ const MentionList = forwardRef<MentionListRef, Props>((props, ref) => {
           onClick={() => selectItem(index)}
           className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition ${
             index === selectedIndex
-              ? 'bg-emerald-500/10 text-emerald-400'
+              ? 'bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
               : 'text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
           }`}
         >

@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.2.4 - 2026-04-23
+
+### Release
+
+- Publish a stability and workspace polish patch after `v1.2.3`.
+
+### Added
+
+- Add a system-following default theme with a cooler light palette and lower-saturation dark palettes.
+- Add persisted left/right workspace panel widths, right-panel tab state, and topbar tool collapse state.
+- Add a draggable AI assistant launcher that stays inside the viewport and no longer shows a separate floating close button when the panel is open.
+
+### Changed
+
+- Unify workspace topbar tools, core modals, side panels, AI assistant surfaces, status colors, and common controls around semantic theme variables.
+- Move crowded workspace tools into a responsive overflow menu on narrower windows.
+- Normalize project AI-OS delivery governance to the v9 shared-root plus lane-artifact layout.
+
+### Fixed
+
+- Fix the character relation graph layout feedback loop that made character labels drift downward.
+- Keep AI assistant panel and launcher geometry clamped after window resize.
+- Load AI assistant configuration, conversation, messages, and drafts together to reduce transient stale state during project switches.
+- Clean up the Gemini CLI service test assertion so it no longer binds an unused runtime argument.
+
+### Docs
+
+- Add or update release planning, risk, verification, lane, and recovery artifacts for the v1.2.4 release path.
+- Record the requirement that GitHub Release pages include changelog, package assets, update metadata, notes, validation state, and rollback guidance.
+
 ## v1.2.3 - 2026-04-22
 
 ### Release

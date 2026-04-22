@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -22,6 +22,55 @@ import { useWikiStore } from '@/stores/wiki-store'
 import { useUIStore } from '@/stores/ui-store'
 
 type LeftTab = 'outline' | 'characters' | 'wiki'
+
+function OutlineTabBar({
+  activeTab,
+  setActiveTab
+}: {
+  activeTab: LeftTab
+  setActiveTab: (tab: LeftTab) => void
+}) {
+  return (
+    <div className="flex border-b border-[var(--border-primary)] bg-[var(--surface-secondary)] text-[10px] font-medium shrink-0" role="tablist">
+      <button
+        role="tab"
+        aria-selected={activeTab === 'outline'}
+        onClick={() => setActiveTab('outline')}
+        className={`flex-1 py-2.5 text-center transition flex items-center justify-center gap-1 ${
+          activeTab === 'outline'
+            ? 'text-[var(--accent-secondary)] border-b-2 border-[var(--accent-primary)] bg-[var(--accent-surface)]'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+        }`}
+      >
+        <FileText size={12} /> 大纲
+      </button>
+      <button
+        role="tab"
+        aria-selected={activeTab === 'characters'}
+        onClick={() => setActiveTab('characters')}
+        className={`flex-1 py-2.5 text-center transition flex items-center justify-center gap-1 ${
+          activeTab === 'characters'
+            ? 'text-[var(--accent-secondary)] border-b-2 border-[var(--accent-primary)] bg-[var(--accent-surface)]'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+        }`}
+      >
+        <Users size={12} /> 人物
+      </button>
+      <button
+        role="tab"
+        aria-selected={activeTab === 'wiki'}
+        onClick={() => setActiveTab('wiki')}
+        className={`flex-1 py-2.5 text-center transition flex items-center justify-center gap-1 ${
+          activeTab === 'wiki'
+            ? 'text-[var(--accent-secondary)] border-b-2 border-[var(--accent-primary)] bg-[var(--accent-surface)]'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+        }`}
+      >
+        <BookOpen size={12} /> 设定
+      </button>
+    </div>
+  )
+}
 
 function SortableChapterItem({
   ch,
@@ -63,13 +112,13 @@ function SortableChapterItem({
         isDragging ? 'opacity-50 z-10' : ''
       } ${
         isCurrent
-          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm'
-          : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
+          ? 'bg-[var(--accent-surface)] text-[var(--accent-secondary)] border border-[var(--accent-border)] shadow-sm'
+          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
       }`}
     >
       <button
         type="button"
-        className="shrink-0 mr-0.5 p-0.5 rounded text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing touch-none"
+        className="shrink-0 mr-0.5 p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing touch-none"
         {...attributes}
         {...listeners}
         onClick={(e) => e.stopPropagation()}
@@ -88,7 +137,7 @@ function SortableChapterItem({
             if (e.key === 'Enter') finishRename()
             if (e.key === 'Escape') cancelEdit()
           }}
-          className="flex-1 bg-transparent border-b border-emerald-500 outline-none text-slate-200 text-sm"
+          className="flex-1 bg-transparent border-b border-[var(--accent-primary)] outline-none text-[var(--text-primary)] text-sm"
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
@@ -121,16 +170,16 @@ function CharacterList() {
   return (
     <div className="flex-1 overflow-y-auto p-2 text-sm space-y-3">
       {characters.length === 0 ? (
-        <div className="text-center text-slate-500 text-xs py-8">
+        <div className="text-center text-[var(--text-muted)] text-xs py-8">
           <p className="mb-2">还没有角色</p>
-          <button onClick={() => openModal('character', { isNew: true })} className="text-indigo-400 hover:text-indigo-300">
+          <button onClick={() => openModal('character', { isNew: true })} className="text-[var(--accent-primary)] hover:text-[var(--accent-secondary)]">
             创建第一个角色
           </button>
         </div>
       ) : (
         Array.from(grouped.entries()).map(([faction, list]) => (
           <div key={faction}>
-            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider px-2 mb-1">
+            <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider px-2 mb-1">
               {factionLabel(faction)}
             </div>
             {list.map((c) => (
@@ -138,14 +187,14 @@ function CharacterList() {
                 key={c.id}
                 type="button"
                 onClick={() => pushModal('character', { ...c })}
-                className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-800/50 transition"
+                className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[var(--bg-tertiary)] transition"
               >
-                <div className="w-6 h-6 rounded-full bg-indigo-900/30 border border-indigo-500/30 flex items-center justify-center text-[10px] text-indigo-400 font-bold shrink-0">
+                <div className="w-6 h-6 rounded-full bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[10px] text-[var(--accent-secondary)] font-bold shrink-0">
                   {c.name.charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs text-slate-200 truncate">{c.name}</div>
-                  <div className="text-[10px] text-slate-600 truncate">{c.description || '无备注'}</div>
+                  <div className="text-xs text-[var(--text-primary)] truncate">{c.name}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] truncate">{c.description || '无备注'}</div>
                 </div>
               </button>
             ))}
@@ -177,8 +226,8 @@ function WikiList() {
             }}
             className={`px-2 py-0.5 text-[10px] rounded border transition ${
               selectedCategory === cat
-                ? 'border-purple-500/30 bg-purple-600/10 text-purple-400'
-                : 'border-[#333] text-slate-500 hover:text-slate-300'
+                ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
+                : 'border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             {cat}
@@ -187,17 +236,17 @@ function WikiList() {
       </div>
       <div className="p-2 space-y-1">
         {entries.length === 0 ? (
-          <p className="text-center text-slate-500 text-xs py-6">无条目</p>
+          <p className="text-center text-[var(--text-muted)] text-xs py-6">无条目</p>
         ) : (
           entries.map((e) => (
             <button
               key={e.id}
               type="button"
               onClick={() => openModal('settings')}
-              className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-800/50 transition"
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-[var(--bg-tertiary)] transition"
             >
-              <div className="text-xs text-slate-200 truncate">{e.title}</div>
-              <div className="text-[10px] text-slate-600 truncate">{e.content?.slice(0, 40) || '无内容'}</div>
+              <div className="text-xs text-[var(--text-primary)] truncate">{e.title}</div>
+              <div className="text-[10px] text-[var(--text-muted)] truncate">{e.content?.slice(0, 40) || '无内容'}</div>
             </button>
           ))
         )}
@@ -221,7 +270,7 @@ export default function OutlineTree() {
   const openModal = useUIStore((s) => s.openModal)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const [activeTab, setActiveTab] = useState<LeftTab>('outline')
-  const [expandedVols, setExpandedVols] = useState<Set<number>>(new Set(volumes.map((v) => v.id)))
+  const [collapsedVols, setCollapsedVols] = useState<Set<number>>(new Set())
   const [editingId, setEditingId] = useState<{ type: 'vol' | 'ch'; id: number } | null>(null)
   const [editText, setEditText] = useState('')
   const [contextMenu, setContextMenu] = useState<{
@@ -230,19 +279,18 @@ export default function OutlineTree() {
     type: 'vol' | 'ch' | 'bg'
     id?: number
   } | null>(null)
-
-  useEffect(() => {
-    setExpandedVols((prev) => {
-      const next = new Set(prev)
-      volumes.forEach((v) => next.add(v.id))
-      return next
-    })
-  }, [volumes])
+  const expandedVols = useMemo(
+    () => new Set(volumes.map((volume) => volume.id).filter((id) => !collapsedVols.has(id))),
+    [collapsedVols, volumes]
+  )
 
   const toggleVol = (id: number) => {
-    const next = new Set(expandedVols)
-    next.has(id) ? next.delete(id) : next.add(id)
-    setExpandedVols(next)
+    setCollapsedVols((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const startRename = (type: 'vol' | 'ch', id: number, currentTitle: string) => {
@@ -301,45 +349,10 @@ export default function OutlineTree() {
     void reorderChapters(vol.id, chapterIds)
   }
 
-  const TabBar = ({ activeTab: at, setActiveTab: setAt }: { activeTab: LeftTab; setActiveTab: (t: LeftTab) => void }) => (
-    <div className="flex border-b border-[#2a2a2a] text-[10px] font-medium shrink-0" role="tablist">
-      <button
-        role="tab"
-        aria-selected={at === 'outline'}
-        onClick={() => setAt('outline')}
-        className={`flex-1 py-2.5 text-center transition flex items-center justify-center gap-1 ${
-          at === 'outline' ? 'text-emerald-500 border-b-2 border-emerald-500 bg-slate-800/30' : 'text-slate-500 hover:text-slate-300'
-        }`}
-      >
-        <FileText size={12} /> 大纲
-      </button>
-      <button
-        role="tab"
-        aria-selected={at === 'characters'}
-        onClick={() => setAt('characters')}
-        className={`flex-1 py-2.5 text-center transition flex items-center justify-center gap-1 ${
-          at === 'characters' ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-800/30' : 'text-slate-500 hover:text-slate-300'
-        }`}
-      >
-        <Users size={12} /> 人物
-      </button>
-      <button
-        role="tab"
-        aria-selected={at === 'wiki'}
-        onClick={() => setAt('wiki')}
-        className={`flex-1 py-2.5 text-center transition flex items-center justify-center gap-1 ${
-          at === 'wiki' ? 'text-purple-400 border-b-2 border-purple-400 bg-slate-800/30' : 'text-slate-500 hover:text-slate-300'
-        }`}
-      >
-        <BookOpen size={12} /> 设定
-      </button>
-    </div>
-  )
-
   if (activeTab === 'characters') {
     return (
       <div className="flex flex-col h-full">
-        <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <OutlineTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
         <CharacterList />
       </div>
     )
@@ -348,7 +361,7 @@ export default function OutlineTree() {
   if (activeTab === 'wiki') {
     return (
       <div className="flex flex-col h-full">
-        <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <OutlineTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
         <WikiList />
       </div>
     )
@@ -356,14 +369,14 @@ export default function OutlineTree() {
 
   return (
     <div className="flex flex-col h-full" onClick={() => setContextMenu(null)} onContextMenu={(e) => handleContextMenu(e, 'bg')}>
-      <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <OutlineTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
       <div className="flex-1 min-h-0 flex flex-col">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChapterDragEnd}>
           <div className="flex-1 overflow-y-auto p-2 text-sm space-y-0.5 min-h-0">
           {volumes.length === 0 && (
-            <div className="text-center text-slate-500 text-xs py-8">
+            <div className="text-center text-[var(--text-muted)] text-xs py-8">
               <p className="mb-2">还没有内容</p>
-              <button onClick={() => openModal('newVolume', { book_id: bookId })} className="text-emerald-500 hover:text-emerald-400">
+              <button onClick={() => openModal('newVolume', { book_id: bookId })} className="text-[var(--accent-primary)] hover:text-[var(--accent-secondary)]">
                 点击 + 创建第一卷
               </button>
             </div>
@@ -371,20 +384,20 @@ export default function OutlineTree() {
           {volumes.map((vol) => (
             <div key={vol.id}>
               <div
-                className="flex items-center text-slate-300 py-1.5 px-2 group cursor-pointer hover:bg-slate-800/50 rounded"
+                className="flex items-center text-[var(--text-primary)] py-1.5 px-2 group cursor-pointer hover:bg-[var(--bg-tertiary)] rounded"
                 onClick={() => toggleVol(vol.id)}
                 onDoubleClick={() => startRename('vol', vol.id, vol.title)}
                 onContextMenu={(e) => handleContextMenu(e, 'vol', vol.id)}
               >
                 {expandedVols.has(vol.id) ? (
-                  <ChevronDown size={14} className="mr-1 text-slate-500" />
+                  <ChevronDown size={14} className="mr-1 text-[var(--text-muted)]" />
                 ) : (
-                  <ChevronRight size={14} className="mr-1 text-slate-500" />
+                  <ChevronRight size={14} className="mr-1 text-[var(--text-muted)]" />
                 )}
                 {expandedVols.has(vol.id) ? (
-                  <FolderOpen size={14} className="mr-2 text-indigo-400" />
+                  <FolderOpen size={14} className="mr-2 text-[var(--accent-primary)]" />
                 ) : (
-                  <FolderClosed size={14} className="mr-2 text-indigo-400" />
+                  <FolderClosed size={14} className="mr-2 text-[var(--accent-primary)]" />
                 )}
                 {editingId?.type === 'vol' && editingId.id === vol.id ? (
                   <input
@@ -396,7 +409,7 @@ export default function OutlineTree() {
                       if (e.key === 'Enter') finishRename()
                       if (e.key === 'Escape') setEditingId(null)
                     }}
-                    className="flex-1 bg-transparent border-b border-emerald-500 outline-none text-slate-200 text-sm"
+                    className="flex-1 bg-transparent border-b border-[var(--accent-primary)] outline-none text-[var(--text-primary)] text-sm"
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
@@ -432,17 +445,17 @@ export default function OutlineTree() {
           </div>
         </DndContext>
       </div>
-      <div className="border-t border-[#2a2a2a] p-2 flex gap-1">
+      <div className="border-t border-[var(--border-primary)] p-2 flex gap-1 bg-[var(--surface-secondary)]">
         <button
           onClick={() => openModal('newVolume', { book_id: bookId })}
-          className="flex-1 py-1.5 text-[11px] text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded transition flex items-center justify-center gap-1"
+          className="flex-1 py-1.5 text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent-secondary)] hover:bg-[var(--bg-tertiary)] rounded transition flex items-center justify-center gap-1"
         >
           <Plus size={12} /> 新建卷
         </button>
         {volumes.length > 0 && (
           <button
             onClick={() => openModal('newChapter', { volume_id: volumes[volumes.length - 1].id })}
-            className="flex-1 py-1.5 text-[11px] text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded transition flex items-center justify-center gap-1"
+            className="flex-1 py-1.5 text-[11px] text-[var(--text-secondary)] hover:text-[var(--accent-secondary)] hover:bg-[var(--bg-tertiary)] rounded transition flex items-center justify-center gap-1"
           >
             <Plus size={12} /> 新建章
           </button>
@@ -450,7 +463,7 @@ export default function OutlineTree() {
       </div>
       {contextMenu && (
         <div
-          className="fixed bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl py-1 z-50 min-w-[140px] text-xs"
+          className="fixed bg-[var(--surface-elevated)] border border-[var(--border-primary)] rounded-lg shadow-xl py-1 z-50 min-w-[140px] text-xs"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           {contextMenu.type === 'bg' && (
@@ -459,7 +472,7 @@ export default function OutlineTree() {
                 setContextMenu(null)
                 openModal('newVolume', { book_id: bookId })
               }}
-              className="w-full px-3 py-1.5 text-left text-slate-300 hover:bg-slate-800 transition"
+              className="w-full px-3 py-1.5 text-left text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition"
             >
               新建卷
             </button>
@@ -471,7 +484,7 @@ export default function OutlineTree() {
                   setContextMenu(null)
                   openModal('newChapter', { volume_id: contextMenu.id })
                 }}
-                className="w-full px-3 py-1.5 text-left text-slate-300 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition"
               >
                 新建章节
               </button>
@@ -480,14 +493,14 @@ export default function OutlineTree() {
                   const v = volumes.find((x) => x.id === contextMenu.id)
                   if (v) startRename('vol', v.id, v.title)
                 }}
-                className="w-full px-3 py-1.5 text-left text-slate-300 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition"
               >
                 重命名
               </button>
-              <div className="border-t border-[#333] my-1" />
+              <div className="border-t border-[var(--border-primary)] my-1" />
               <button
                 onClick={() => handleDeleteVol(contextMenu.id!)}
-                className="w-full px-3 py-1.5 text-left text-red-400 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--danger-primary)] hover:bg-[var(--danger-surface)] transition"
               >
                 删除卷
               </button>
@@ -501,14 +514,14 @@ export default function OutlineTree() {
                   const ch = allChs.find((c) => c.id === contextMenu.id)
                   if (ch) startRename('ch', ch.id, ch.title)
                 }}
-                className="w-full px-3 py-1.5 text-left text-slate-300 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition"
               >
                 重命名
               </button>
-              <div className="border-t border-[#333] my-1" />
+              <div className="border-t border-[var(--border-primary)] my-1" />
               <button
                 onClick={() => handleDeleteCh(contextMenu.id!)}
-                className="w-full px-3 py-1.5 text-left text-red-400 hover:bg-slate-800 transition"
+                className="w-full px-3 py-1.5 text-left text-[var(--danger-primary)] hover:bg-[var(--danger-surface)] transition"
               >
                 删除章节
               </button>

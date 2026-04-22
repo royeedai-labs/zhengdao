@@ -1,0 +1,69 @@
+version: 1
+baseline_id: "CR-20260422-author-layout-cold-white-theme"
+scope:
+  mode: "change"
+  focus: "workspace-author-layout-cold-white-theme"
+  quality_tier: "standard"
+
+tasks:
+  - id: TASK-LAYOUT-001
+    title: "建立本轮 AI-OS lane 工件"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    requirement_refs:
+      - "REQ-LAYOUT-001"
+      - "REQ-LAYOUT-002"
+      - "REQ-LAYOUT-003"
+      - "REQ-LAYOUT-004"
+    verification_required:
+      - "artifact-review"
+
+  - id: TASK-LAYOUT-002
+    title: "重构主题系统为 system 默认和冷白效率色板"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "renderer-theme"
+      - "ui-store"
+    verification_required:
+      - "theme unit tests"
+      - "npm run build"
+
+  - id: TASK-LAYOUT-003
+    title: "优化工作区顶栏、左右栏和编辑区布局"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "WorkspaceLayout"
+      - "TopBar"
+      - "OutlineTree"
+      - "RightPanel"
+      - "EditorArea"
+    verification_required:
+      - "layout unit tests"
+      - "responsive visual smoke"
+
+  - id: TASK-LAYOUT-004
+    title: "全应用关键表面接入新主题变量"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "AI assistant"
+      - "bottom panel"
+      - "modals"
+      - "bookshelf"
+    verification_required:
+      - "npm run build"
+      - "manual visual checklist"

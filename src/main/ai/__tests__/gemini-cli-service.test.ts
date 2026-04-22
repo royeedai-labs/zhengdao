@@ -83,7 +83,7 @@ describe('Gemini CLI service', () => {
 
     expect(result).toEqual({ content: 'ok' })
     expect(spawn).toHaveBeenCalledTimes(1)
-    const [_runtime, args, options] = spawn.mock.calls[0]
+    const [, args, options] = spawn.mock.calls[0]
     expect(args).toContain('/Applications/zhengdao/resources/app.asar.unpacked/node_modules/@google/gemini-cli/bundle/gemini.js')
     expect(args).toContain('--output-format')
     expect(args).toContain('json')

@@ -20,9 +20,6 @@ Thumbs.db
 npm-debug.log*
 
 # AI-OS session & metadata
-.ai-os/STATE.md
-.ai-os/context-snapshot.md
-.ai-os/codebase-map.md
 .ai-os/lanes/*/STATE.md
 .ai-os/lanes/*/context-snapshot.md
 .ai-os/lanes/*/codebase-map.md

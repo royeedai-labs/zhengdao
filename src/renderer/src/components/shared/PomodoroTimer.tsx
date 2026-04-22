@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Timer } from 'lucide-react'
 
 const LS_WORK = 'write_pomodoro_work_sec'
@@ -36,14 +36,14 @@ export default function PomodoroTimer() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [display, setDisplay] = useState({ phase: 'idle' as 'idle' | 'work' | 'break', remaining: 0 })
 
-  const clearTick = useCallback(() => {
+  const clearTick = () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
-  }, [])
+  }
 
-  const armInterval = useCallback(() => {
+  function armInterval() {
     clearTick()
     intervalRef.current = setInterval(() => {
       if (remainingRef.current <= 1) {
@@ -69,9 +69,9 @@ export default function PomodoroTimer() {
       remainingRef.current -= 1
       setDisplay({ phase: phaseRef.current, remaining: remainingRef.current })
     }, 1000)
-  }, [clearTick])
+  }
 
-  const toggle = useCallback(() => {
+  const toggle = () => {
     if (phaseRef.current === 'idle') {
       const { work } = loadSettings()
       phaseRef.current = 'work'
@@ -84,9 +84,9 @@ export default function PomodoroTimer() {
     phaseRef.current = 'idle'
     remainingRef.current = 0
     setDisplay({ phase: 'idle', remaining: 0 })
-  }, [armInterval, clearTick])
+  }
 
-  useEffect(() => () => clearTick(), [clearTick])
+  useEffect(() => () => clearTick(), [])
 
   const preset = loadSettings()
   const label =
@@ -105,7 +105,7 @@ export default function PomodoroTimer() {
             ? '点击停止'
             : '点击停止休息'
       }
-      className="flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--border-primary)] bg-[var(--bg-tertiary)]/80 text-[10px] font-mono text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:border-emerald-500/40 transition"
+      className="flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--border-primary)] bg-[var(--bg-tertiary)]/80 text-[10px] font-mono text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-border)] transition"
     >
       <Timer size={12} className="shrink-0 text-rose-400/90" />
       <span>{display.phase === 'work' ? '' : display.phase === 'break' ? '休 ' : ''}</span>

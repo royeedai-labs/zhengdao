@@ -1,16 +1,13 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { useChapterStore } from '@/stores/chapter-store'
-import { useBookStore } from '@/stores/book-store'
+import { useCallback } from 'react'
 
 export function useAutoSave() {
-  const currentChapter = useChapterStore((s) => s.currentChapter)
-  const bookId = useBookStore((s) => s.currentBookId)
-
   const saveDraft = useCallback(
     (chapterId: number, html: string) => {
       try {
         localStorage.setItem(`draft_${chapterId}`, html)
-      } catch {}
+      } catch {
+        return
+      }
     },
     []
   )
@@ -18,7 +15,9 @@ export function useAutoSave() {
   const clearDraft = useCallback((chapterId: number) => {
     try {
       localStorage.removeItem(`draft_${chapterId}`)
-    } catch {}
+    } catch {
+      return
+    }
   }, [])
 
   const getDraft = useCallback((chapterId: number): string | null => {

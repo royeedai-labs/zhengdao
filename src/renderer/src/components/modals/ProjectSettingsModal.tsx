@@ -111,20 +111,23 @@ export default function ProjectSettingsModal() {
 
   useEffect(() => {
     if (!config) return
-    setGenreState(
-      deriveGenreEditorState(
-        {
-          genre: config.genre || 'urban',
-          character_fields: config.character_fields || [],
-          faction_labels: config.faction_labels || [],
-          status_labels: config.status_labels || [],
-          emotion_labels: config.emotion_labels || []
-        },
-        GENRE_PRESETS
+    const id = window.setTimeout(() => {
+      setGenreState(
+        deriveGenreEditorState(
+          {
+            genre: config.genre || 'urban',
+            character_fields: config.character_fields || [],
+            faction_labels: config.faction_labels || [],
+            status_labels: config.status_labels || [],
+            emotion_labels: config.emotion_labels || []
+          },
+          GENRE_PRESETS
+        )
       )
-    )
-    setDailyGoal(config.daily_goal || 6000)
-    setSensitiveList(config.sensitive_list || 'default')
+      setDailyGoal(config.daily_goal || 6000)
+      setSensitiveList(config.sensitive_list || 'default')
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [config])
 
   useEffect(() => {
@@ -238,7 +241,7 @@ export default function ProjectSettingsModal() {
               onClick={() => setTab(key)}
               className={`px-4 py-3 text-xs font-bold border-b-2 transition ${
                 tab === key
-                  ? 'border-emerald-500 text-emerald-400'
+                  ? 'border-[var(--accent-primary)] text-[var(--accent-secondary)]'
                   : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
@@ -267,8 +270,8 @@ export default function ProjectSettingsModal() {
                   onClick={() => switchPreset(GENRE_PRESETS.find((preset) => preset.id === genreState.builtInGenreId) || GENRE_PRESETS[0])}
                   className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                     genreState.mode === 'preset'
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                      : 'border-[var(--border-primary)] text-[var(--text-secondary)] hover:border-emerald-500/30'
+                      ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
+                      : 'border-[var(--border-primary)] text-[var(--text-secondary)] hover:border-[var(--accent-border)]'
                   }`}
                 >
                   使用内置题材
@@ -278,8 +281,8 @@ export default function ProjectSettingsModal() {
                   onClick={enableCustomGenre}
                   className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                     genreState.mode === 'custom'
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                      : 'border-[var(--border-primary)] text-[var(--text-secondary)] hover:border-emerald-500/30'
+                      ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
+                      : 'border-[var(--border-primary)] text-[var(--text-secondary)] hover:border-[var(--accent-border)]'
                   }`}
                 >
                   当前作品自定义题材
@@ -297,7 +300,7 @@ export default function ProjectSettingsModal() {
                         onClick={() => switchPreset(preset)}
                         className={`w-full rounded-lg border p-3 text-left transition ${
                           genreState.builtInGenreId === preset.id
-                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                            ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
                             : 'border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-primary)] hover:border-[var(--border-secondary)]'
                         }`}
                       >
@@ -325,7 +328,7 @@ export default function ProjectSettingsModal() {
                             name: event.target.value
                           }
                         }))}
-                      className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
+                      className="w-full rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)]"
                       placeholder="例如：悬疑群像"
                     />
                   </div>
@@ -369,15 +372,15 @@ export default function ProjectSettingsModal() {
 
           {tab === 'ai' && (
             <div className="space-y-4">
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-100">
-                <div className="font-bold text-emerald-300">AI 配置已拆分</div>
-                <p className="mt-1 text-emerald-100/80">
+              <div className="rounded-lg border border-[var(--info-border)] bg-[var(--info-surface)] p-3 text-xs text-[var(--text-primary)]">
+                <div className="font-bold text-[var(--info-primary)]">AI 配置已拆分</div>
+                <p className="mt-1 text-[var(--text-secondary)]">
                   账号、API Key、Gemini CLI 与 Ollama 属于全局账号；提示词、上下文、写作禁区和能力卡在“AI 能力与作品配置”中管理。
                 </p>
                 <button
                   type="button"
                   onClick={() => openModal('aiSettings')}
-                  className="mt-2 rounded border border-emerald-500/30 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/10"
+                  className="mt-2 rounded border border-[var(--info-border)] px-3 py-1.5 text-xs font-semibold text-[var(--info-primary)] hover:bg-[var(--info-surface)]"
                 >
                   打开 AI 能力与作品配置
                 </button>
@@ -393,7 +396,7 @@ export default function ProjectSettingsModal() {
                 <select
                   value={sensitiveList}
                   onChange={(e) => setSensitiveList(e.target.value)}
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-[var(--accent-primary)]"
                 >
                   <option value="default">默认词库</option>
                   <option value="strict">严格词库</option>
@@ -414,7 +417,7 @@ export default function ProjectSettingsModal() {
                 step={100}
                 value={dailyGoal}
                 onChange={(e) => setDailyGoal(Number(e.target.value))}
-                className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-emerald-400 font-mono text-lg focus:outline-none focus:border-emerald-500"
+                className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--accent-secondary)] font-mono text-lg focus:outline-none focus:border-[var(--accent-primary)]"
               />
               <p className="text-xs text-[var(--text-muted)] mt-2">用于顶部日更进度条统计（统计接入后可显示实际进度）。</p>
             </div>
@@ -441,8 +444,8 @@ export default function ProjectSettingsModal() {
                             onClick={() => setCaptureId(a.id)}
                             className={`font-mono px-2 py-1 rounded border text-[11px] min-w-[120px] text-center transition ${
                               captureId === a.id
-                                ? 'border-emerald-500 text-emerald-400 animate-pulse'
-                                : 'border-[var(--border-secondary)] text-[var(--text-secondary)] hover:border-emerald-500/50'
+                                ? 'border-[var(--accent-primary)] text-[var(--accent-secondary)] animate-pulse'
+                                : 'border-[var(--border-secondary)] text-[var(--text-secondary)] hover:border-[var(--accent-border)]'
                             }`}
                           >
                             {captureId === a.id ? '请按键…' : getChord(a.id)}
@@ -450,7 +453,7 @@ export default function ProjectSettingsModal() {
                           <button
                             type="button"
                             onClick={() => void setShortcut(a.id, '')}
-                            className="text-[11px] text-[var(--text-muted)] hover:text-emerald-400 px-2"
+                            className="text-[11px] text-[var(--text-muted)] hover:text-[var(--accent-secondary)] px-2"
                           >
                             恢复默认
                           </button>
@@ -471,7 +474,7 @@ export default function ProjectSettingsModal() {
 
               <div className="space-y-3 border border-[var(--border-primary)] rounded-lg p-4 bg-[var(--bg-primary)]">
                 <div className="flex items-center gap-2 text-[var(--text-primary)] text-sm font-bold">
-                  <HardDrive size={16} className="text-emerald-500" />
+                  <HardDrive size={16} className="text-[var(--accent-primary)]" />
                   定时备份
                 </div>
                 <div className="flex gap-2 items-start">
@@ -487,7 +490,7 @@ export default function ProjectSettingsModal() {
                       const p = await window.api.openDirectory()
                       if (p) setBackupDir(p)
                     }}
-                    className="shrink-0 px-2 py-1.5 text-xs border border-[var(--border-secondary)] rounded text-[var(--text-primary)] hover:border-emerald-500 flex items-center gap-1"
+                    className="shrink-0 px-2 py-1.5 text-xs border border-[var(--border-secondary)] rounded text-[var(--text-primary)] hover:border-[var(--accent-border)] flex items-center gap-1"
                   >
                     <FolderOpen size={14} /> 选择目录
                   </button>
@@ -534,7 +537,7 @@ export default function ProjectSettingsModal() {
                       setBackupBusy(false)
                     }
                   }}
-                  className="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 rounded text-white"
+                  className="text-xs px-3 py-1.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 rounded text-[var(--accent-contrast)]"
                 >
                   应用备份设置
                 </button>
@@ -554,7 +557,7 @@ export default function ProjectSettingsModal() {
                       setBackupBusy(false)
                     }
                   }}
-                  className="ml-2 text-xs px-3 py-1.5 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 rounded"
+                  className="ml-2 text-xs px-3 py-1.5 border border-[var(--accent-border)] text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] rounded"
                 >
                   立即备份
                 </button>
@@ -565,7 +568,7 @@ export default function ProjectSettingsModal() {
                 <button
                   type="button"
                   onClick={() => void refreshBackupList()}
-                  className="text-[11px] text-emerald-500 flex items-center gap-1 hover:text-emerald-400"
+                  className="text-[11px] text-[var(--accent-secondary)] flex items-center gap-1 hover:text-[var(--accent-primary)]"
                 >
                   <RefreshCw size={12} /> 刷新
                 </button>
@@ -604,7 +607,7 @@ export default function ProjectSettingsModal() {
 
               <div className="space-y-3 border border-[var(--border-primary)] rounded-lg p-4 bg-[var(--bg-primary)]">
                 <div className="flex items-center gap-2 text-[var(--text-primary)] text-sm font-bold">
-                  <Database size={16} className="text-emerald-500" />
+                  <Database size={16} className="text-[var(--accent-primary)]" />
                   完整数据迁移
                 </div>
                 <p className="text-[11px] text-[var(--text-muted)]">
@@ -624,7 +627,7 @@ export default function ProjectSettingsModal() {
                         setBackupBusy(false)
                       }
                     }}
-                    className="text-xs px-3 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border-secondary)] rounded text-[var(--text-primary)] hover:border-emerald-500/50"
+                    className="text-xs px-3 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border-secondary)] rounded text-[var(--text-primary)] hover:border-[var(--accent-border)]"
                   >
                     导出数据库
                   </button>
@@ -646,7 +649,7 @@ export default function ProjectSettingsModal() {
                         setBackupBusy(false)
                       }
                     }}
-                    className="text-xs px-3 py-1.5 border border-red-500/40 text-red-400 rounded hover:bg-red-500/10"
+                    className="text-xs px-3 py-1.5 border border-[var(--danger-border)] text-[var(--danger-primary)] rounded hover:bg-[var(--danger-surface)]"
                   >
                     导入数据库
                   </button>
@@ -675,7 +678,7 @@ export default function ProjectSettingsModal() {
                 </div>
               </div>
 
-              {backupNote && <p className="text-xs text-emerald-400">{backupNote}</p>}
+              {backupNote && <p className="text-xs text-[var(--success-primary)]">{backupNote}</p>}
             </>
           )}
         </div>
@@ -692,7 +695,7 @@ export default function ProjectSettingsModal() {
                 else await saveAiTabSettings()
                 closeModal()
               }}
-              className="flex items-center gap-1 px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded"
+              className="flex items-center gap-1 px-4 py-1.5 text-xs bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-[var(--accent-contrast)] rounded"
             >
               <Save size={14} /> 保存
             </button>
@@ -722,7 +725,7 @@ function RowActions({
     <button
       type="button"
       onClick={onAdd}
-      className="rounded-md border border-dashed border-[var(--border-secondary)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition hover:border-emerald-500/40 hover:text-emerald-400"
+      className="rounded-md border border-dashed border-[var(--border-secondary)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent-secondary)]"
     >
       + {label}
     </button>
@@ -741,7 +744,7 @@ function PlainInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-md border border-[var(--border-primary)] bg-[var(--bg-primary)] px-2 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 ${
+      className={`w-full rounded-md border border-[var(--border-primary)] bg-[var(--bg-primary)] px-2 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] ${
         props.className || ''
       }`}
     />
@@ -752,7 +755,7 @@ function PlainSelect(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-md border border-[var(--border-primary)] bg-[var(--bg-primary)] px-2 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 ${
+      className={`w-full rounded-md border border-[var(--border-primary)] bg-[var(--bg-primary)] px-2 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] ${
         props.className || ''
       }`}
     />
@@ -766,7 +769,7 @@ function RemoveButton({ onClick, title }: { onClick: () => void; title: string }
       onClick={onClick}
       title={title}
       aria-label={title}
-      className="rounded-md border border-red-500/25 px-2 py-1 text-[11px] text-red-400 transition hover:bg-red-500/10"
+      className="rounded-md border border-[var(--danger-border)] px-2 py-1 text-[11px] text-[var(--danger-primary)] transition hover:bg-[var(--danger-surface)]"
     >
       删除
     </button>

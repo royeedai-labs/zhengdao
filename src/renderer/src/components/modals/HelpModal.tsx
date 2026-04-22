@@ -468,27 +468,27 @@ export default function HelpModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4">
-      <div className="bg-[#1a1a1a] border border-[#333] w-full max-w-3xl max-h-[85vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
-        <div className="h-12 border-b border-[#2a2a2a] bg-[#141414] flex items-center justify-between px-5 shrink-0">
-          <div className="flex items-center space-x-2 text-emerald-400 font-bold">
+      <div className="bg-[var(--surface-elevated)] border border-[var(--border-primary)] w-full max-w-3xl max-h-[85vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="h-12 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-between px-5 shrink-0">
+          <div className="flex items-center space-x-2 text-[var(--accent-secondary)] font-bold">
             <HelpCircle size={18} />
             <span>使用帮助</span>
           </div>
-          <button onClick={closeModal} className="text-slate-500 hover:text-slate-300 transition">
+          <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
             <X size={20} />
           </button>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <nav className="w-48 border-r border-[#2a2a2a] bg-[#141414] overflow-y-auto shrink-0 py-2">
+          <nav className="w-48 border-r border-[var(--border-primary)] bg-[var(--bg-primary)] overflow-y-auto shrink-0 py-2">
             {HELP_SECTIONS.map((section, i) => (
               <button
                 key={i}
                 onClick={() => setOpenIdx(i)}
                 className={`w-full text-left px-4 py-2 text-xs flex items-center gap-1.5 transition ${
                   openIdx === i
-                    ? 'bg-emerald-600/10 text-emerald-400 font-bold border-r-2 border-emerald-500'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#1e1e1e]'
+                    ? 'bg-[var(--accent-surface)] text-[var(--accent-secondary)] font-bold border-r-2 border-[var(--accent-primary)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
                 }`}
               >
                 <ChevronRight
@@ -501,15 +501,15 @@ export default function HelpModal() {
           </nav>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            <h2 className="text-lg font-bold text-emerald-400 mb-4">
+            <h2 className="text-lg font-bold text-[var(--accent-secondary)] mb-4">
               {HELP_SECTIONS[openIdx].title}
             </h2>
             {HELP_SECTIONS[openIdx].items.map((item, j) => (
-              <div key={j} className="bg-[#222] rounded-lg border border-[#333] overflow-hidden">
-                <div className="px-4 py-3 text-sm font-medium text-slate-200">
+              <div key={j} className="bg-[var(--surface-secondary)] rounded-lg border border-[var(--border-primary)] overflow-hidden">
+                <div className="px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
                   {item.q}
                 </div>
-                <div className="px-4 pb-4 text-xs text-slate-400 leading-relaxed whitespace-pre-line border-t border-[#2a2a2a] pt-3">
+                <div className="px-4 pb-4 text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-line border-t border-[var(--border-primary)] pt-3">
                   {item.a}
                 </div>
               </div>
@@ -517,19 +517,19 @@ export default function HelpModal() {
           </div>
         </div>
 
-        <div className="h-10 border-t border-[#2a2a2a] bg-[#141414] flex items-center justify-between px-5 text-[10px] text-slate-600 shrink-0">
+        <div className="h-10 border-t border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-between px-5 text-[10px] text-[var(--text-muted)] shrink-0">
           <button
             type="button"
             onClick={() => {
               triggerOnboardingTour()
               closeModal()
             }}
-            className="inline-flex items-center gap-1 text-emerald-500/90 hover:text-emerald-400 font-semibold transition"
+            className="inline-flex items-center gap-1 text-[var(--accent-secondary)] hover:text-[var(--accent-primary)] font-semibold transition"
           >
             <Compass size={12} />
             重新引导
           </button>
-          <span className="text-slate-600">证道 · 按 F1 或 ? 打开帮助</span>
+          <span className="text-[var(--text-muted)]">证道 · 按 F1 或 ? 打开帮助</span>
         </div>
       </div>
     </div>

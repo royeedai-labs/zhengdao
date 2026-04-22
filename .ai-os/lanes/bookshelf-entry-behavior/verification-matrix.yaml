@@ -1,0 +1,27 @@
+impact_rules:
+  - when: "workspace-entry-behavior-change"
+    run:
+      - "npm test -- src/renderer/src/utils/__tests__/workspace-entry.test.ts"
+      - "npm run build"
+  - when: "topbar-overview-entry-change"
+    run:
+      - "code review for explicit overview entry"
+      - "manual smoke if UI changed"
+
+failure_modes:
+  - id: FM-ENTRY-001
+    scenario: "Clicking an existing book still opens overview automatically before entering useful workspace"
+    expected: "Book body click enters workspace without auto overview modal"
+    guard: ".ai-os/lanes/bookshelf-entry-behavior/evals/bookshelf-entry-no-auto-overview.md"
+  - id: FM-ENTRY-002
+    scenario: "Removing automatic overview also removes explicit overview access"
+    expected: "Explicit overview entry remains available"
+    guard: "TopBar / WorkspaceLayout review"
+  - id: FM-ENTRY-003
+    scenario: "Onboarding loses priority for first-time flow"
+    expected: "Onboarding still wins when it is the intended first-run flow"
+    guard: "workspace-entry focused tests"
+
+guards:
+  - ".ai-os/lanes/bookshelf-entry-behavior/evals/bookshelf-entry-no-auto-overview.md"
+  - ".ai-os/lanes/bookshelf-entry-behavior/DESIGN.md"

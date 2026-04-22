@@ -64,3 +64,7 @@ tasks:
     title: "将 Gemini CLI 空模型默认到 Gemini 3 Pro，并优化真实 delta 队列流式体验"
     status: completed
     acceptance: ["AC-AI-013"]
+  - id: TASK-AI-CHAT-017
+    title: "调整 AI 悬浮入口拖拽与展开态遮挡"
+    status: completed
+    acceptance: ["AC-AI-001"]

@@ -16,7 +16,8 @@ import {
   ArchiveRestore,
   BarChart3,
   LayoutDashboard,
-  Flame
+  Flame,
+  MoreHorizontal
 } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
@@ -40,13 +41,17 @@ export default function TopBar() {
     toggleRightPanel,
     openModal,
     theme,
-    setTheme
+    setTheme,
+    topbarToolsCollapsed,
+    toggleTopbarToolsCollapsed
   } = useUIStore()
   const { books, currentBookId, closeBook } = useBookStore()
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [toolMenuOpen, setToolMenuOpen] = useState(false)
   const themeMenuRef = useRef<HTMLDivElement>(null)
   const accountMenuRef = useRef<HTMLDivElement>(null)
+  const toolMenuRef = useRef<HTMLDivElement>(null)
 
   const user = useAuthStore((s) => s.user)
   const syncing = useAuthStore((s) => s.syncing)
@@ -64,15 +69,16 @@ export default function TopBar() {
   }, [currentBookId, loadBookSyncMeta])
 
   useEffect(() => {
-    if (!themeMenuOpen && !accountMenuOpen) return
+    if (!themeMenuOpen && !accountMenuOpen && !toolMenuOpen) return
     const close = (e: MouseEvent) => {
       const t = e.target as Node
       if (themeMenuOpen && !themeMenuRef.current?.contains(t)) setThemeMenuOpen(false)
       if (accountMenuOpen && !accountMenuRef.current?.contains(t)) setAccountMenuOpen(false)
+      if (toolMenuOpen && !toolMenuRef.current?.contains(t)) setToolMenuOpen(false)
     }
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
-  }, [themeMenuOpen, accountMenuOpen])
+  }, [themeMenuOpen, accountMenuOpen, toolMenuOpen])
   const config = useConfigStore((s) => s.config)
   const warningCount = useForeshadowStore((s) => s.getWarningCount())
   const currentBook = books.find((b) => b.id === currentBookId)
@@ -84,10 +90,10 @@ export default function TopBar() {
   const titlebarSafeArea = getCurrentTitlebarSafeArea()
 
   const cloudIconClass = syncing
-    ? 'text-emerald-400 animate-pulse'
+    ? 'text-[var(--success-primary)] animate-pulse'
     : user && lastBookSyncAt
-      ? 'text-emerald-500'
-      : 'text-slate-500'
+      ? 'text-[var(--success-primary)]'
+      : 'text-[var(--text-muted)]'
   const cloudTitle = !user
     ? '未登录，云备份不可用'
     : syncing
@@ -101,6 +107,14 @@ export default function TopBar() {
     setThemeMenuOpen(false)
     setAccountMenuOpen(false)
   }
+
+  const closeToolsAndOpenModal = (modal: Parameters<typeof openModal>[0]) => {
+    setToolMenuOpen(false)
+    openModal(modal)
+  }
+
+  const toolButtonClass =
+    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--border-secondary)] bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:border-[var(--accent-border)] hover:bg-[var(--accent-surface)] hover:text-[var(--accent-secondary)] transition shrink-0 min-h-8'
 
   return (
     <div
@@ -116,7 +130,7 @@ export default function TopBar() {
         <button
           onClick={closeBook}
           title="返回书架"
-          className="text-sm font-medium text-[var(--text-primary)] hover:text-emerald-400 transition flex items-center gap-1 min-w-0"
+          className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--accent-secondary)] transition flex items-center gap-1 min-w-0"
         >
           <span className="truncate">《{currentBook?.title || '未命名'}》</span>
           <ArrowUpRight size={12} className="text-[var(--text-muted)]" />
@@ -125,7 +139,7 @@ export default function TopBar() {
           type="button"
           onClick={() => openModal('bookOverview')}
           title="书籍总览"
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border border-emerald-500/30 text-emerald-400/90 hover:bg-emerald-500/10 transition no-drag"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-tertiary)] transition no-drag"
         >
           <LayoutDashboard size={14} />
           总览
@@ -152,27 +166,31 @@ export default function TopBar() {
         </div>
       </div>
 
-      <div className="topbar-tools no-drag flex flex-1 min-w-0 items-center justify-center px-3 overflow-x-auto">
+      <div
+        className={`topbar-tools no-drag flex-1 min-w-0 items-center justify-center px-2 overflow-x-auto ${
+          topbarToolsCollapsed ? 'hidden' : 'hidden xl:flex'
+        }`}
+      >
         <div className="flex min-w-max items-center gap-2 whitespace-nowrap py-1">
           <button
             onClick={() => openModal('fullCharacters')}
             title="角色总库"
-            className="flex items-center px-3 py-1.5 bg-indigo-600/10 text-indigo-400 border border-indigo-500/30 rounded hover:bg-indigo-600/20 transition font-bold relative min-h-8"
+            className={toolButtonClass}
           >
-            <Users size={14} className="mr-1.5" /> 角色总库
+            <Users size={14} /> 角色总库
           </button>
           <button
             onClick={() => openModal('settings')}
             title="设定维基"
-            className="flex items-center px-3 py-1.5 bg-purple-600/10 text-purple-400 border border-purple-500/30 rounded hover:bg-purple-600/20 transition font-bold min-h-8"
+            className={toolButtonClass}
           >
-            <BookOpen size={14} className="mr-1.5" /> 设定维基
+            <BookOpen size={14} /> 设定维基
           </button>
           <button
             type="button"
             onClick={() => openModal('stats')}
             title="写作数据中心"
-            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-sky-500/35 text-sky-400 hover:bg-sky-500/10 transition shrink-0 min-h-8"
+            className={toolButtonClass}
           >
             <BarChart3 size={14} />
             数据
@@ -191,7 +209,7 @@ export default function TopBar() {
             onClick={() => openModal('trash')}
             aria-label="回收站"
             title="回收站"
-            className="p-1.5 hover:bg-[var(--bg-tertiary)] hover:text-orange-400 rounded transition text-[var(--text-muted)] shrink-0 min-h-8 min-w-8"
+            className="p-1.5 hover:bg-[var(--bg-tertiary)] hover:text-[var(--warning-primary)] rounded transition text-[var(--text-muted)] shrink-0 min-h-8 min-w-8"
           >
             <ArchiveRestore size={16} />
           </button>
@@ -206,30 +224,107 @@ export default function TopBar() {
         </div>
       </div>
 
-      <div className="flex items-center space-x-4 text-[var(--text-secondary)] no-drag shrink-0">
-        <div className="flex items-center space-x-3 text-xs w-56">
+      <div
+        className={`relative no-drag shrink-0 ${topbarToolsCollapsed ? 'flex' : 'flex xl:hidden'}`}
+        ref={toolMenuRef}
+      >
+        <button
+          type="button"
+          aria-label="更多工作区工具"
+          aria-haspopup="menu"
+          aria-expanded={toolMenuOpen}
+          title="更多工作区工具"
+          onClick={() => setToolMenuOpen((open) => !open)}
+          className="p-1.5 hover:bg-[var(--bg-tertiary)] hover:text-[var(--accent-primary)] rounded transition min-h-8 min-w-8"
+        >
+          <MoreHorizontal size={16} />
+        </button>
+        {toolMenuOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-50 mt-1 min-w-[196px] rounded-lg border border-[var(--border-primary)] bg-[var(--surface-elevated)] py-1 shadow-xl"
+          >
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('fullCharacters')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <Users size={14} /> 角色总库
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('settings')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <BookOpen size={14} /> 设定维基
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('stats')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <BarChart3 size={14} /> 数据中心
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('trash')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <ArchiveRestore size={14} /> 回收站
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('projectSettings')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <Settings size={14} /> 项目设置
+            </button>
+            <div className="my-1 border-t border-[var(--border-primary)]" />
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => toggleTopbarToolsCollapsed()}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
+            >
+              <MoreHorizontal size={14} />
+              {topbarToolsCollapsed ? '固定显示工具区' : '收起工具区'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 xl:gap-3 text-[var(--text-secondary)] no-drag shrink-0">
+        <div className="hidden lg:flex items-center space-x-3 text-xs w-48 xl:w-56">
           <span className="text-[var(--text-secondary)] font-medium shrink-0">日更:</span>
           <div className="flex-1 bg-[var(--bg-tertiary)] h-2.5 rounded-full overflow-hidden relative border border-[var(--border-primary)]">
             <div
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.4)] transition-all duration-500"
-              style={{ width: `${dailyPercent}%` }}
+              className="absolute top-0 left-0 h-full transition-all duration-500"
+              style={{
+                width: `${dailyPercent}%`,
+                background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))'
+              }}
             />
           </div>
-            <span className="text-[var(--accent-primary)] font-bold font-mono shrink-0">
+            <span className="text-[var(--accent-secondary)] font-bold font-mono shrink-0">
             {dailyWords.toLocaleString()}{' '}
             <span className="text-[var(--text-muted)] text-[10px]">/ {(dailyGoal / 1000).toFixed(0)}k</span>
           </span>
         </div>
         <PomodoroTimer />
-        <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap" title="本次写作会话">
+        <span className="hidden 2xl:inline text-[10px] text-[var(--text-muted)] whitespace-nowrap" title="本次写作会话">
           本次 {sessionTime}
         </span>
-        <span className="flex items-center gap-0.5 text-[11px] text-orange-400/95 font-semibold whitespace-nowrap" title="连续打卡天数">
-          <Flame size={13} className="text-orange-500 shrink-0" />
+        <span className="flex items-center gap-0.5 text-[11px] text-[var(--warning-primary)] font-semibold whitespace-nowrap" title="连续打卡天数">
+          <Flame size={13} className="text-[var(--warning-primary)] shrink-0" />
           {streak}
         </span>
         {warningCount > 0 && (
-          <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[10px] px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+          <span className="bg-[var(--warning-surface)] text-[var(--warning-primary)] border border-[var(--warning-border)] text-[10px] px-1.5 py-0.5 rounded-full font-bold animate-pulse">
             {warningCount} 待填坑
           </span>
         )}
@@ -288,7 +383,7 @@ export default function TopBar() {
             type="button"
             onClick={() => openModal('login')}
             title="登录并启用云备份"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border border-[var(--accent-border)] text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] transition"
           >
             <LogIn size={14} />
             登录
@@ -315,7 +410,7 @@ export default function TopBar() {
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-xs font-bold shadow-md shrink-0">
+                <div className="w-7 h-7 rounded-full border border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)] flex items-center justify-center text-xs font-bold shadow-md shrink-0">
                   {(user.name || user.email || '?').charAt(0)}
                 </div>
               )}
@@ -355,7 +450,7 @@ export default function TopBar() {
                     void logout()
                     setAccountMenuOpen(false)
                   }}
-                  className="flex w-full items-center px-3 py-2 text-left text-xs text-red-400/90 hover:bg-[var(--bg-tertiary)] transition"
+                  className="flex w-full items-center px-3 py-2 text-left text-xs text-[var(--danger-primary)] hover:bg-[var(--danger-surface)] transition"
                 >
                   退出 Google 登录
                 </button>

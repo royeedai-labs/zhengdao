@@ -21,8 +21,8 @@ export default function UpdateActionButton({ variant = 'workspace' }: UpdateActi
 
   const classes =
     variant === 'bookshelf'
-      ? 'flex items-center px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-70 disabled:cursor-not-allowed'
-      : 'flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/10 transition shrink-0 min-h-8 disabled:opacity-70 disabled:cursor-not-allowed'
+      ? 'flex items-center px-4 py-2 rounded-lg text-sm font-bold transition shadow-lg bg-[var(--success-primary)] hover:brightness-105 text-[var(--text-inverse)] disabled:opacity-70 disabled:cursor-not-allowed'
+      : 'flex items-center gap-1 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-[var(--success-border)] text-[var(--success-primary)] hover:bg-[var(--success-surface)] transition shrink-0 min-h-8 disabled:opacity-70 disabled:cursor-not-allowed'
 
   return (
     <button

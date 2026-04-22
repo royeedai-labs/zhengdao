@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
@@ -40,28 +40,34 @@ export default function StatsModal() {
     { type: string; label: string; unlocked_at?: string }[]
   >([])
 
-  const load = useCallback(async () => {
-    if (!bookId) return
-    const end = new Date()
-    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()))
-    start.setUTCDate(start.getUTCDate() - 400)
-    const from = utcDayKey(start)
-    const to = utcDayKey(end)
-    const rows = (await window.api.getStatsRange(bookId, from, to)) as DailyStats[]
-    setRangeRows(rows)
-    const sess = (await window.api.getSessionsToday(bookId)) as SessionRow[]
-    setSessionsToday(sess)
-    const ach = (await window.api.getAchievements(bookId)) as {
-      type: string
-      label: string
-      unlocked_at: string
-    }[]
-    setAchievementRows(ach)
-  }, [bookId])
-
   useEffect(() => {
+    if (!bookId) return
+    let cancelled = false
+
+    const load = async () => {
+      const end = new Date()
+      const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()))
+      start.setUTCDate(start.getUTCDate() - 400)
+      const from = utcDayKey(start)
+      const to = utcDayKey(end)
+      const rows = (await window.api.getStatsRange(bookId, from, to)) as DailyStats[]
+      const sess = (await window.api.getSessionsToday(bookId)) as SessionRow[]
+      const ach = (await window.api.getAchievements(bookId)) as {
+        type: string
+        label: string
+        unlocked_at: string
+      }[]
+      if (cancelled) return
+      setRangeRows(rows)
+      setSessionsToday(sess)
+      setAchievementRows(ach)
+    }
+
     void load()
-  }, [load])
+    return () => {
+      cancelled = true
+    }
+  }, [bookId])
 
   const todayKey = utcDayKey(new Date())
   const byDate = useMemo(() => {
@@ -134,9 +140,9 @@ export default function StatsModal() {
 
   return (
     <div className="fixed inset-0 z-[120] flex flex-col bg-black/70 backdrop-blur-md text-[var(--text-primary)]">
-      <header className="grid grid-cols-[48px_1fr_48px] items-center px-6 py-4 border-b border-[var(--border-primary)] shrink-0 bg-[var(--bg-secondary)]/95">
+      <header className="grid grid-cols-[48px_1fr_48px] items-center px-6 py-4 border-b border-[var(--border-primary)] shrink-0 bg-[var(--bg-primary)]/95">
         <div className="h-10 w-10" aria-hidden />
-        <h2 className="text-center text-lg font-bold tracking-wide">写作数据中心</h2>
+        <h2 className="text-center text-lg font-bold tracking-wide text-[var(--accent-secondary)]">写作数据中心</h2>
         <button
           type="button"
           onClick={closeModal}
@@ -161,10 +167,10 @@ export default function StatsModal() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            className={`px-4 py-2 rounded-lg border text-sm font-semibold transition ${
               tab === id
-                ? 'bg-emerald-600 text-white'
-                : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--border-primary)]'
+                ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
+                : 'border-[var(--border-primary)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:border-[var(--accent-border)] hover:text-[var(--text-primary)]'
             }`}
           >
             {label}
@@ -175,23 +181,23 @@ export default function StatsModal() {
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-10 bg-[var(--bg-primary)]">
         {tab === 'day' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5">
+            <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5">
               <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">今日字数</div>
-              <div className="mt-2 text-3xl font-bold text-emerald-400 tabular-nums">
+              <div className="mt-2 text-3xl font-bold text-[var(--accent-secondary)] tabular-nums">
                 {todayWords.toLocaleString()}
               </div>
             </div>
-            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5">
+            <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5">
               <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">今日写作时长</div>
-              <div className="mt-2 text-3xl font-bold text-sky-400 tabular-nums">
+              <div className="mt-2 text-3xl font-bold text-[var(--text-primary)] tabular-nums">
                 {todayMs >= 3600000
                   ? `${Math.floor(todayMs / 3600000)}h ${Math.round((todayMs % 3600000) / 60000)}m`
                   : `${Math.max(1, Math.round(todayMs / 60000))}m`}
               </div>
             </div>
-            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5">
+            <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-5">
               <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">时速（字/小时）</div>
-              <div className="mt-2 text-3xl font-bold text-amber-400 tabular-nums">{wph.toLocaleString()}</div>
+              <div className="mt-2 text-3xl font-bold text-[var(--text-primary)] tabular-nums">{wph.toLocaleString()}</div>
             </div>
           </div>
         )}
@@ -204,9 +210,12 @@ export default function StatsModal() {
                 <div key={d.date} className="flex-1 flex flex-col items-center gap-2 min-w-0 h-full">
                   <div className="flex-1 w-full flex flex-col justify-end min-h-0">
                     <div
-                      className="w-full rounded-t-md bg-gradient-to-t from-emerald-900/60 to-emerald-500 min-h-[4px] transition-all"
-                      style={{ height: `${Math.max(4, (d.count / weekMax) * 100)}%` }}
+                      className="w-full rounded-t-md min-h-[4px] transition-all"
                       title={`${d.date} · ${d.count.toLocaleString()} 字`}
+                      style={{
+                        height: `${Math.max(4, (d.count / weekMax) * 100)}%`,
+                        background: 'linear-gradient(0deg, var(--accent-primary), var(--accent-secondary))'
+                      }}
                     />
                   </div>
                   <span className="text-[10px] text-[var(--text-muted)] truncate w-full text-center">{d.date.slice(5)}</span>
@@ -237,10 +246,10 @@ export default function StatsModal() {
                 return (
                   <div
                     key={cell.date}
-                    className="rounded-sm bg-slate-700"
+                    className="rounded-sm bg-[var(--bg-tertiary)]"
                     style={{
                       backgroundColor:
-                        cell.count === 0 ? 'rgb(39 39 42)' : `rgba(34, 197, 94, ${intensity})`
+                        cell.count === 0 ? 'rgb(39 39 42)' : `rgba(199, 165, 107, ${intensity})`
                     }}
                     title={`${cell.date} · ${cell.count.toLocaleString()} 字`}
                   />
@@ -258,8 +267,11 @@ export default function StatsModal() {
                 <div key={m.ym} className="flex-1 flex flex-col items-center gap-2 min-w-0 h-full">
                   <div className="flex-1 w-full flex flex-col justify-end min-h-0">
                     <div
-                      className="w-full rounded-t-md bg-gradient-to-t from-teal-900/50 to-teal-400 min-h-[4px]"
-                      style={{ height: `${Math.max(4, (m.total / yearMonths.mx) * 100)}%` }}
+                      className="w-full rounded-t-md min-h-[4px]"
+                      style={{
+                        height: `${Math.max(4, (m.total / yearMonths.mx) * 100)}%`,
+                        background: 'linear-gradient(0deg, var(--accent-primary), var(--accent-secondary))'
+                      }}
                       title={`${m.ym} · ${m.total.toLocaleString()} 字`}
                     />
                   </div>
@@ -281,7 +293,7 @@ export default function StatsModal() {
                   key={def.type}
                   className={`rounded-xl border p-3 text-center ${
                     unlocked
-                      ? 'border-emerald-500/40 bg-emerald-950/30'
+                      ? 'border-[var(--accent-border)] bg-[var(--accent-surface)]'
                       : 'border-[var(--border-primary)] bg-[var(--bg-secondary)] opacity-50'
                   }`}
                   title={def.description}

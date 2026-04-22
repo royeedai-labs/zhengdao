@@ -32,23 +32,20 @@ export default function FullSettingsModal() {
   }, [bookId, loadCategories])
 
   useEffect(() => {
-    if (selectedCategory) {
-      void loadEntries(bookId, selectedCategory)
-      setSelectedEntry(null)
-      setTitle('')
-      setContent('')
-    }
+    if (!selectedCategory) return
+    void loadEntries(bookId, selectedCategory)
   }, [bookId, selectedCategory, loadEntries])
 
-  useEffect(() => {
-    if (selectedEntry) {
-      setTitle(selectedEntry.title)
-      setContent(selectedEntry.content)
-    }
-  }, [selectedEntry])
+  const resetEditor = () => {
+    setSelectedEntry(null)
+    setTitle('')
+    setContent('')
+  }
 
   const pickEntry = (e: WikiEntry) => {
     setSelectedEntry(e)
+    setTitle(e.title)
+    setContent(e.content)
   }
 
   const handleSave = async () => {
@@ -63,21 +60,19 @@ export default function FullSettingsModal() {
         content
       })
       setSelectedEntry(entry)
+      setTitle(entry.title)
+      setContent(entry.content)
     }
   }
 
   const handleNewEntry = () => {
-    setSelectedEntry(null)
-    setTitle('')
-    setContent('')
+    resetEditor()
   }
 
   const handleDeleteEntry = async () => {
     if (!selectedEntry) return
     await deleteEntry(selectedEntry.id)
-    setSelectedEntry(null)
-    setTitle('')
-    setContent('')
+    resetEditor()
   }
 
   const handleAddCategory = async () => {
@@ -87,14 +82,15 @@ export default function FullSettingsModal() {
     setNewCatName('')
     await loadCategories(bookId)
     selectCategory(name)
+    resetEditor()
     await loadEntries(bookId, name)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4">
-      <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] w-full max-w-[1000px] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] w-full max-w-[1000px] rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         <div className="h-12 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-between px-5 shrink-0">
-          <div className="flex items-center space-x-2 text-purple-400 font-bold">
+          <div className="flex items-center space-x-2 text-[var(--accent-secondary)] font-bold">
             <BookOpen size={18} />
             <span>设定维基</span>
           </div>
@@ -124,7 +120,7 @@ export default function FullSettingsModal() {
                   onClick={handleAddCategory}
                   title="新增分类"
                   aria-label="新增分类"
-                  className="p-1.5 bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30"
+                  className="p-1.5 border border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)] rounded hover:bg-[var(--bg-tertiary)]"
                 >
                   <Plus size={14} />
                 </button>
@@ -136,11 +132,14 @@ export default function FullSettingsModal() {
                   key={cat}
                   type="button"
                   onClick={() => {
+                    resetEditor()
                     selectCategory(cat)
                     void loadEntries(bookId, cat)
                   }}
                   className={`w-full text-left px-3 py-2 rounded text-xs transition ${
-                    selectedCategory === cat ? 'bg-purple-600/20 text-purple-300' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                    selectedCategory === cat
+                      ? 'bg-[var(--accent-surface)] text-[var(--accent-secondary)] border border-[var(--accent-border)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] border border-transparent'
                   }`}
                 >
                   {cat}
@@ -156,7 +155,7 @@ export default function FullSettingsModal() {
                 type="button"
                 onClick={handleNewEntry}
                 disabled={!selectedCategory}
-                className="text-xs text-emerald-400 hover:text-emerald-300 disabled:opacity-40"
+                className="text-xs text-[var(--accent-secondary)] hover:text-[var(--accent-primary)] disabled:opacity-40"
               >
                 + 新建条目
               </button>
@@ -172,7 +171,7 @@ export default function FullSettingsModal() {
                     onClick={() => pickEntry(e)}
                     className={`w-full text-left px-3 py-2 rounded text-sm border transition ${
                       selectedEntry?.id === e.id
-                        ? 'border-purple-500/50 bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
+                        ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--text-primary)]'
                         : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                     }`}
                   >
@@ -189,13 +188,13 @@ export default function FullSettingsModal() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="条目标题"
-                className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] font-bold focus:outline-none focus:border-purple-500"
+                className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] font-bold focus:outline-none focus:border-[var(--accent-border)]"
               />
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="正文（支持纯文本/Markdown 风格）..."
-                className="flex-1 min-h-[200px] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-secondary)] text-sm resize-none focus:outline-none focus:border-purple-500"
+                className="flex-1 min-h-[200px] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-secondary)] text-sm resize-none focus:outline-none focus:border-[var(--accent-border)]"
               />
             </div>
             <div className="h-14 border-t border-[var(--border-primary)] px-4 flex items-center justify-between shrink-0 bg-[var(--bg-secondary)]">
@@ -212,7 +211,7 @@ export default function FullSettingsModal() {
                   })
                 }}
                 disabled={!selectedEntry}
-                className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 disabled:opacity-30"
+                className="flex items-center gap-1 text-xs text-[var(--danger-primary)] hover:brightness-105 disabled:opacity-30"
               >
                 <Trash2 size={14} /> 删除条目
               </button>
@@ -224,7 +223,7 @@ export default function FullSettingsModal() {
                   type="button"
                   onClick={handleSave}
                   disabled={!selectedCategory || !title.trim()}
-                  className="flex items-center gap-1 px-4 py-1.5 text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white rounded"
+                  className="flex items-center gap-1 px-4 py-1.5 text-xs bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 text-[var(--accent-contrast)] rounded"
                 >
                   <Save size={14} /> 保存
                 </button>

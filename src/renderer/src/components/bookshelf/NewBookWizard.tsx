@@ -31,13 +31,13 @@ export default function NewBookWizard() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#1a1a1a] border border-[#333] w-[520px] rounded-xl shadow-2xl overflow-hidden flex flex-col">
-        <div className="h-12 border-b border-[#2a2a2a] bg-[#141414] flex items-center justify-between px-5">
-          <div className="flex items-center space-x-2 text-emerald-500 font-bold">
+      <div className="bg-[var(--surface-elevated)] border border-[var(--border-primary)] w-[520px] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <div className="h-12 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-between px-5">
+          <div className="flex items-center space-x-2 text-[var(--accent-secondary)] font-bold">
             <BookOpen size={18} />
             <span>新建作品 ({step}/2)</span>
           </div>
-          <button onClick={closeModal} className="text-slate-500 hover:text-slate-300 transition">
+          <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
             <X size={20} />
           </button>
         </div>
@@ -45,23 +45,23 @@ export default function NewBookWizard() {
           {step === 1 && (
             <>
               <div>
-                <label className="block text-[11px] text-slate-500 uppercase tracking-wider mb-1">作品名称</label>
+                <label className="block text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-1">作品名称</label>
                 <input
                   type="text"
                   autoFocus
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-[#111] border border-[#333] rounded px-3 py-2.5 text-slate-200 text-lg focus:outline-none focus:border-emerald-500 transition"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2.5 text-[var(--text-primary)] text-lg focus:outline-none focus:border-[var(--accent-primary)] transition"
                   placeholder="例如：重生之金融巨子"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-500 uppercase tracking-wider mb-1">笔名 (选填)</label>
+                <label className="block text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-1">笔名 (选填)</label>
                 <input
                   type="text"
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
-                  className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 transition"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition"
                   placeholder="你的笔名"
                 />
               </div>
@@ -69,7 +69,7 @@ export default function NewBookWizard() {
           )}
           {step === 2 && (
             <div>
-              <label className="block text-[11px] text-slate-500 uppercase tracking-wider mb-3">选择题材模板</label>
+              <label className="block text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-3">选择题材模板</label>
               <div className="space-y-2">
                 {GENRE_PRESETS.map((preset) => (
                   <div
@@ -77,12 +77,12 @@ export default function NewBookWizard() {
                     onClick={() => setGenre(preset.id)}
                     className={`p-3 rounded-lg border cursor-pointer transition-all ${
                       genre === preset.id
-                        ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
-                        : 'bg-[#111] border-[#333] text-slate-300 hover:border-slate-500'
+                        ? 'bg-[var(--accent-surface)] border-[var(--accent-border)] text-[var(--accent-secondary)]'
+                        : 'bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] hover:border-[var(--border-secondary)]'
                     }`}
                   >
                     <div className="font-bold text-sm mb-1">{preset.name}</div>
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[11px] text-[var(--text-muted)]">
                       字段: {preset.character_fields.map((f) => f.label).join('、')}
                     </div>
                   </div>
@@ -91,15 +91,15 @@ export default function NewBookWizard() {
             </div>
           )}
         </div>
-        <div className="h-14 border-t border-[#2a2a2a] bg-[#141414] flex items-center justify-end px-5 gap-3">
-          <button onClick={closeModal} className="px-4 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition">
+        <div className="h-14 border-t border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-end px-5 gap-3">
+          <button onClick={closeModal} className="px-4 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
             取消
           </button>
           {step === 1 && (
             <button
               onClick={() => title.trim() && setStep(2)}
               disabled={!title.trim()}
-              className="px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded flex items-center transition shadow-lg shadow-emerald-900/20"
+              className="px-4 py-1.5 text-xs bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 disabled:cursor-not-allowed text-[var(--accent-contrast)] rounded flex items-center transition shadow-lg shadow-[0_10px_24px_rgba(63,111,159,0.16)]"
             >
               下一步 <ChevronRight size={14} className="ml-1" />
             </button>
@@ -108,7 +108,7 @@ export default function NewBookWizard() {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded flex items-center transition shadow-lg shadow-emerald-900/20"
+              className="px-4 py-1.5 text-xs bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 text-[var(--accent-contrast)] rounded flex items-center transition shadow-lg shadow-[0_10px_24px_rgba(63,111,159,0.16)]"
             >
               <Save size={14} className="mr-1" /> {submitting ? '创建中...' : '确认创建'}
             </button>

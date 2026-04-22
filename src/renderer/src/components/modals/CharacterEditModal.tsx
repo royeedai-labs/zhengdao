@@ -62,7 +62,7 @@ function MilestoneGrowthSvg({ milestones }: { milestones: CharacterMilestone[] }
         <text x={8} y={pad.t + ch / 2} fill="#64748b" fontSize="10" transform={`rotate(-90 8 ${pad.t + ch / 2})`}>
           {useNumeric ? '数值' : '里程碑序'}
         </text>
-        {sorted.map((m, idx) => (
+        {sorted.map((m) => (
           <text
             key={`tx-${m.id}`}
             x={sx(m.chapter_number)}
@@ -95,20 +95,49 @@ function MilestoneGrowthSvg({ milestones }: { milestones: CharacterMilestone[] }
 
 export default function CharacterEditModal() {
   const { modalData, closeModal, pushModal } = useUIStore()
-  const { createCharacter, updateCharacter, getAppearances } = useCharacterStore()
   const config = useConfigStore((s) => s.config)
   const bookId = useBookStore((s) => s.currentBookId)!
   const data = modalData as Partial<Character> & { isNew?: boolean } | null
+  const modalKey = `${data?.id ?? 'new'}:${config?.faction_labels?.[0]?.value ?? 'neutral'}:${config?.status_labels?.[0]?.value ?? 'active'}`
+
+  return (
+    <CharacterEditModalInner
+      key={modalKey}
+      bookId={bookId}
+      config={config}
+      data={data}
+      closeModal={closeModal}
+      pushModal={pushModal}
+    />
+  )
+}
+
+function CharacterEditModalInner({
+  bookId,
+  config,
+  data,
+  closeModal,
+  pushModal
+}: {
+  bookId: number
+  config: ReturnType<typeof useConfigStore.getState>['config']
+  data: (Partial<Character> & { isNew?: boolean }) | null
+  closeModal: () => void
+  pushModal: ReturnType<typeof useUIStore.getState>['pushModal']
+}) {
+  const { createCharacter, updateCharacter, getAppearances } = useCharacterStore()
   const isNew = Boolean(data?.isNew || !data?.id)
 
-  const [name, setName] = useState(data?.name || '')
-  const [faction, setFaction] = useState(data?.faction || config?.faction_labels?.[0]?.value || 'neutral')
-  const [status, setStatus] = useState(data?.status || config?.status_labels?.[0]?.value || 'active')
-  const [description, setDescription] = useState(data?.description || '')
-  const [customFields, setCustomFields] = useState<Record<string, string>>(data?.custom_fields || {})
+  const [name, setName] = useState(() => data?.name || '')
+  const [faction, setFaction] = useState(() => data?.faction || config?.faction_labels?.[0]?.value || 'neutral')
+  const [status, setStatus] = useState(() => data?.status || config?.status_labels?.[0]?.value || 'active')
+  const [description, setDescription] = useState(() => data?.description || '')
+  const [customFields, setCustomFields] = useState<Record<string, string>>(() => data?.custom_fields || {})
   const [appearances, setAppearances] = useState<Array<{ chapter_id: number; chapter_title: string }>>([])
   const [milestones, setMilestones] = useState<CharacterMilestone[]>([])
-  const [msChapter, setMsChapter] = useState(1)
+  const [msChapter, setMsChapter] = useState(() =>
+    Math.max(1, useChapterStore.getState().getCurrentChapterNumber() || 1)
+  )
   const [msLabel, setMsLabel] = useState('')
   const [msValue, setMsValue] = useState('')
   const [milestoneSaving, setMilestoneSaving] = useState(false)
@@ -119,32 +148,29 @@ export default function CharacterEditModal() {
   const characterFields = config?.character_fields || []
 
   useEffect(() => {
-    setName(data?.name || '')
-    setFaction(data?.faction || config?.faction_labels?.[0]?.value || 'neutral')
-    setStatus(data?.status || config?.status_labels?.[0]?.value || 'active')
-    setDescription(data?.description || '')
-    setCustomFields(data?.custom_fields ? { ...data.custom_fields } : {})
-  }, [data?.id, data?.name, data?.faction, data?.status, data?.description, data?.custom_fields, config])
-
-  useEffect(() => {
-    if (data?.id) {
-      getAppearances(data.id).then(setAppearances)
-    } else {
-      setAppearances([])
+    if (!data?.id) return
+    let cancelled = false
+    const loadAppearances = async () => {
+      const rows = await getAppearances(data.id)
+      if (!cancelled) setAppearances(rows)
+    }
+    void loadAppearances()
+    return () => {
+      cancelled = true
     }
   }, [data?.id, getAppearances])
 
   useEffect(() => {
-    if (!data?.id) {
-      setMilestones([])
-      return
+    if (!data?.id) return
+    let cancelled = false
+    const loadMilestones = async () => {
+      const rows = (await window.api.getMilestones(data.id)) as CharacterMilestone[]
+      if (!cancelled) setMilestones(rows)
     }
-    void window.api.getMilestones(data.id).then((rows) => setMilestones(rows as CharacterMilestone[]))
-  }, [data?.id])
-
-  useEffect(() => {
-    setMsChapter(Math.max(1, useChapterStore.getState().getCurrentChapterNumber() || 1))
-    setMilestoneError(null)
+    void loadMilestones()
+    return () => {
+      cancelled = true
+    }
   }, [data?.id])
 
   const addMilestone = async () => {

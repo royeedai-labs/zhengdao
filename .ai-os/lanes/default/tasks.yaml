@@ -418,3 +418,61 @@ tasks:
       - "repo-url"
       - "tag-proof"
       - "release-proof-or-blocker"
+
+  - id: TASK-AI-REL-124
+    title: "发布 v1.2.4 并补齐 Release 必要环节"
+    milestone: M3
+    parent: null
+    status: in_progress
+    owner: AI
+    risk: high
+    priority: P0
+    wave: 9
+    execution_role: "implementer"
+    approval_required: "user_requested_release"
+    depends_on: []
+    requirement_refs:
+      - "CR-20260423-001100-v1.2.4-release-local-changes"
+    acceptance_refs:
+      - "release-body-required"
+      - "release-assets-required"
+      - "project-native-verification-required"
+    context_files:
+      - "package.json"
+      - "package-lock.json"
+      - "CHANGELOG.md"
+      - ".github/workflows/release.yml"
+      - "scripts/release/update-github-release-notes.mjs"
+      - ".ai-os/lanes/default/release-plan.md"
+      - ".ai-os/lanes/default/risk-register.md"
+      - ".ai-os/lanes/default/verification-matrix.yaml"
+    outputs:
+      - "release: v1.2.4 commit"
+      - "v1.2.4 tag"
+      - "GitHub Release v1.2.4"
+    affected_components:
+      - "git"
+      - "github"
+      - "release"
+      - "update-metadata"
+    verification_required:
+      - "npm test"
+      - "npm run build"
+      - "git diff --check"
+      - "remote release body and asset check"
+    measurable_outcome:
+      - "v1.2.4 Release 存在且正文、安装包、自动更新元数据齐全"
+    edge_cases:
+      - "GitHub token 失效或已轮换"
+      - "release workflow 打包失败"
+      - "Release 正文同步失败"
+      - "dirty worktree 中含未归类改动"
+    definition_of_done:
+      - "版本号、tag、CHANGELOG 和 GitHub Release 一致"
+      - "Release 正文包含更新日志、安装包清单、自动更新元数据、验证状态和回滚提示"
+      - "远端资产清单包含 Windows installer、macOS dmg / zip、latest.yml、latest-mac.yml 和 blockmap"
+    evidence_required:
+      - "test-log"
+      - "build-log"
+      - "release-url"
+      - "asset-list"

@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clampAiAssistantLauncherPosition,
   clampAiAssistantPanelRect,
+  createDefaultAiAssistantLauncherPosition,
   createDefaultAiAssistantPanelRect,
+  translateAiAssistantLauncherPosition,
   resizeAiAssistantPanelRect,
   translateAiAssistantPanelRect
 } from '../panel-layout'
 
 describe('createDefaultAiAssistantPanelRect', () => {
-  it('creates a bottom-right panel rect within the viewport', () => {
+  it('creates a panel rect that leaves room for the right context panel', () => {
     expect(createDefaultAiAssistantPanelRect(1440, 900)).toEqual({
-      x: 1004,
+      x: 644,
       y: 108,
       width: 420,
       height: 680
@@ -30,6 +33,41 @@ describe('clampAiAssistantPanelRect', () => {
       y: 16,
       width: 748,
       height: 688
+    })
+  })
+})
+
+describe('createDefaultAiAssistantLauncherPosition', () => {
+  it('creates the collapsed launcher away from the right context panel', () => {
+    expect(createDefaultAiAssistantLauncherPosition(1440, 900)).toEqual({
+      x: 1016,
+      y: 676
+    })
+  })
+})
+
+describe('clampAiAssistantLauncherPosition', () => {
+  it('keeps the collapsed launcher inside the viewport', () => {
+    expect(clampAiAssistantLauncherPosition({ x: 999, y: -24 }, 640, 480)).toEqual({
+      x: 576,
+      y: 16
+    })
+  })
+})
+
+describe('translateAiAssistantLauncherPosition', () => {
+  it('moves the collapsed launcher but clamps it back into the viewport', () => {
+    expect(
+      translateAiAssistantLauncherPosition(
+        { x: 560, y: 360 },
+        200,
+        200,
+        640,
+        480
+      )
+    ).toEqual({
+      x: 576,
+      y: 416
     })
   })
 })

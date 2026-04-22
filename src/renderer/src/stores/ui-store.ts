@@ -1,15 +1,30 @@
 import { create } from 'zustand'
 import type { ModalType } from '@/types'
-import { THEME_IDS } from '@/utils/themes'
+import { isThemeId, resolveThemeMode, type ThemeId } from '@/utils/themes'
 import {
+  clampWorkspacePanelWidth,
+  getDefaultWorkspacePanelWidth,
+  isRightPanelTab,
+  type RightPanelTab,
+  type WorkspacePanelKind
+} from '@/utils/workspace-layout'
+import {
+  clampAiAssistantLauncherPosition,
   clampAiAssistantPanelRect,
+  createDefaultAiAssistantLauncherPosition,
   createDefaultAiAssistantPanelRect,
+  type AiAssistantLauncherPosition,
   type AiAssistantPanelRect
 } from '@/components/ai/panel-layout'
 
 const THEME_STORAGE_KEY = 'write-ui-theme'
 const BOTTOM_PANEL_HEIGHT_STORAGE_KEY = 'write-bottom-panel-height'
+const LEFT_PANEL_WIDTH_STORAGE_KEY = 'write-left-panel-width'
+const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'write-right-panel-width'
+const RIGHT_PANEL_TAB_STORAGE_KEY = 'write-right-panel-tab'
+const TOPBAR_TOOLS_COLLAPSED_STORAGE_KEY = 'write-topbar-tools-collapsed'
 const AI_ASSISTANT_PANEL_RECT_STORAGE_KEY = 'write-ai-assistant-panel-rect'
+const AI_ASSISTANT_LAUNCHER_POSITION_STORAGE_KEY = 'write-ai-assistant-launcher-position'
 
 function clampBottomPanelHeight(height: number): number {
   if (typeof window === 'undefined') {
@@ -22,14 +37,27 @@ function clampBottomPanelHeight(height: number): number {
 function readStoredTheme(): string {
   try {
     const v = localStorage.getItem(THEME_STORAGE_KEY)
-    if (v && (THEME_IDS as readonly string[]).includes(v)) return v
+    if (v && isThemeId(v)) return v
   } catch {
     void 0
   }
-  return 'dark'
+  return 'system'
 }
 
-const initialTheme = readStoredTheme()
+function prefersDarkTheme(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function applyThemeToDocument(theme: ThemeId): void {
+  if (typeof document === 'undefined') return
+  const resolved = resolveThemeMode(theme, prefersDarkTheme())
+  document.documentElement.dataset.theme = resolved
+  document.documentElement.dataset.themeMode = theme
+  document.documentElement.style.colorScheme = resolved === 'light' ? 'light' : 'dark'
+}
+
+const initialTheme = readStoredTheme() as ThemeId
 
 function readStoredBottomPanelHeight(): number {
   try {
@@ -40,6 +68,63 @@ function readStoredBottomPanelHeight(): number {
     return clampBottomPanelHeight(parsed)
   } catch {
     return 320
+  }
+}
+
+function readStoredWorkspacePanelWidth(kind: WorkspacePanelKind): number {
+  const storageKey = kind === 'left' ? LEFT_PANEL_WIDTH_STORAGE_KEY : RIGHT_PANEL_WIDTH_STORAGE_KEY
+  const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return getDefaultWorkspacePanelWidth(kind, viewportWidth)
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) return getDefaultWorkspacePanelWidth(kind, viewportWidth)
+    return clampWorkspacePanelWidth(kind, parsed, viewportWidth)
+  } catch {
+    return getDefaultWorkspacePanelWidth(kind, viewportWidth)
+  }
+}
+
+function persistWorkspacePanelWidth(kind: WorkspacePanelKind, width: number): void {
+  const storageKey = kind === 'left' ? LEFT_PANEL_WIDTH_STORAGE_KEY : RIGHT_PANEL_WIDTH_STORAGE_KEY
+  try {
+    localStorage.setItem(storageKey, String(width))
+  } catch {
+    void 0
+  }
+}
+
+function readStoredRightPanelTab(): RightPanelTab {
+  try {
+    const raw = localStorage.getItem(RIGHT_PANEL_TAB_STORAGE_KEY)
+    if (raw && isRightPanelTab(raw)) return raw
+  } catch {
+    void 0
+  }
+  return 'foreshadow'
+}
+
+function persistRightPanelTab(tab: RightPanelTab): void {
+  try {
+    localStorage.setItem(RIGHT_PANEL_TAB_STORAGE_KEY, tab)
+  } catch {
+    void 0
+  }
+}
+
+function readStoredTopbarToolsCollapsed(): boolean {
+  try {
+    return localStorage.getItem(TOPBAR_TOOLS_COLLAPSED_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function persistTopbarToolsCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(TOPBAR_TOOLS_COLLAPSED_STORAGE_KEY, String(collapsed))
+  } catch {
+    void 0
   }
 }
 
@@ -75,8 +160,47 @@ function persistAiAssistantPanelRect(rect: AiAssistantPanelRect): void {
   }
 }
 
+function readStoredAiAssistantLauncherPosition(): AiAssistantLauncherPosition {
+  if (typeof window === 'undefined') {
+    return { x: 16, y: 16 }
+  }
+
+  try {
+    const raw = localStorage.getItem(AI_ASSISTANT_LAUNCHER_POSITION_STORAGE_KEY)
+    if (!raw) return createDefaultAiAssistantLauncherPosition(window.innerWidth, window.innerHeight)
+    const parsed = JSON.parse(raw) as Partial<AiAssistantLauncherPosition>
+    if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') {
+      return createDefaultAiAssistantLauncherPosition(window.innerWidth, window.innerHeight)
+    }
+    return clampAiAssistantLauncherPosition(parsed as AiAssistantLauncherPosition, window.innerWidth, window.innerHeight)
+  } catch {
+    return createDefaultAiAssistantLauncherPosition(window.innerWidth, window.innerHeight)
+  }
+}
+
+function persistAiAssistantLauncherPosition(position: AiAssistantLauncherPosition): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(AI_ASSISTANT_LAUNCHER_POSITION_STORAGE_KEY, JSON.stringify(position))
+  } catch {
+    void 0
+  }
+}
+
 if (typeof document !== 'undefined') {
-  document.documentElement.dataset.theme = initialTheme
+  applyThemeToDocument(initialTheme)
+}
+
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  const media = window.matchMedia('(prefers-color-scheme: dark)')
+  const onSystemThemeChange = () => {
+    if (readStoredTheme() === 'system') applyThemeToDocument('system')
+  }
+  if (typeof media.addEventListener === 'function') {
+    media.addEventListener('change', onSystemThemeChange)
+  } else if (typeof media.addListener === 'function') {
+    media.addListener(onSystemThemeChange)
+  }
 }
 
 type TypewriterPosition = 'center' | 'upper' | 'lower'
@@ -88,9 +212,13 @@ interface ModalEntry {
 
 interface UIStore {
   leftPanelOpen: boolean
+  leftPanelWidth: number
   rightPanelOpen: boolean
+  rightPanelWidth: number
+  rightPanelTab: RightPanelTab
   bottomPanelOpen: boolean
   bottomPanelHeight: number
+  topbarToolsCollapsed: boolean
   blackRoomMode: boolean
   blackRoomTextColor: 'green' | 'white'
 
@@ -104,6 +232,7 @@ interface UIStore {
   aiAssistantOpen: boolean
   aiAssistantSkillKey: string | null
   aiAssistantPanelRect: AiAssistantPanelRect
+  aiAssistantLauncherPosition: AiAssistantLauncherPosition
   aiAssistantSelectionText: string
   aiAssistantSelectionChapterId: number | null
   aiAssistantSelectionFrom: number | null
@@ -114,10 +243,15 @@ interface UIStore {
   modalStack: ModalEntry[]
 
   toggleLeftPanel: () => void
+  setLeftPanelWidth: (width: number) => void
   toggleRightPanel: () => void
+  setRightPanelWidth: (width: number) => void
+  setRightPanelTab: (tab: RightPanelTab) => void
   toggleBottomPanel: () => void
   setBottomPanelHeight: (height: number) => void
   resetBottomPanelHeight: () => void
+  setTopbarToolsCollapsed: (collapsed: boolean) => void
+  toggleTopbarToolsCollapsed: () => void
   setBlackRoomMode: (flag: boolean) => void
   toggleBlackRoomTextColor: () => void
 
@@ -132,6 +266,7 @@ interface UIStore {
   closeAiAssistant: () => void
   setAiAssistantSkillKey: (skillKey: string | null) => void
   setAiAssistantPanelRect: (rect: AiAssistantPanelRect) => void
+  setAiAssistantLauncherPosition: (position: AiAssistantLauncherPosition) => void
   setAiAssistantSelection: (data: {
     text: string
     chapterId: number | null
@@ -139,7 +274,7 @@ interface UIStore {
     to: number | null
   }) => void
 
-  theme: string
+  theme: ThemeId
   setTheme: (theme: string) => void
 
   openModal: (type: ModalType, data?: Record<string, unknown> | null) => void
@@ -152,9 +287,13 @@ interface UIStore {
 
 export const useUIStore = create<UIStore>((set, get) => ({
   leftPanelOpen: true,
+  leftPanelWidth: readStoredWorkspacePanelWidth('left'),
   rightPanelOpen: true,
+  rightPanelWidth: readStoredWorkspacePanelWidth('right'),
+  rightPanelTab: readStoredRightPanelTab(),
   bottomPanelOpen: false,
   bottomPanelHeight: readStoredBottomPanelHeight(),
+  topbarToolsCollapsed: readStoredTopbarToolsCollapsed(),
   blackRoomMode: false,
   blackRoomTextColor: 'green',
 
@@ -168,6 +307,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   aiAssistantOpen: false,
   aiAssistantSkillKey: null,
   aiAssistantPanelRect: readStoredAiAssistantPanelRect(),
+  aiAssistantLauncherPosition: readStoredAiAssistantLauncherPosition(),
   aiAssistantSelectionText: '',
   aiAssistantSelectionChapterId: null,
   aiAssistantSelectionFrom: null,
@@ -182,7 +322,23 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set((s) => ({ onboardingTourSignal: s.onboardingTourSignal + 1 })),
 
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
+  setLeftPanelWidth: (width) => {
+    const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth
+    const next = clampWorkspacePanelWidth('left', width, viewportWidth)
+    persistWorkspacePanelWidth('left', next)
+    set({ leftPanelWidth: next })
+  },
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
+  setRightPanelWidth: (width) => {
+    const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth
+    const next = clampWorkspacePanelWidth('right', width, viewportWidth)
+    persistWorkspacePanelWidth('right', next)
+    set({ rightPanelWidth: next })
+  },
+  setRightPanelTab: (tab) => {
+    persistRightPanelTab(tab)
+    set({ rightPanelTab: tab })
+  },
   toggleBottomPanel: () => set((s) => ({ bottomPanelOpen: !s.bottomPanelOpen })),
   setBottomPanelHeight: (height) => {
     const next = clampBottomPanelHeight(height)
@@ -202,6 +358,16 @@ export const useUIStore = create<UIStore>((set, get) => ({
     }
     set({ bottomPanelHeight: next })
   },
+  setTopbarToolsCollapsed: (collapsed) => {
+    persistTopbarToolsCollapsed(collapsed)
+    set({ topbarToolsCollapsed: collapsed })
+  },
+  toggleTopbarToolsCollapsed: () =>
+    set((s) => {
+      const next = !s.topbarToolsCollapsed
+      persistTopbarToolsCollapsed(next)
+      return { topbarToolsCollapsed: next }
+    }),
   setBlackRoomMode: (flag) => set({ blackRoomMode: flag }),
   toggleBlackRoomTextColor: () =>
     set((s) => ({ blackRoomTextColor: s.blackRoomTextColor === 'green' ? 'white' : 'green' })),
@@ -236,6 +402,14 @@ export const useUIStore = create<UIStore>((set, get) => ({
     persistAiAssistantPanelRect(next)
     set({ aiAssistantPanelRect: next })
   },
+  setAiAssistantLauncherPosition: (position) => {
+    const next =
+      typeof window === 'undefined'
+        ? position
+        : clampAiAssistantLauncherPosition(position, window.innerWidth, window.innerHeight)
+    persistAiAssistantLauncherPosition(next)
+    set({ aiAssistantLauncherPosition: next })
+  },
   setAiAssistantSelection: ({ text, chapterId, from, to }) =>
     set({
       aiAssistantSelectionText: text,
@@ -246,15 +420,13 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   theme: initialTheme,
   setTheme: (theme) => {
-    const next = (THEME_IDS as readonly string[]).includes(theme) ? theme : 'dark'
+    const next = isThemeId(theme) ? theme : 'system'
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next)
     } catch {
       void 0
     }
-    if (typeof document !== 'undefined') {
-      document.documentElement.dataset.theme = next
-    }
+    applyThemeToDocument(next)
     set({ theme: next })
   },
 

@@ -4,14 +4,12 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { useUIStore } from '@/stores/ui-store'
 import { useChapterStore } from '@/stores/chapter-store'
-import { useBookStore } from '@/stores/book-store'
 import { useUpdateStore } from '@/stores/update-store'
 
 export default function BlackRoomMode() {
   const { blackRoomMode, blackRoomTextColor } = useUIStore()
   const currentChapter = useChapterStore((s) => s.currentChapter)
   const updateChapterContent = useChapterStore((s) => s.updateChapterContent)
-  const bookId = useBookStore((s) => s.currentBookId)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef<string>('')
@@ -22,7 +20,9 @@ export default function BlackRoomMode() {
       lastSavedRef.current = html
       try {
         localStorage.removeItem(`draft_${chapterId}`)
-      } catch {}
+      } catch {
+        return
+      }
     },
     [updateChapterContent]
   )
@@ -43,7 +43,9 @@ export default function BlackRoomMode() {
       const html = e.getHTML()
       try {
         localStorage.setItem(`draft_${currentChapter.id}`, html)
-      } catch {}
+      } catch {
+        return
+      }
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       const scheduledChapterId = currentChapter.id
       saveTimerRef.current = setTimeout(async () => {
@@ -77,7 +79,7 @@ export default function BlackRoomMode() {
       editor.commands.setContent(content || '<p></p>')
       lastSavedRef.current = content
     }
-  }, [editor, currentChapter?.id])
+  }, [editor, currentChapter])
 
   useEffect(() => {
     if (blackRoomMode) {

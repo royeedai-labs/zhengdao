@@ -1,0 +1,13 @@
+version: 1
+baseline_id: "CR-20260422-author-layout-cold-white-theme"
+guards:
+  - id: "theme-system-resolution"
+    failure_mode: "`system` 主题没有跟随系统浅/深外观或手动主题覆盖失效"
+    verification:
+      - "unit test: theme mode resolution"
+      - "manual toggle: light/dark/system"
+  - id: "workspace-responsive-overlap"
+    failure_mode: "顶栏、右侧 tab、AI 悬浮按钮或底部沙盘入口在常见宽度下互相遮挡"
+    verification:
+      - "unit test: layout clamp/default placement"
+      - "manual visual smoke at 1024/1440/1920"

@@ -75,7 +75,7 @@ export function chordFromKeyEvent(e: KeyboardEvent): string {
   if (e.shiftKey) parts.push('Shift')
   if (e.altKey) parts.push('Alt')
 
-  let k = e.key
+  const k = e.key
   if (k === '`' || e.code === 'Backquote') {
     parts.push('`')
     return parts.join('+')

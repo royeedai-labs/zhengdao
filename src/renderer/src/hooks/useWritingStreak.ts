@@ -6,19 +6,29 @@ export function useWritingStreak() {
   const [streak, setStreak] = useState(0)
 
   const refresh = useCallback(async () => {
-    if (!bookId) {
-      setStreak(0)
-      return
-    }
+    if (!bookId) return
     const stats = (await window.api.getAchievementStats(bookId)) as { streak: number }
     setStreak(stats.streak)
   }, [bookId])
 
   useEffect(() => {
-    void refresh()
-    const id = setInterval(refresh, 60_000)
-    return () => clearInterval(id)
-  }, [refresh])
+    let cancelled = false
 
-  return { streak, refresh }
+    const refreshStreak = async () => {
+      if (!bookId) return
+      const stats = (await window.api.getAchievementStats(bookId)) as { streak: number }
+      if (!cancelled) setStreak(stats.streak)
+    }
+
+    void refreshStreak()
+    const id = setInterval(() => {
+      void refreshStreak()
+    }, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [bookId])
+
+  return { streak: bookId ? streak : 0, refresh }
 }

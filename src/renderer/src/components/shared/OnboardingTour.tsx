@@ -21,7 +21,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: '.sidebar-left',
     title: '目录与资产',
     description:
-      '管理你的卷、章节结构。切换标签页可浏览人物卡和世界设定。支持拖拽排序。',
+      '以大纲为主管理卷章结构。人物和设定在同一侧栏作为辅助资料，支持拖拽排序。',
     position: 'right'
   },
   {
@@ -33,8 +33,8 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     target: '.sidebar-right',
-    title: '创作辅助面板',
-    description: '实时追踪伏笔状态、查看当前出场角色、随手记录灵感。',
+    title: '上下文助手',
+    description: '在伏笔、角色和灵感之间切换，一次聚焦一个辅助任务，不打断正文创作。',
     position: 'left'
   },
   {
@@ -48,7 +48,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: '.topbar-tools',
     title: '全局工具',
     description:
-      '角色总库、设定维基、数据中心、导出、AI 助手配置。按 Ctrl+K 打开命令面板快速操作。',
+      '角色总库、设定维基、数据中心和项目工具会随窗口宽度折叠。按 Ctrl+K 打开命令面板快速操作。',
     position: 'bottom'
   },
   {
@@ -93,8 +93,11 @@ export default function OnboardingTour({ signal }: OnboardingTourProps) {
 
   useEffect(() => {
     if (signal <= 0) return
-    setStepIdx(0)
-    setVisible(true)
+    const id = window.setTimeout(() => {
+      setStepIdx(0)
+      setVisible(true)
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [signal])
 
   const step = TOUR_STEPS[stepIdx]
@@ -137,12 +140,13 @@ export default function OnboardingTour({ signal }: OnboardingTourProps) {
 
   useEffect(() => {
     if (!visible) return
-    updateRect()
+    const frameId = window.requestAnimationFrame(updateRect)
     const ro = () => updateRect()
     window.addEventListener('resize', ro)
     window.addEventListener('scroll', ro, true)
     const id = window.setInterval(updateRect, 400)
     return () => {
+      window.cancelAnimationFrame(frameId)
       window.removeEventListener('resize', ro)
       window.removeEventListener('scroll', ro, true)
       window.clearInterval(id)
@@ -175,7 +179,7 @@ export default function OnboardingTour({ signal }: OnboardingTourProps) {
     top = Math.max(pad, Math.min(top, window.innerHeight - th - pad))
     left = Math.max(pad, Math.min(left, window.innerWidth - tw - pad))
     return { top, left }
-  }, [rect, stepIdx])
+  }, [rect, step.position])
 
   const finish = () => {
     completeOnboardingStorage()
@@ -210,7 +214,7 @@ export default function OnboardingTour({ signal }: OnboardingTourProps) {
         className="absolute z-[10000] w-[280px] rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-4 shadow-2xl pointer-events-auto"
         style={{ top: tooltipStyle.top, left: tooltipStyle.left }}
       >
-        <h3 className="text-sm font-bold text-emerald-400 mb-2">{step.title}</h3>
+        <h3 className="text-sm font-bold text-[var(--accent-secondary)] mb-2">{step.title}</h3>
         <p className="text-xs text-[var(--text-primary)] leading-relaxed mb-4">{step.description}</p>
         <div className="flex items-center justify-between gap-2">
           <button
@@ -234,7 +238,7 @@ export default function OnboardingTour({ signal }: OnboardingTourProps) {
               <button
                 type="button"
                 onClick={next}
-                className="text-xs px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white"
+                className="text-xs px-3 py-1.5 rounded bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-[var(--accent-contrast)]"
               >
                 下一步
               </button>
@@ -243,7 +247,7 @@ export default function OnboardingTour({ signal }: OnboardingTourProps) {
               <button
                 type="button"
                 onClick={finish}
-                className="text-xs px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white"
+                className="text-xs px-3 py-1.5 rounded bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-[var(--accent-contrast)]"
               >
                 开始创作
               </button>
@@ -256,7 +260,7 @@ export default function OnboardingTour({ signal }: OnboardingTourProps) {
             <span
               key={i}
               className={`h-1.5 rounded-full transition-all ${
-                i === stepIdx ? 'w-4 bg-emerald-500' : 'w-1.5 bg-[var(--border-secondary)]'
+                i === stepIdx ? 'w-4 bg-[var(--accent-primary)]' : 'w-1.5 bg-[var(--border-secondary)]'
               }`}
             />
           ))}

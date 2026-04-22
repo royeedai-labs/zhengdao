@@ -176,36 +176,36 @@ export default function ForeshadowBoard() {
   const total = foreshadowings.length
 
   const pendingTone: SectionTone = {
-    border: 'border-sky-500/20',
-    bg: 'bg-sky-500/5',
-    text: 'text-sky-100',
-    icon: 'text-sky-400',
-    empty: 'text-sky-300/55'
+    border: 'border-[var(--info-border)]',
+    bg: 'bg-[var(--info-surface)]',
+    text: 'text-[var(--text-primary)]',
+    icon: 'text-[var(--info-primary)]',
+    empty: 'text-[var(--text-muted)]'
   }
   const warningTone: SectionTone = {
-    border: 'border-orange-500/25',
-    bg: 'bg-orange-500/5',
-    text: 'text-orange-100',
-    icon: 'text-orange-400',
-    empty: 'text-orange-300/55'
+    border: 'border-[var(--warning-border)]',
+    bg: 'bg-[var(--warning-surface)]',
+    text: 'text-[var(--text-primary)]',
+    icon: 'text-[var(--warning-primary)]',
+    empty: 'text-[var(--text-muted)]'
   }
   const resolvedTone: SectionTone = {
-    border: 'border-emerald-500/20',
-    bg: 'bg-emerald-500/5',
-    text: 'text-emerald-100',
-    icon: 'text-emerald-400',
-    empty: 'text-emerald-300/55'
+    border: 'border-[var(--success-border)]',
+    bg: 'bg-[var(--success-surface)]',
+    text: 'text-[var(--text-primary)]',
+    icon: 'text-[var(--success-primary)]',
+    empty: 'text-[var(--text-muted)]'
   }
 
   return (
-    <div className="shrink-0 border-b border-[var(--border-primary)] p-3">
+    <div className="h-full overflow-y-auto p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
-          <AlertCircle size={13} className="shrink-0 text-orange-500" />
+          <AlertCircle size={13} className="shrink-0 text-[var(--warning-primary)]" />
           伏笔看板
         </h3>
         {warnings.length > 0 && (
-          <span className="whitespace-nowrap rounded-full border border-orange-500/20 bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-400 animate-pulse">
+          <span className="whitespace-nowrap rounded-full border border-[var(--warning-border)] bg-[var(--warning-surface)] px-2 py-0.5 text-[10px] font-bold text-[var(--warning-primary)] animate-pulse">
             {warnings.length} 催债中
           </span>
         )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useChapterStore } from '@/stores/chapter-store'
@@ -39,28 +39,30 @@ export default function GlobalSearchModal() {
     if (scopeAllBooks) return undefined
     return currentBookId ?? undefined
   }, [scopeAllBooks, currentBookId])
-
-  const runSearch = useCallback(async () => {
-    if (!debounced) {
-      setHits([])
-      return
-    }
-    if (!scopeAllBooks && bookIdArg === undefined) {
-      setHits([])
-      return
-    }
-    setLoading(true)
-    try {
-      const rows = (await window.api.searchChapters(debounced, bookIdArg)) as Hit[]
-      setHits(rows)
-    } finally {
-      setLoading(false)
-    }
-  }, [debounced, bookIdArg, scopeAllBooks])
+  const shouldSearch = debounced.length > 0 && (scopeAllBooks || bookIdArg !== undefined)
 
   useEffect(() => {
+    if (!shouldSearch) return
+    let cancelled = false
+
+    const runSearch = async () => {
+      setLoading(true)
+      try {
+        const rows = (await window.api.searchChapters(debounced, bookIdArg)) as Hit[]
+        if (!cancelled) setHits(rows)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
     void runSearch()
-  }, [runSearch])
+    return () => {
+      cancelled = true
+    }
+  }, [bookIdArg, debounced, shouldSearch])
+
+  const visibleHits = shouldSearch ? hits : []
+  const showLoading = shouldSearch ? loading : false
 
   const onPick = async (hit: Hit) => {
     if (hit.book_id !== currentBookId) {
@@ -123,15 +125,15 @@ export default function GlobalSearchModal() {
         )}
 
         <div className="mt-4 flex-1 overflow-y-auto rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] min-h-0">
-          {loading ? (
+          {showLoading ? (
             <p className="p-8 text-center text-sm text-[var(--text-muted)]">搜索中...</p>
-          ) : hits.length === 0 ? (
+          ) : visibleHits.length === 0 ? (
             <p className="p-8 text-center text-sm text-[var(--text-muted)]">
               {debounced ? '未找到匹配章节' : '输入关键字开始搜索'}
             </p>
           ) : (
             <ul className="divide-y divide-[var(--border-primary)]">
-              {hits.map((h) => (
+              {visibleHits.map((h) => (
                 <li key={`${h.book_id}-${h.id}`}>
                   <button
                     type="button"

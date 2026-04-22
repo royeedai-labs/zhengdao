@@ -11,6 +11,7 @@ import {
   Leaf,
   Maximize2,
   Moon,
+  Monitor,
   PanelLeft,
   PanelRight,
   PanelBottom,
@@ -198,8 +199,22 @@ function useCommands(): Command[] {
         }
       },
       {
+        id: 'theme-system',
+        label: '跟随系统外观',
+        category: '主题',
+        icon: Monitor,
+        action: () => setTheme('system')
+      },
+      {
+        id: 'theme-light',
+        label: '冷白浅色',
+        category: '主题',
+        icon: Sun,
+        action: () => setTheme('light')
+      },
+      {
         id: 'theme-dark',
-        label: '暗色默认',
+        label: '夜间深色',
         category: '主题',
         icon: Moon,
         action: () => setTheme('dark')
@@ -232,13 +247,6 @@ function useCommands(): Command[] {
         icon: Smartphone,
         action: () => setTheme('dark-oled')
       },
-      {
-        id: 'theme-light',
-        label: '亮色模式',
-        category: '主题',
-        icon: Sun,
-        action: () => setTheme('light')
-      }
     ],
     [
       openModal,
@@ -395,7 +403,7 @@ export default function CommandPalette() {
                         onClick={() => execute(cmd)}
                         className={`w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
                           selected
-                            ? 'bg-emerald-900/35 text-emerald-100 ring-1 ring-emerald-500/40 ring-inset'
+                            ? 'bg-[var(--accent-surface)] text-[var(--text-primary)] ring-1 ring-[var(--accent-border)] ring-inset'
                             : 'text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >

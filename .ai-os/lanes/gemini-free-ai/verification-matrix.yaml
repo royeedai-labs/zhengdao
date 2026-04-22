@@ -1,0 +1,35 @@
+impact_rules:
+  - when: "gemini-provider-routing-change"
+    run:
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/provider-routing.test.ts"
+      - "npm run build"
+  - when: "gemini-cli-service-change"
+    run:
+      - "npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts"
+      - "packaged CLI version smoke"
+      - "security review of cwd/settings/tool boundary"
+  - when: "release-packaging-change"
+    run:
+      - "npm test"
+      - "npm run build"
+      - "macOS package smoke"
+      - "Windows smoke or explicit blocker"
+
+failure_modes:
+  - id: FM-GEMINI-001
+    scenario: "Packaged app cannot locate Gemini CLI bundle after asar packaging"
+    expected: "Packaged app can run bundled `gemini.js --version` or reports a clear unavailable state"
+    guard: ".ai-os/lanes/gemini-free-ai/evals/gemini-cli-packaged-smoke.md"
+  - id: FM-GEMINI-002
+    scenario: "Gemini CLI cwd or settings grants broader local file access than intended"
+    expected: "CLI runs under app-owned cwd with minimal settings and no yolo behavior"
+    guard: ".ai-os/lanes/gemini-free-ai/security-review.md"
+  - id: FM-GEMINI-003
+    scenario: "Windows package smoke blocked by node-pty cross-compilation"
+    expected: "Ship notes retain Windows real-environment blocker instead of claiming full runtime completion"
+    guard: ".ai-os/lanes/gemini-free-ai/STATE.md"
+
+guards:
+  - ".ai-os/lanes/gemini-free-ai/evals/gemini-cli-packaged-smoke.md"
+  - ".ai-os/lanes/gemini-free-ai/security-review.md"
+  - ".ai-os/lanes/gemini-free-ai/release-plan.md"

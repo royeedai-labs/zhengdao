@@ -32,8 +32,8 @@ import { buildDraftPreviewModel } from './draft-preview'
 import { buildAssistantMessageDisplay } from './message-display'
 import {
   resizeAiAssistantPanelRect,
-  translateAiAssistantPanelRect,
-  type AiAssistantPanelRect
+  translateAiAssistantLauncherPosition,
+  translateAiAssistantPanelRect
 } from './panel-layout'
 import {
   appendAssistantStreamToken,
@@ -134,6 +134,7 @@ export default function AiAssistantDock() {
     aiAssistantOpen,
     aiAssistantSkillKey,
     aiAssistantPanelRect,
+    aiAssistantLauncherPosition,
     aiAssistantSelectionText,
     aiAssistantSelectionChapterId,
     aiAssistantSelectionFrom,
@@ -141,6 +142,7 @@ export default function AiAssistantDock() {
     openAiAssistant,
     closeAiAssistant,
     setAiAssistantSkillKey,
+    setAiAssistantLauncherPosition,
     setAiAssistantPanelRect,
     openModal
   } = useUIStore()
@@ -155,15 +157,30 @@ export default function AiAssistantDock() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [context, setContext] = useState<AiAssistantContext>({ contextText: '', chips: [] })
   const [conversationListOpen, setConversationListOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const panelRectRef = useRef(aiAssistantPanelRect)
+  const launcherPositionRef = useRef(aiAssistantLauncherPosition)
+  const launcherClickSuppressedRef = useRef(false)
   const interactionCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     panelRectRef.current = aiAssistantPanelRect
   }, [aiAssistantPanelRect])
+
+  useEffect(() => {
+    launcherPositionRef.current = aiAssistantLauncherPosition
+  }, [aiAssistantLauncherPosition])
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      setAiAssistantPanelRect(panelRectRef.current)
+      setAiAssistantLauncherPosition(launcherPositionRef.current)
+    }
+
+    window.addEventListener('resize', handleWindowResize)
+    return () => window.removeEventListener('resize', handleWindowResize)
+  }, [setAiAssistantLauncherPosition, setAiAssistantPanelRect])
 
   const selectedSkill = useMemo(() => {
     return resolveAssistantSkillSelection(skills, overrides, aiAssistantSkillKey)
@@ -172,6 +189,41 @@ export default function AiAssistantDock() {
     () => buildConversationListItems(conversations, conversationId),
     [conversations, conversationId]
   )
+  const context = useMemo<AiAssistantContext>(() => {
+    const chapterPlain = currentChapter?.content ? stripHtmlToText(currentChapter.content) : ''
+    return buildAssistantContext({
+      policy: resolveAssistantContextPolicy(selectedSkill, profile),
+      currentChapter: currentChapter
+        ? { id: currentChapter.id, title: currentChapter.title, plainText: chapterPlain }
+        : null,
+      selectedText: aiAssistantSelectionChapterId === currentChapter?.id ? aiAssistantSelectionText : '',
+      characters: characters.map((character) => ({
+        id: character.id,
+        name: character.name,
+        description: character.description
+      })),
+      foreshadowings: foreshadowings.map((item) => ({
+        id: item.id,
+        text: item.text,
+        status: item.status
+      })),
+      plotNodes: plotNodes.map((node) => ({
+        id: node.id,
+        title: node.title,
+        description: node.description,
+        chapter_number: node.chapter_number
+      }))
+    })
+  }, [
+    aiAssistantSelectionChapterId,
+    aiAssistantSelectionText,
+    characters,
+    currentChapter,
+    foreshadowings,
+    plotNodes,
+    profile,
+    selectedSkill
+  ])
 
   const refreshConversation = async (targetConversationId?: number | null) => {
     if (!bookId) return
@@ -201,57 +253,44 @@ export default function AiAssistantDock() {
     setProfile(profileRow as AiWorkProfile)
   }
 
-  const rebuildContext = () => {
-    const chapterPlain = currentChapter?.content ? stripHtmlToText(currentChapter.content) : ''
-    setContext(
-      buildAssistantContext({
-        policy: resolveAssistantContextPolicy(selectedSkill, profile),
-        currentChapter: currentChapter
-          ? { id: currentChapter.id, title: currentChapter.title, plainText: chapterPlain }
-          : null,
-        selectedText: aiAssistantSelectionChapterId === currentChapter?.id ? aiAssistantSelectionText : '',
-        characters: characters.map((character) => ({
-          id: character.id,
-          name: character.name,
-          description: character.description
-        })),
-        foreshadowings: foreshadowings.map((item) => ({
-          id: item.id,
-          text: item.text,
-          status: item.status
-        })),
-        plotNodes: plotNodes.map((node) => ({
-          id: node.id,
-          title: node.title,
-          description: node.description,
-          chapter_number: node.chapter_number
-        }))
-      })
-    )
-  }
-
   useEffect(() => {
     if (!bookId) return
-    void refreshConfig()
-    void refreshConversation()
+    let cancelled = false
+
+    const loadAssistantState = async () => {
+      const [skillRows, overrideRows, profileRow] = await Promise.all([
+        window.api.aiGetSkillTemplates(),
+        window.api.aiGetSkillOverrides(bookId),
+        window.api.aiGetWorkProfile(bookId)
+      ])
+      const conversation = (await window.api.aiGetOrCreateConversation(bookId)) as { id: number }
+      const [conversationRows, messageRows, draftRows] = await Promise.all([
+        window.api.aiGetConversations(bookId),
+        window.api.aiGetMessages(conversation.id),
+        window.api.aiGetDrafts(bookId, 'pending', conversation.id)
+      ])
+      if (cancelled) return
+      setSkills(skillRows as AiSkillTemplate[])
+      setOverrides(overrideRows as AiSkillOverride[])
+      setProfile(profileRow as AiWorkProfile)
+      setConversations(conversationRows as AiConversationRow[])
+      setMessages(messageRows as AiMessage[])
+      setDrafts(draftRows as AiDraftRow[])
+      setConversationId(conversation.id)
+    }
+
+    void loadAssistantState()
+    return () => {
+      cancelled = true
+    }
   }, [bookId])
 
   useEffect(() => {
-    rebuildContext()
-  }, [
-    selectedSkill?.context_policy,
-    profile?.context_policy,
-    currentChapter?.id,
-    currentChapter?.content,
-    aiAssistantSelectionChapterId,
-    aiAssistantSelectionText,
-    characters,
-    foreshadowings,
-    plotNodes
-  ])
-
-  useEffect(() => {
-    if (aiAssistantSkillKey) setInput('')
+    if (!aiAssistantSkillKey) return
+    const id = window.setTimeout(() => {
+      setInput('')
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [aiAssistantSkillKey])
 
   useEffect(() => {
@@ -273,6 +312,11 @@ export default function AiAssistantDock() {
   }, [])
 
   if (!bookId) return null
+
+  const handleSkillSelectionChange = (skillKey: string | null) => {
+    setAiAssistantSkillKey(skillKey)
+    setInput('')
+  }
 
   const send = async (explicitSkill?: AiSkillTemplate, explicitInput?: string) => {
     const skill = explicitSkill || selectedSkill
@@ -399,7 +443,7 @@ export default function AiAssistantDock() {
   }
 
   const runSkill = (skill: AiSkillTemplate) => {
-    setAiAssistantSkillKey(skill.key)
+    handleSkillSelectionChange(skill.key)
     if (skill.key === 'continue_writing') {
       setInput('从当前光标或章节末尾自然续写，保持当前节奏。')
     } else if (skill.key === 'review_chapter') {
@@ -585,58 +629,122 @@ export default function AiAssistantDock() {
     void refreshConversation()
   }
 
-  const beginPointerInteraction =
-    (
-      onMove: (event: MouseEvent, startRect: AiAssistantPanelRect, startX: number, startY: number) => void
-    ) =>
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      const startX = event.clientX
-      const startY = event.clientY
-      const startRect = panelRectRef.current
-      const previousUserSelect = document.body.style.userSelect
+  const stopInteraction = () => {
+    interactionCleanupRef.current?.()
+    interactionCleanupRef.current = null
+  }
 
-      const handleMove = (moveEvent: MouseEvent) => {
-        onMove(moveEvent, startRect, startX, startY)
-      }
+  const handleDragStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startY = event.clientY
+    const startRect = panelRectRef.current
+    const previousUserSelect = document.body.style.userSelect
 
-      const cleanup = () => {
-        document.body.style.userSelect = previousUserSelect
-        window.removeEventListener('mousemove', handleMove)
-        window.removeEventListener('mouseup', cleanup)
-        interactionCleanupRef.current = null
-      }
-
-      interactionCleanupRef.current?.()
-      interactionCleanupRef.current = cleanup
-      document.body.style.userSelect = 'none'
-      window.addEventListener('mousemove', handleMove)
-      window.addEventListener('mouseup', cleanup)
+    const handleMove = (moveEvent: MouseEvent) => {
+      setAiAssistantPanelRect(
+        translateAiAssistantPanelRect(
+          startRect,
+          moveEvent.clientX - startX,
+          moveEvent.clientY - startY,
+          window.innerWidth,
+          window.innerHeight
+        )
+      )
     }
 
-  const handleDragStart = beginPointerInteraction((moveEvent, startRect, startX, startY) => {
-    setAiAssistantPanelRect(
-      translateAiAssistantPanelRect(
-        startRect,
-        moveEvent.clientX - startX,
-        moveEvent.clientY - startY,
-        window.innerWidth,
-        window.innerHeight
-      )
-    )
-  })
+    const cleanup = () => {
+      document.body.style.userSelect = previousUserSelect
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', cleanup)
+      interactionCleanupRef.current = null
+    }
 
-  const handleResizeStart = beginPointerInteraction((moveEvent, startRect, startX, startY) => {
-    setAiAssistantPanelRect(
-      resizeAiAssistantPanelRect(
-        startRect,
-        moveEvent.clientX - startX,
-        moveEvent.clientY - startY,
-        window.innerWidth,
-        window.innerHeight
+    stopInteraction()
+    interactionCleanupRef.current = cleanup
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', cleanup)
+  }
+
+  const handleResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startY = event.clientY
+    const startRect = panelRectRef.current
+    const previousUserSelect = document.body.style.userSelect
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      setAiAssistantPanelRect(
+        resizeAiAssistantPanelRect(
+          startRect,
+          moveEvent.clientX - startX,
+          moveEvent.clientY - startY,
+          window.innerWidth,
+          window.innerHeight
+        )
       )
-    )
-  })
+    }
+
+    const cleanup = () => {
+      document.body.style.userSelect = previousUserSelect
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', cleanup)
+      interactionCleanupRef.current = null
+    }
+
+    stopInteraction()
+    interactionCleanupRef.current = cleanup
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', cleanup)
+  }
+
+  const handleLauncherDragStart = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startY = event.clientY
+    const startPosition = launcherPositionRef.current
+    const previousUserSelect = document.body.style.userSelect
+    let moved = false
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX
+      const deltaY = moveEvent.clientY - startY
+      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+        moved = true
+      }
+      setAiAssistantLauncherPosition(
+        translateAiAssistantLauncherPosition(
+          startPosition,
+          deltaX,
+          deltaY,
+          window.innerWidth,
+          window.innerHeight
+        )
+      )
+    }
+
+    const cleanup = () => {
+      document.body.style.userSelect = previousUserSelect
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', cleanup)
+      interactionCleanupRef.current = null
+      if (moved) {
+        launcherClickSuppressedRef.current = true
+        window.setTimeout(() => {
+          launcherClickSuppressedRef.current = false
+        }, 0)
+      }
+    }
+
+    stopInteraction()
+    interactionCleanupRef.current = cleanup
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', cleanup)
+  }
 
   return (
     <>
@@ -655,7 +763,7 @@ export default function AiAssistantDock() {
             className="flex h-12 shrink-0 cursor-move items-center justify-between border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-4"
           >
             <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
-              <Bot size={17} className="text-emerald-400" />
+              <Bot size={17} className="text-[var(--accent-primary)]" />
               <span className="shrink-0">AI 创作助手</span>
               <GripVertical size={14} className="text-[var(--text-muted)]" />
             </div>
@@ -684,7 +792,7 @@ export default function AiAssistantDock() {
                 type="button"
                 onClick={() => void clearConversation()}
                 title="清空当前会话"
-                className="rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-red-400"
+                className="rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--danger-surface)] hover:text-[var(--danger-primary)]"
               >
                 <Trash2 size={16} />
               </button>
@@ -739,7 +847,7 @@ export default function AiAssistantDock() {
                     key={conversation.id}
                     className={`group flex items-start gap-2 rounded-lg border p-2 ${
                       conversation.selected
-                        ? 'border-emerald-500/35 bg-emerald-500/10'
+                        ? 'border-[var(--accent-border)] bg-[var(--accent-surface)]'
                         : 'border-transparent hover:border-[var(--border-primary)] hover:bg-[var(--bg-secondary)]'
                     }`}
                   >
@@ -762,7 +870,7 @@ export default function AiAssistantDock() {
                       type="button"
                       onClick={() => void deleteConversation(conversation.id)}
                       title="删除会话"
-                      className="rounded p-1 text-[var(--text-muted)] opacity-70 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+                      className="rounded p-1 text-[var(--text-muted)] opacity-70 hover:bg-[var(--danger-surface)] hover:text-[var(--danger-primary)] group-hover:opacity-100"
                     >
                       <Trash2 size={13} />
                     </button>
@@ -784,10 +892,10 @@ export default function AiAssistantDock() {
                       key={skill.key}
                       type="button"
                       onClick={() => runSkill(skill)}
-                      className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2 text-left transition hover:border-emerald-500/40"
+                      className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2 text-left transition hover:border-[var(--accent-border)]"
                     >
                       <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
-                        <Sparkles size={13} className="text-emerald-400" /> {skill.name}
+                        <Sparkles size={13} className="text-[var(--accent-primary)]" /> {skill.name}
                       </div>
                       <div className="mt-1 line-clamp-2 text-[10px] text-[var(--text-muted)]">{skill.description}</div>
                     </button>
@@ -815,7 +923,7 @@ export default function AiAssistantDock() {
                   key={message.id}
                   className={`rounded-lg border p-3 text-sm leading-relaxed whitespace-pre-wrap ${
                     message.role === 'user'
-                      ? 'ml-8 border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                      ? 'ml-8 border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--text-primary)]'
                       : 'mr-8 border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-secondary)]'
                   }`}
                 >
@@ -860,7 +968,7 @@ export default function AiAssistantDock() {
                   )}
                   {message.streaming && (
                     <span className="ml-1 inline-flex translate-y-0.5">
-                      <Loader2 size={12} className="animate-spin text-emerald-400" />
+                      <Loader2 size={12} className="animate-spin text-[var(--accent-primary)]" />
                     </span>
                   )}
                 </div>
@@ -868,8 +976,8 @@ export default function AiAssistantDock() {
             })}
 
             {drafts.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-200">
+              <div className="space-y-2 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-surface)] p-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--warning-primary)]">
                   <ClipboardCheck size={14} /> 草稿篮
                 </div>
                 {drafts.map((draft) => {
@@ -905,7 +1013,7 @@ export default function AiAssistantDock() {
                             type="button"
                             onClick={() => void applyDraft(draft)}
                             title="确认应用"
-                            className="rounded bg-emerald-600 p-1.5 text-white hover:bg-emerald-500"
+                            className="rounded bg-[var(--accent-primary)] p-1.5 text-[var(--accent-contrast)] hover:bg-[var(--accent-secondary)]"
                           >
                             <Check size={13} />
                           </button>
@@ -913,7 +1021,7 @@ export default function AiAssistantDock() {
                             type="button"
                             onClick={() => void markDraft(draft.id, 'dismissed')}
                             title="丢弃草稿"
-                            className="rounded border border-[var(--border-secondary)] p-1.5 text-[var(--text-muted)] hover:text-red-400"
+                            className="rounded border border-[var(--border-secondary)] p-1.5 text-[var(--text-muted)] hover:text-[var(--danger-primary)]"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -931,7 +1039,7 @@ export default function AiAssistantDock() {
               </div>
             )}
             {error && (
-              <div className="rounded-lg border border-red-500/25 bg-red-500/10 p-2 text-xs text-red-300">
+              <div className="rounded-lg border border-[var(--danger-border)] bg-[var(--danger-surface)] p-2 text-xs text-[var(--danger-primary)]">
                 {error}
               </div>
             )}
@@ -941,7 +1049,7 @@ export default function AiAssistantDock() {
             <div className="mb-2 flex items-center gap-2">
               <select
                 value={selectedSkill?.key || ''}
-                onChange={(event) => setAiAssistantSkillKey(event.target.value || null)}
+                onChange={(event) => handleSkillSelectionChange(event.target.value || null)}
                 className="field py-1.5 text-xs"
               >
                 <option value="">普通对话 / 自动识别</option>
@@ -996,25 +1104,30 @@ export default function AiAssistantDock() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => {
-          if (aiAssistantOpen) {
-            closeAiAssistant()
-            return
-          }
-          open()
-        }}
-        className={`fixed bottom-28 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border shadow-xl transition ${
-          aiAssistantOpen
-            ? 'border-[var(--border-secondary)] bg-[var(--bg-secondary)] text-[var(--text-secondary)]'
-            : 'border-emerald-500 bg-emerald-600 text-white shadow-[0_0_18px_rgba(16,185,129,0.35)] hover:bg-emerald-500'
-        }`}
-        title="打开 AI 创作助手"
-        aria-label="打开 AI 创作助手"
-      >
-        {aiAssistantOpen ? <X size={20} /> : <Bot size={22} />}
-      </button>
+      {!aiAssistantOpen && (
+        <button
+          type="button"
+          onMouseDown={handleLauncherDragStart}
+          onClick={(event) => {
+            if (launcherClickSuppressedRef.current) {
+              event.preventDefault()
+              launcherClickSuppressedRef.current = false
+              return
+            }
+            open()
+          }}
+          className="fixed z-40 flex h-12 w-12 cursor-grab items-center justify-center rounded-full border border-[var(--accent-border)] bg-[var(--accent-primary)] text-[var(--accent-contrast)] shadow-xl shadow-[0_10px_24px_rgba(63,111,159,0.22)] transition hover:bg-[var(--accent-secondary)] active:cursor-grabbing"
+          style={{
+            left: aiAssistantLauncherPosition.x,
+            top: aiAssistantLauncherPosition.y,
+            touchAction: 'none'
+          }}
+          title="拖动或打开 AI 创作助手"
+          aria-label="拖动或打开 AI 创作助手"
+        >
+          <Bot size={22} />
+        </button>
+      )}
     </>
   )
 }

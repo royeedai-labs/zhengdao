@@ -1,0 +1,29 @@
+impact_rules:
+  - when: "license-policy-change"
+    run:
+      - "rg \"MIT|AGPL|license|License\" LICENSE README.md package.json package-lock.json"
+      - "npm run build"
+      - "release notes review when publishing"
+  - when: "release-copy-change"
+    run:
+      - "CHANGELOG entry review"
+      - "GitHub Release body checklist"
+
+failure_modes:
+  - id: FM-LIC-001
+    scenario: "README or package metadata drifts back to MIT while LICENSE remains AGPL"
+    expected: "All top-level project license declarations use `AGPL-3.0-only`"
+    guard: ".ai-os/lanes/license-policy/evals/license-metadata-drift.md"
+  - id: FM-LIC-002
+    scenario: "Release body omits changelog or necessary asset/update metadata"
+    expected: "Release notes include changelog, installer assets, update metadata, verification state and rollback note"
+    guard: ".ai-os/memory.md EC-002"
+  - id: FM-LIC-003
+    scenario: "Bulk replacement changes third-party dependency license facts"
+    expected: "Only current project top-level license metadata is changed"
+    guard: "path-scoped diff review"
+
+guards:
+  - ".ai-os/lanes/license-policy/evals/license-metadata-drift.md"
+  - ".ai-os/memory.md"
+  - ".ai-os/lanes/license-policy/release-plan.md"

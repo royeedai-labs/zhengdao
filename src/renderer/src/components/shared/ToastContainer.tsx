@@ -8,19 +8,19 @@ const typeStyles: Record<
   { iconWrap: string; Icon: typeof CheckCircle }
 > = {
   success: {
-    iconWrap: 'bg-emerald-500/15 text-emerald-400',
+    iconWrap: 'bg-[var(--success-surface)] text-[var(--success-primary)]',
     Icon: CheckCircle
   },
   warning: {
-    iconWrap: 'bg-orange-500/15 text-orange-400',
+    iconWrap: 'bg-[var(--warning-surface)] text-[var(--warning-primary)]',
     Icon: AlertTriangle
   },
   error: {
-    iconWrap: 'bg-red-500/15 text-red-400',
+    iconWrap: 'bg-[var(--danger-surface)] text-[var(--danger-primary)]',
     Icon: XCircle
   },
   info: {
-    iconWrap: 'bg-sky-500/15 text-sky-400',
+    iconWrap: 'bg-[var(--info-surface)] text-[var(--info-primary)]',
     Icon: Info
   }
 }

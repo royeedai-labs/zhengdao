@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Bot,
@@ -40,6 +40,8 @@ type AiProviderStatus = {
   message: string
 }
 
+type SkillDraft = Partial<AiSkillTemplate & AiSkillOverride>
+
 const EMPTY_PROFILE: AiWorkProfile = {
   id: 0,
   book_id: 0,
@@ -74,6 +76,23 @@ function createEmptyAccountDraft() {
   }
 }
 
+function createSkillDraft(
+  selectedSkill: AiSkillTemplate,
+  selectedOverride: AiSkillOverride | null,
+  useOverride: boolean
+): SkillDraft {
+  const source = useOverride && selectedOverride ? selectedOverride : selectedSkill
+  return {
+    name: source.name || selectedSkill.name,
+    description: source.description || selectedSkill.description,
+    system_prompt: source.system_prompt || selectedSkill.system_prompt,
+    user_prompt_template: source.user_prompt_template || selectedSkill.user_prompt_template,
+    context_policy: source.context_policy || selectedSkill.context_policy,
+    output_contract: source.output_contract || selectedSkill.output_contract,
+    enabled_surfaces: source.enabled_surfaces || selectedSkill.enabled_surfaces
+  }
+}
+
 export default function AiSettingsModal() {
   const closeModal = useUIStore((s) => s.closeModal)
   const bookId = useBookStore((s) => s.currentBookId)!
@@ -84,7 +103,6 @@ export default function AiSettingsModal() {
   const [profile, setProfile] = useState<AiWorkProfile>(EMPTY_PROFILE)
   const [selectedSkillKey, setSelectedSkillKey] = useState('continue_writing')
   const [useOverride, setUseOverride] = useState(false)
-  const [skillDraft, setSkillDraft] = useState<Partial<AiSkillTemplate & AiSkillOverride>>({})
   const [accountDraft, setAccountDraft] = useState(createEmptyAccountDraft)
   const [accountProviderStatus, setAccountProviderStatus] = useState<AiProviderStatus | null>(null)
   const [accountProviderStatusLoading, setAccountProviderStatusLoading] = useState(false)
@@ -102,46 +120,50 @@ export default function AiSettingsModal() {
     [accountDraft.provider]
   )
 
-  const refresh = async () => {
+  const loadModalState = useCallback(async () => {
     const [accountRows, skillRows, profileRow, overrideRows] = await Promise.all([
       window.api.aiGetAccounts(),
       window.api.aiGetSkillTemplates(),
       window.api.aiGetWorkProfile(bookId),
       window.api.aiGetSkillOverrides(bookId)
     ])
-    setAccounts(accountRows as AiAccount[])
-    setSkills(skillRows as AiSkillTemplate[])
-    setProfile((profileRow as AiWorkProfile) || EMPTY_PROFILE)
-    setOverrides(overrideRows as AiSkillOverride[])
+    return {
+      accounts: accountRows as AiAccount[],
+      skills: skillRows as AiSkillTemplate[],
+      profile: (profileRow as AiWorkProfile) || EMPTY_PROFILE,
+      overrides: overrideRows as AiSkillOverride[]
+    }
+  }, [bookId])
+
+  const refresh = async () => {
+    const next = await loadModalState()
+    setAccounts(next.accounts)
+    setSkills(next.skills)
+    setProfile(next.profile)
+    setOverrides(next.overrides)
+    setUseOverride(Boolean(next.overrides.find((override) => override.skill_key === selectedSkillKey)))
   }
 
   useEffect(() => {
-    void refresh()
-  }, [bookId])
+    let cancelled = false
 
-  useEffect(() => {
-    if (!selectedSkill) return
-    const source = useOverride && selectedOverride ? selectedOverride : selectedSkill
-    setSkillDraft({
-      name: source.name || selectedSkill.name,
-      description: source.description || selectedSkill.description,
-      system_prompt: source.system_prompt || selectedSkill.system_prompt,
-      user_prompt_template: source.user_prompt_template || selectedSkill.user_prompt_template,
-      context_policy: source.context_policy || selectedSkill.context_policy,
-      output_contract: source.output_contract || selectedSkill.output_contract,
-      enabled_surfaces: source.enabled_surfaces || selectedSkill.enabled_surfaces
-    })
-  }, [selectedSkill, selectedOverride, useOverride])
+    const loadInitialState = async () => {
+      const next = await loadModalState()
+      if (cancelled) return
+      setAccounts(next.accounts)
+      setSkills(next.skills)
+      setProfile(next.profile)
+      setOverrides(next.overrides)
+      setUseOverride(Boolean(next.overrides.find((override) => override.skill_key === selectedSkillKey)))
+    }
 
-  useEffect(() => {
-    setUseOverride(Boolean(selectedOverride))
-  }, [selectedSkillKey, selectedOverride])
+    void loadInitialState()
+    return () => {
+      cancelled = true
+    }
+  }, [loadModalState, selectedSkillKey])
 
   const refreshAccountProviderStatus = async (probe = false) => {
-    if (!accountProviderMeta.supportsStatusCheck) {
-      setAccountProviderStatus(null)
-      return
-    }
     setAccountProviderStatusLoading(true)
     try {
       const status = (await window.api.aiGetProviderStatus(accountDraft.provider, { probe })) as AiProviderStatus
@@ -152,12 +174,23 @@ export default function AiSettingsModal() {
   }
 
   useEffect(() => {
-    if (tab !== 'accounts') return
-    if (!accountProviderMeta.supportsStatusCheck) {
-      setAccountProviderStatus(null)
-      return
+    if (tab !== 'accounts' || !accountProviderMeta.supportsStatusCheck) return
+    let cancelled = false
+
+    const loadProviderStatus = async () => {
+      setAccountProviderStatusLoading(true)
+      try {
+        const status = (await window.api.aiGetProviderStatus(accountDraft.provider, { probe: false })) as AiProviderStatus
+        if (!cancelled) setAccountProviderStatus(status)
+      } finally {
+        if (!cancelled) setAccountProviderStatusLoading(false)
+      }
     }
-    void refreshAccountProviderStatus()
+
+    void loadProviderStatus()
+    return () => {
+      cancelled = true
+    }
   }, [tab, accountDraft.provider, accountProviderMeta.supportsStatusCheck])
 
   const saveProfile = async () => {
@@ -166,7 +199,7 @@ export default function AiSettingsModal() {
     await refresh()
   }
 
-  const saveSkill = async () => {
+  const saveSkill = async (skillDraft: SkillDraft) => {
     if (!selectedSkill) return
     if (useOverride) {
       await window.api.aiUpsertSkillOverride(bookId, selectedSkill.key, skillDraft)
@@ -195,6 +228,7 @@ export default function AiSettingsModal() {
   }
 
   const editAccount = (account: AiAccount) => {
+    setAccountProviderStatus(null)
     setAccountDraft({
       id: account.id,
       name: account.name,
@@ -205,6 +239,14 @@ export default function AiSettingsModal() {
       is_default: Boolean(account.is_default)
     })
   }
+
+  const selectSkill = (skillKey: string) => {
+    setSelectedSkillKey(skillKey)
+    setUseOverride(Boolean(overrides.find((override) => override.skill_key === skillKey)))
+  }
+
+  const displayedAccountProviderStatus =
+    accountProviderMeta.supportsStatusCheck ? accountProviderStatus : null
 
   const startGeminiCliLogin = async () => {
     setAccountProviderStatusLoading(true)
@@ -339,7 +381,7 @@ export default function AiSettingsModal() {
                   <button
                     key={skill.key}
                     type="button"
-                    onClick={() => setSelectedSkillKey(skill.key)}
+                    onClick={() => selectSkill(skill.key)}
                     className={`w-full rounded-lg border p-3 text-left transition ${
                       selectedSkillKey === skill.key
                         ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
@@ -358,57 +400,15 @@ export default function AiSettingsModal() {
                   </button>
                 ))}
               </div>
-              <div className="space-y-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-bold text-[var(--text-primary)]">{selectedSkill.name}</div>
-                    <div className="text-[11px] text-[var(--text-muted)]">{selectedSkill.key}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setUseOverride(false)}
-                      className={`seg-btn ${!useOverride ? 'seg-active' : ''}`}
-                    >
-                      继承/编辑全局
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUseOverride(true)}
-                      className={`seg-btn ${useOverride ? 'seg-active' : ''}`}
-                    >
-                      本作品覆盖
-                    </button>
-                  </div>
-                </div>
-                <Field label="能力名称">
-                  <input value={String(skillDraft.name || '')} onChange={(event) => setSkillDraft((current) => ({ ...current, name: event.target.value }))} className="field" />
-                </Field>
-                <TextArea label="能力说明" rows={2} value={String(skillDraft.description || '')} onChange={(value) => setSkillDraft((current) => ({ ...current, description: value }))} />
-                <TextArea label="系统提示词" rows={5} value={String(skillDraft.system_prompt || '')} onChange={(value) => setSkillDraft((current) => ({ ...current, system_prompt: value }))} />
-                <TextArea label="用户提示词模板" rows={4} value={String(skillDraft.user_prompt_template || '')} onChange={(value) => setSkillDraft((current) => ({ ...current, user_prompt_template: value }))} />
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Field label="上下文策略">
-                    <input value={String(skillDraft.context_policy || '')} onChange={(event) => setSkillDraft((current) => ({ ...current, context_policy: event.target.value }))} className="field" />
-                  </Field>
-                  <Field label="启用入口">
-                    <input value={String(skillDraft.enabled_surfaces || '')} onChange={(event) => setSkillDraft((current) => ({ ...current, enabled_surfaces: event.target.value }))} className="field" />
-                  </Field>
-                  <Field label="输出要求">
-                    <input value={String(skillDraft.output_contract || '')} onChange={(event) => setSkillDraft((current) => ({ ...current, output_contract: event.target.value }))} className="field" />
-                  </Field>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {selectedOverride && (
-                    <button type="button" onClick={() => void resetSkillOverride()} className="secondary-btn">
-                      <RotateCcw size={14} /> 恢复全局
-                    </button>
-                  )}
-                  <button type="button" onClick={() => void saveSkill()} className="primary-btn">
-                    <Save size={14} /> {useOverride ? '保存本作品覆盖' : '保存全局能力'}
-                  </button>
-                </div>
-              </div>
+              <SkillDraftEditor
+                key={`${selectedSkill.key}:${useOverride ? 'override' : 'global'}:${selectedOverride ? 'custom' : 'inherited'}`}
+                selectedSkill={selectedSkill}
+                selectedOverride={selectedOverride}
+                useOverride={useOverride}
+                onUseOverrideChange={setUseOverride}
+                onReset={() => void resetSkillOverride()}
+                onSave={(skillDraft) => void saveSkill(skillDraft)}
+              />
             </div>
           )}
 
@@ -426,13 +426,20 @@ export default function AiSettingsModal() {
                     <input value={accountDraft.name} onChange={(event) => setAccountDraft((current) => ({ ...current, name: event.target.value }))} className="field" />
                   </Field>
                   <Field label="Provider">
-                    <select value={accountDraft.provider} onChange={(event) => setAccountDraft((current) => ({ ...current, provider: event.target.value }))} className="field">
+                    <select
+                      value={accountDraft.provider}
+                      onChange={(event) => {
+                        setAccountProviderStatus(null)
+                        setAccountDraft((current) => ({ ...current, provider: event.target.value }))
+                      }}
+                      className="field"
+                    >
                       {ACCOUNT_PROVIDERS.map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
                       ))}
                     </select>
                   </Field>
-                  {accountProviderMeta.showEndpointField ? (
+                      {accountProviderMeta.showEndpointField ? (
                     <Field label="Endpoint">
                       <input
                         value={accountDraft.api_endpoint}
@@ -475,12 +482,12 @@ export default function AiSettingsModal() {
                 {accountProviderMeta.supportsStatusCheck && (
                   <div className="mt-3 space-y-3 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-3">
                     <div className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
-                      {accountProviderStatus && accountProviderStatus.available && !accountProviderStatus.needsSetup ? (
+                      {displayedAccountProviderStatus && displayedAccountProviderStatus.available && !displayedAccountProviderStatus.needsSetup ? (
                         <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
                       ) : (
                         <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
                       )}
-                      <span>{accountProviderStatus?.message || '检测 Gemini CLI 状态后可启动终端式 Google 登录。'}</span>
+                      <span>{displayedAccountProviderStatus?.message || '检测 Gemini CLI 状态后可启动终端式 Google 登录。'}</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -549,6 +556,111 @@ export default function AiSettingsModal() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function SkillDraftEditor({
+  selectedSkill,
+  selectedOverride,
+  useOverride,
+  onUseOverrideChange,
+  onReset,
+  onSave
+}: {
+  selectedSkill: AiSkillTemplate
+  selectedOverride: AiSkillOverride | null
+  useOverride: boolean
+  onUseOverrideChange: (value: boolean) => void
+  onReset: () => void
+  onSave: (skillDraft: SkillDraft) => void
+}) {
+  const [skillDraft, setSkillDraft] = useState<SkillDraft>(() =>
+    createSkillDraft(selectedSkill, selectedOverride, useOverride)
+  )
+
+  return (
+    <div className="space-y-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-bold text-[var(--text-primary)]">{selectedSkill.name}</div>
+          <div className="text-[11px] text-[var(--text-muted)]">{selectedSkill.key}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onUseOverrideChange(false)}
+            className={`seg-btn ${!useOverride ? 'seg-active' : ''}`}
+          >
+            继承/编辑全局
+          </button>
+          <button
+            type="button"
+            onClick={() => onUseOverrideChange(true)}
+            className={`seg-btn ${useOverride ? 'seg-active' : ''}`}
+          >
+            本作品覆盖
+          </button>
+        </div>
+      </div>
+      <Field label="能力名称">
+        <input
+          value={String(skillDraft.name || '')}
+          onChange={(event) => setSkillDraft((current) => ({ ...current, name: event.target.value }))}
+          className="field"
+        />
+      </Field>
+      <TextArea
+        label="能力说明"
+        rows={2}
+        value={String(skillDraft.description || '')}
+        onChange={(value) => setSkillDraft((current) => ({ ...current, description: value }))}
+      />
+      <TextArea
+        label="系统提示词"
+        rows={5}
+        value={String(skillDraft.system_prompt || '')}
+        onChange={(value) => setSkillDraft((current) => ({ ...current, system_prompt: value }))}
+      />
+      <TextArea
+        label="用户提示词模板"
+        rows={4}
+        value={String(skillDraft.user_prompt_template || '')}
+        onChange={(value) => setSkillDraft((current) => ({ ...current, user_prompt_template: value }))}
+      />
+      <div className="grid gap-3 md:grid-cols-3">
+        <Field label="上下文策略">
+          <input
+            value={String(skillDraft.context_policy || '')}
+            onChange={(event) => setSkillDraft((current) => ({ ...current, context_policy: event.target.value }))}
+            className="field"
+          />
+        </Field>
+        <Field label="启用入口">
+          <input
+            value={String(skillDraft.enabled_surfaces || '')}
+            onChange={(event) => setSkillDraft((current) => ({ ...current, enabled_surfaces: event.target.value }))}
+            className="field"
+          />
+        </Field>
+        <Field label="输出要求">
+          <input
+            value={String(skillDraft.output_contract || '')}
+            onChange={(event) => setSkillDraft((current) => ({ ...current, output_contract: event.target.value }))}
+            className="field"
+          />
+        </Field>
+      </div>
+      <div className="flex flex-wrap justify-end gap-2">
+        {selectedOverride && (
+          <button type="button" onClick={onReset} className="secondary-btn">
+            <RotateCcw size={14} /> 恢复全局
+          </button>
+        )}
+        <button type="button" onClick={() => onSave(skillDraft)} className="primary-btn">
+          <Save size={14} /> {useOverride ? '保存本作品覆盖' : '保存全局能力'}
+        </button>
       </div>
     </div>
   )

@@ -11,7 +11,6 @@ function formatSession(ms: number): string {
 }
 
 export function useWritingSession(bookId: number | null) {
-  const loading = useChapterStore((s) => s.loading)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [sessionWords, setSessionWords] = useState(0)
   const sessionIdRef = useRef<number | null>(null)

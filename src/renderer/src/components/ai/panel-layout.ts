@@ -5,10 +5,18 @@ export type AiAssistantPanelRect = {
   height: number
 }
 
+export type AiAssistantLauncherPosition = {
+  x: number
+  y: number
+}
+
 const PANEL_MARGIN = 16
 const DEFAULT_PANEL_WIDTH = 420
 const DEFAULT_PANEL_HEIGHT = 680
 const DEFAULT_PANEL_BOTTOM_OFFSET = 112
+const DEFAULT_LAUNCHER_SIZE = 48
+const DEFAULT_LAUNCHER_BOTTOM_OFFSET = 176
+const DEFAULT_CONTEXT_PANEL_RESERVE = 360
 const MIN_PANEL_WIDTH = 320
 const MIN_PANEL_HEIGHT = 320
 const MAX_PANEL_WIDTH = 748
@@ -46,12 +54,64 @@ export function createDefaultAiAssistantPanelRect(
 ): AiAssistantPanelRect {
   const width = Math.min(DEFAULT_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, round(viewportWidth) - PANEL_MARGIN * 2))
   const height = Math.min(DEFAULT_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, round(viewportHeight) - PANEL_MARGIN * 2))
+  const preferredX = round(viewportWidth) - PANEL_MARGIN - DEFAULT_CONTEXT_PANEL_RESERVE - width
   return clampAiAssistantPanelRect(
     {
-      x: round(viewportWidth) - PANEL_MARGIN - width,
+      x: preferredX,
       y: round(viewportHeight) - DEFAULT_PANEL_BOTTOM_OFFSET - height,
       width,
       height
+    },
+    viewportWidth,
+    viewportHeight
+  )
+}
+
+export function clampAiAssistantLauncherPosition(
+  position: AiAssistantLauncherPosition,
+  viewportWidth: number,
+  viewportHeight: number
+): AiAssistantLauncherPosition {
+  return {
+    x: clamp(
+      round(position.x),
+      PANEL_MARGIN,
+      round(viewportWidth) - PANEL_MARGIN - DEFAULT_LAUNCHER_SIZE
+    ),
+    y: clamp(
+      round(position.y),
+      PANEL_MARGIN,
+      round(viewportHeight) - PANEL_MARGIN - DEFAULT_LAUNCHER_SIZE
+    )
+  }
+}
+
+export function createDefaultAiAssistantLauncherPosition(
+  viewportWidth: number,
+  viewportHeight: number
+): AiAssistantLauncherPosition {
+  const preferredX = round(viewportWidth) - PANEL_MARGIN - DEFAULT_CONTEXT_PANEL_RESERVE - DEFAULT_LAUNCHER_SIZE
+  return clampAiAssistantLauncherPosition(
+    {
+      x: preferredX,
+      y: round(viewportHeight) - DEFAULT_LAUNCHER_BOTTOM_OFFSET - DEFAULT_LAUNCHER_SIZE
+    },
+    viewportWidth,
+    viewportHeight
+  )
+}
+
+export function translateAiAssistantLauncherPosition(
+  position: AiAssistantLauncherPosition,
+  deltaX: number,
+  deltaY: number,
+  viewportWidth: number,
+  viewportHeight: number
+): AiAssistantLauncherPosition {
+  return clampAiAssistantLauncherPosition(
+    {
+      x: position.x + deltaX,
+      y: position.y + deltaY
     },
     viewportWidth,
     viewportHeight

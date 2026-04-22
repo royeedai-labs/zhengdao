@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Lightbulb, Plus, Trash2 } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useUIStore } from '@/stores/ui-store'
@@ -15,17 +15,27 @@ export default function QuickNotes() {
   const [notes, setNotes] = useState<NoteItem[]>([])
   const [input, setInput] = useState('')
 
-  const loadNotes = async () => {
-    try {
-      const data = await window.api.getNotes(bookId)
-      setNotes(data as NoteItem[])
-    } catch {
-      setNotes([])
-    }
-  }
+  const loadNotes = useCallback(async () => {
+    const data = await window.api.getNotes(bookId)
+    setNotes(data as NoteItem[])
+  }, [bookId])
 
   useEffect(() => {
-    void loadNotes()
+    let cancelled = false
+
+    const refreshNotes = async () => {
+      try {
+        const data = await window.api.getNotes(bookId)
+        if (!cancelled) setNotes(data as NoteItem[])
+      } catch {
+        if (!cancelled) setNotes([])
+      }
+    }
+
+    void refreshNotes()
+    return () => {
+      cancelled = true
+    }
   }, [bookId])
 
   const addNote = async () => {
@@ -41,9 +51,9 @@ export default function QuickNotes() {
   }
 
   return (
-    <div className="p-4 shrink-0 max-h-[200px] flex flex-col">
+    <div className="p-4 h-full min-h-0 flex flex-col">
       <h3 className="text-xs font-bold text-[var(--text-primary)] flex items-center mb-3 uppercase tracking-wider">
-        <Lightbulb size={14} className="mr-1.5 text-yellow-500" /> 灵感速记
+        <Lightbulb size={14} className="mr-1.5 text-[var(--brand-primary)]" /> 灵感速记
       </h3>
       <div className="flex gap-1 mb-2">
         <input
@@ -51,13 +61,13 @@ export default function QuickNotes() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addNote()}
           placeholder="记下灵感..."
-          className="flex-1 rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-yellow-500/50"
+          className="flex-1 rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand-primary)]"
         />
         <button
           onClick={addNote}
           title="新增灵感"
           aria-label="新增灵感"
-          className="p-1 text-yellow-500 hover:text-yellow-400 transition"
+          className="p-1 text-[var(--brand-primary)] hover:text-[var(--accent-secondary)] transition"
         >
           <Plus size={14} />
         </button>
@@ -77,7 +87,7 @@ export default function QuickNotes() {
                 })}
               title="删除灵感"
               aria-label="删除灵感"
-              className="shrink-0 p-0.5 text-[var(--text-muted)] hover:text-red-400 opacity-0 group-hover:opacity-100 transition"
+              className="shrink-0 p-0.5 text-[var(--text-muted)] hover:text-[var(--danger-primary)] opacity-0 group-hover:opacity-100 transition"
             >
               <Trash2 size={10} />
             </button>

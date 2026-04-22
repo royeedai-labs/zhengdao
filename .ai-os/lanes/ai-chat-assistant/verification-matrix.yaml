@@ -1,0 +1,45 @@
+impact_rules:
+  - when: "ai-assistant-ui-change"
+    run:
+      - "npx vitest run src/renderer/src/components/ai/__tests__/*.test.ts"
+      - "npm run build"
+  - when: "ai-repository-or-migration-change"
+    run:
+      - "npx vitest run src/main/database/__tests__/ai-assistant-repo.test.ts src/main/database/__tests__/migrations.test.ts"
+      - "npm test"
+  - when: "gemini-cli-stream-change"
+    run:
+      - "npx vitest run src/main/ai/__tests__/gemini-cli-service.test.ts src/renderer/src/utils/ai/__tests__/provider-routing.test.ts src/renderer/src/components/ai/__tests__/streaming-message.test.ts"
+      - "real provider manual smoke or explicit blocker"
+  - when: "release-native-change"
+    run:
+      - "node scripts/release/rebuild-electron-native.mjs"
+      - "node scripts/release/verify-electron-native.mjs"
+      - "GitHub release workflow check"
+
+failure_modes:
+  - id: FM-AI-001
+    scenario: "Gemini CLI stream-json contains content parts or empty output and assistant silently saves an empty message"
+    expected: "Content parts are parsed; truly empty responses become explicit errors and are not persisted as blank assistant messages"
+    guard: ".ai-os/lanes/ai-chat-assistant/evals/gemini-cli-stream-empty-response.md"
+  - id: FM-AI-002
+    scenario: "User opens ordinary chat but app defaults to a writing skill and produces body draft"
+    expected: "No selected ability card means ordinary conversation mode"
+    guard: "src/renderer/src/components/ai/__tests__/conversation-mode.test.ts"
+  - id: FM-AI-003
+    scenario: "Release workflow passes tests but builder rebuilds node-pty and fails before uploading installer assets"
+    expected: "electron-builder does not run default rebuild; release workflow owns native rebuild"
+    guard: "scripts/release/electron-builder-config.test.ts and release-plan.md"
+  - id: FM-AI-004
+    scenario: "Deleting a history conversation removes local data without confirmation or leaves no fallback selection"
+    expected: "Delete action is confirmed and UI selects a valid fallback conversation"
+    guard: "conversation-list focused tests and manual UI check"
+  - id: FM-AI-005
+    scenario: "AI assistant is open but the collapsed floating X remains over the input area or send button"
+    expected: "Collapsed launcher only renders when the assistant is closed; open assistant is collapsed from its title bar"
+    guard: "src/renderer/src/components/ai/__tests__/panel-layout.test.ts and manual UI check"
+
+guards:
+  - ".ai-os/lanes/ai-chat-assistant/evals/gemini-cli-stream-empty-response.md"
+  - ".ai-os/lanes/ai-chat-assistant/risk-register.md"
+  - ".ai-os/lanes/ai-chat-assistant/release-plan.md"
