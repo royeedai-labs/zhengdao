@@ -78,12 +78,13 @@ describe('buildAssistantContext', () => {
       currentChapter: {
         id: 7,
         title: '第七章 宴会',
-        plainText: `${'前情'.repeat(1200)}光标附近的关键冲突`
+        plainText: `${'前情'.repeat(1200)}林凡在宴会反杀，黑色戒指发烫，光标附近的关键冲突`
       },
-      selectedText: '主角抬手压下全场。',
+      selectedText: '主角抬手压下赵天宇，全场哗然。',
       characters: [
         { id: 1, name: '林凡', description: '主角' },
-        { id: 2, name: '赵天宇', description: '反派' }
+        { id: 2, name: '赵天宇', description: '反派' },
+        { id: 3, name: '苏离', description: '本章未出场' }
       ],
       foreshadowings: [{ id: 1, text: '黑色戒指', status: 'pending' }],
       plotNodes: [{ id: 1, title: '宴会反杀', description: '公开打脸', chapter_number: 7 }]
@@ -96,8 +97,11 @@ describe('buildAssistantContext', () => {
       'foreshadowings',
       'plot_nodes'
     ])
-    expect(context.contextText).toContain('主角抬手压下全场。')
+    expect(context.contextText).toContain('主角抬手压下赵天宇，全场哗然。')
     expect(context.contextText).toContain('第七章 宴会')
+    expect(context.contextText).toContain('林凡')
+    expect(context.contextText).toContain('赵天宇')
+    expect(context.contextText).not.toContain('苏离')
     expect(context.contextText.length).toBeLessThan(5000)
   })
 })

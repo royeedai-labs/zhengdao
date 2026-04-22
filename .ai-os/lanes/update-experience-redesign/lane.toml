@@ -1,0 +1,6 @@
+id = "update-experience-redesign"
+title = "应用更新体验重构"
+status = "active"
+baseline_id = "CR-20260423-013500-update-experience-redesign"
+quality_tier = "standard"
+risk_tier = "medium"

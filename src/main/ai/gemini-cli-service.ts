@@ -23,6 +23,11 @@ export interface AiStreamCallbacks {
   onError: (error: string) => void
 }
 
+export interface AiStreamSession {
+  cancel: () => void
+  done: Promise<void>
+}
+
 type SpawnLike = (
   command: string,
   args: string[],
@@ -339,93 +344,117 @@ export function createGeminiCliService(deps: GeminiCliServiceDeps = {}) {
     })
   }
 
-  async function stream(request: AiBridgeCompleteRequest, callbacks: AiStreamCallbacks): Promise<void> {
+  function stream(request: AiBridgeCompleteRequest, callbacks: AiStreamCallbacks): AiStreamSession {
     const cliEntry = getCliEntry()
     if (!deps.getCliEntry && !existsSync(cliEntry)) {
       callbacks.onError('Gemini CLI 尚未打包或未安装，请重新安装应用后再试。')
-      return
+      return { cancel: () => void 0, done: Promise.resolve() }
     }
     if (!deps.ensureWorkspace) {
       callbacks.onError('Gemini CLI 工作目录尚未初始化。')
-      return
+      return { cancel: () => void 0, done: Promise.resolve() }
     }
 
-    const cwd = await deps.ensureWorkspace()
-    const args = [cliEntry, '--output-format', 'stream-json']
-    args.push('--model', resolveGeminiCliRequestModel(request.model || ''))
+    let cancel = () => void 0
+    const done = deps.ensureWorkspace().then((cwd) => {
+      const args = [cliEntry, '--output-format', 'stream-json']
+      args.push('--model', resolveGeminiCliRequestModel(request.model || ''))
 
-    return new Promise<void>((resolve) => {
-      let settled = false
-      let stdoutLineBuffer = ''
-      let stderr = ''
-      let fullText = ''
-      const child = spawn(runtime, args, {
-        cwd,
-        env: buildGeminiCliProcessEnv(process.env),
-        stdio: 'pipe'
-      })
+      return new Promise<void>((resolve) => {
+        let settled = false
+        let cancelled = false
+        let stdoutLineBuffer = ''
+        let stderr = ''
+        let fullText = ''
+        const child = spawn(runtime, args, {
+          cwd,
+          env: buildGeminiCliProcessEnv(process.env),
+          stdio: 'pipe'
+        })
 
-      const finish = () => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        resolve()
-      }
-
-      const fail = (error: string) => {
-        if (settled) return
-        callbacks.onError(error)
-        finish()
-      }
-
-      const handleLine = (line: string) => {
-        const parsed = parseGeminiCliStreamJsonLine(line)
-        if (parsed.error) {
-          fail(parsed.error)
-          return
+        const finish = () => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          resolve()
         }
-        if (parsed.token) {
-          fullText += parsed.token
-          callbacks.onToken(parsed.token)
-        }
-      }
 
-      const timer = setTimeout(() => {
-        child.kill()
-        fail('Gemini CLI 请求超时，请稍后重试。')
-      }, timeoutMs)
-
-      child.stdout.on('data', (chunk) => {
-        stdoutLineBuffer += chunk.toString()
-        const lines = stdoutLineBuffer.split(/\r?\n/)
-        stdoutLineBuffer = lines.pop() || ''
-        for (const line of lines) handleLine(line)
-      })
-      child.stderr.on('data', (chunk) => {
-        stderr += chunk.toString()
-      })
-      child.on('error', (error) => {
-        fail(normalizeCliError(error.message))
-      })
-      child.on('close', (code) => {
-        if (settled) return
-        if (stdoutLineBuffer.trim()) handleLine(stdoutLineBuffer)
-        if (settled) return
-        if (code === 0 && fullText.trim()) {
+        const complete = () => {
+          if (settled) return
           callbacks.onComplete(fullText)
           finish()
-          return
         }
-        if (code === 0) {
-          fail(stderr.trim() ? normalizeCliError(stderr.trim()) : EMPTY_GEMINI_CLI_STREAM_RESPONSE_ERROR)
-          return
-        }
-        fail(normalizeCliError(stderr.trim() || `exit ${code}`))
-      })
 
-      child.stdin.write(buildPrompt(request))
-      child.stdin.end()
+        const fail = (error: string) => {
+          if (settled) return
+          callbacks.onError(error)
+          finish()
+        }
+
+        const handleLine = (line: string) => {
+          const parsed = parseGeminiCliStreamJsonLine(line)
+          if (parsed.error) {
+            fail(parsed.error)
+            return
+          }
+          if (parsed.token) {
+            fullText += parsed.token
+            callbacks.onToken(parsed.token)
+          }
+        }
+
+        cancel = () => {
+          if (settled || cancelled) return
+          cancelled = true
+          child.kill()
+        }
+
+        const timer = setTimeout(() => {
+          child.kill()
+          fail('Gemini CLI 请求超时，请稍后重试。')
+        }, timeoutMs)
+
+        child.stdout.on('data', (chunk) => {
+          stdoutLineBuffer += chunk.toString()
+          const lines = stdoutLineBuffer.split(/\r?\n/)
+          stdoutLineBuffer = lines.pop() || ''
+          for (const line of lines) handleLine(line)
+        })
+        child.stderr.on('data', (chunk) => {
+          stderr += chunk.toString()
+        })
+        child.on('error', (error) => {
+          if (cancelled) {
+            complete()
+            return
+          }
+          fail(normalizeCliError(error.message))
+        })
+        child.on('close', (code) => {
+          if (settled) return
+          if (stdoutLineBuffer.trim()) handleLine(stdoutLineBuffer)
+          if (settled) return
+          if (cancelled) {
+            complete()
+            return
+          }
+          if (code === 0 && fullText.trim()) {
+            complete()
+            return
+          }
+          if (code === 0) {
+            fail(stderr.trim() ? normalizeCliError(stderr.trim()) : EMPTY_GEMINI_CLI_STREAM_RESPONSE_ERROR)
+            return
+          }
+          fail(normalizeCliError(stderr.trim() || `exit ${code}`))
+        })
+
+        child.stdin.write(buildPrompt(request))
+        child.stdin.end()
+      })
     })
+
+    return { cancel: () => cancel(), done }
   }
 
   async function getStatus(probe = false): Promise<GeminiCliStatus> {

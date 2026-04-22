@@ -29,7 +29,7 @@ import { DriveSync } from './sync/drive-sync'
 import { backupDatabaseFile, replaceDatabaseFromFile } from './database/connection'
 import { autoBackup } from './backup/auto-backup'
 import { readDocxPlainText } from './utils/read-docx-text'
-import { getUpdateState, installDownloadedUpdate } from './updater/service'
+import { checkForUpdates, downloadAvailableUpdate, getAppVersion, getUpdateState, installDownloadedUpdate } from './updater/service'
 import {
   buildGeminiCliSetupScript,
   createGeminiCliService,
@@ -38,11 +38,13 @@ import {
   resolveGeminiCliRuntime,
   type AiBridgeCompleteRequest
 } from './ai/gemini-cli-service'
+import { getProviderStatus as probeProviderStatus } from './ai/provider-status'
 
 const googleAuth = new GoogleAuth()
 const driveSync = new DriveSync(googleAuth)
 const searchRepo = new SearchRepo()
 let geminiCliService: ReturnType<typeof createGeminiCliService> | null = null
+const activeGeminiStreamSessions = new Map<string, { cancel: () => void }>()
 
 function getGeminiCliService(): ReturnType<typeof createGeminiCliService> {
   if (!geminiCliService) {
@@ -139,6 +141,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ai:getConversations', (_, bookId: number) =>
     aiAssistantRepo.getAiConversations(bookId)
   )
+  ipcMain.handle('ai:updateConversationTitle', (_, conversationId: number, title: string) =>
+    aiAssistantRepo.updateAiConversationTitle(conversationId, title)
+  )
   ipcMain.handle('ai:clearConversation', (_, conversationId: number) =>
     aiAssistantRepo.clearAiConversation(conversationId)
   )
@@ -167,11 +172,24 @@ export function registerIpcHandlers(): void {
       return
     }
 
-    void getGeminiCliService().stream(request, {
+    const session = getGeminiCliService().stream(request, {
       onToken: (token) => event.sender.send('ai:streamToken', requestId, token),
-      onComplete: (content) => event.sender.send('ai:streamComplete', requestId, content),
-      onError: (error) => event.sender.send('ai:streamError', requestId, error)
+      onComplete: (content) => {
+        activeGeminiStreamSessions.delete(requestId)
+        event.sender.send('ai:streamComplete', requestId, content)
+      },
+      onError: (error) => {
+        activeGeminiStreamSessions.delete(requestId)
+        event.sender.send('ai:streamError', requestId, error)
+      }
     })
+    activeGeminiStreamSessions.set(requestId, { cancel: session.cancel })
+    void session.done.finally(() => {
+      activeGeminiStreamSessions.delete(requestId)
+    })
+  })
+  ipcMain.on('ai:cancelStream', (_event, requestId: string) => {
+    activeGeminiStreamSessions.get(requestId)?.cancel()
   })
 
   // Volumes
@@ -360,15 +378,37 @@ export function registerIpcHandlers(): void {
     }
     return getGeminiCliService().complete(request)
   })
-  ipcMain.handle('ai:getProviderStatus', async (_, provider: string, options?: { probe?: boolean }) => {
+  ipcMain.handle(
+    'ai:getProviderStatus',
+    async (
+      _,
+      provider: string,
+      options?: {
+        probe?: boolean
+        config?: {
+          accountId?: number | null
+          api_key?: string
+          api_endpoint?: string
+          model?: string
+        }
+      }
+    ) => {
+      const accountConfig =
+        options?.config?.accountId != null
+          ? aiAssistantRepo.getAiAccountRuntimeConfig(options.config.accountId)
+          : null
     if (provider === 'gemini_cli') return getGeminiCliService().getStatus(Boolean(options?.probe))
-    return {
-      provider,
-      available: true,
-      needsSetup: false,
-      message: '当前 Provider 由项目设置直接配置。'
+      return probeProviderStatus(
+        {
+          provider,
+          apiKey: options?.config?.api_key || accountConfig?.ai_api_key || '',
+          apiEndpoint: options?.config?.api_endpoint || accountConfig?.ai_api_endpoint || '',
+          model: options?.config?.model || accountConfig?.ai_model || ''
+        },
+        Boolean(options?.probe)
+      )
     }
-  })
+  )
   ipcMain.handle('ai:setupGeminiCli', async () => launchGeminiCliSetup())
 
   ipcMain.handle('sync:uploadBook', async (_, bookId: number) => {
@@ -591,6 +631,13 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('app:getUpdateState', () => getUpdateState())
+  ipcMain.handle('app:getAppVersion', () => getAppVersion())
+  ipcMain.handle('app:checkForUpdates', async () => {
+    return await checkForUpdates()
+  })
+  ipcMain.handle('app:downloadUpdate', async () => {
+    return await downloadAvailableUpdate()
+  })
   ipcMain.handle('app:installDownloadedUpdate', async () => {
     await installDownloadedUpdate()
   })

@@ -18,7 +18,7 @@ const DEFAULT_META: AiAccountProviderUiMeta = {
   showEndpointField: true,
   endpointPlaceholder: '可留空使用默认端点',
   modelPlaceholder: '可留空使用 provider 默认模型',
-  supportsStatusCheck: false,
+  supportsStatusCheck: true,
   supportsAuthLaunch: false
 }
 

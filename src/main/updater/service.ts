@@ -47,7 +47,22 @@ class AppUpdaterService {
       await this.controller.checkForUpdates()
     } catch (error) {
       console.error('[Updater] checkForUpdates failed:', error)
-      this.controller.markError(error)
+      this.controller.markError(error, 'check')
+    }
+
+    return this.controller.getSnapshot()
+  }
+
+  async downloadAvailableUpdate(): Promise<UpdateSnapshot> {
+    if (!app.isPackaged) {
+      throw new Error('当前不是打包版，无法下载更新')
+    }
+
+    try {
+      await this.controller.downloadAvailableUpdate()
+    } catch (error) {
+      console.error('[Updater] downloadAvailableUpdate failed:', error)
+      this.controller.markError(error, 'download')
     }
 
     return this.controller.getSnapshot()
@@ -76,10 +91,18 @@ export function getUpdateState(): UpdateSnapshot {
   return appUpdaterService.getSnapshot()
 }
 
+export function getAppVersion(): string {
+  return app.getVersion()
+}
+
 export async function installDownloadedUpdate(): Promise<void> {
   await appUpdaterService.installDownloadedUpdate()
 }
 
 export async function checkForUpdates(): Promise<UpdateSnapshot> {
   return appUpdaterService.checkForUpdates()
+}
+
+export async function downloadAvailableUpdate(): Promise<UpdateSnapshot> {
+  return appUpdaterService.downloadAvailableUpdate()
 }

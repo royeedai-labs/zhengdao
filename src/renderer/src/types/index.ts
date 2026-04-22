@@ -209,6 +209,7 @@ export type ModalType =
   | 'bookOverview'
   | 'consistencyCheck'
   | 'aiSettings'
+  | 'appSettings'
 
 export interface GenrePreset {
   id: string

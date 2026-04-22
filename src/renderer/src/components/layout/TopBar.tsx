@@ -17,7 +17,8 @@ import {
   BarChart3,
   LayoutDashboard,
   Flame,
-  MoreHorizontal
+  MoreHorizontal,
+  Info
 } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
@@ -27,7 +28,6 @@ import { useDailyStats } from '@/hooks/useDailyStats'
 import { useWritingSession } from '@/hooks/useWritingSession'
 import { useWritingStreak } from '@/hooks/useWritingStreak'
 import PomodoroTimer from '@/components/shared/PomodoroTimer'
-import UpdateActionButton from '@/components/shared/UpdateActionButton'
 import AppBrand from '@/components/shared/AppBrand'
 import { THEME_IDS, THEME_LABELS } from '@/utils/themes'
 import { useAuthStore } from '@/stores/auth-store'
@@ -195,7 +195,15 @@ export default function TopBar() {
             <BarChart3 size={14} />
             数据
           </button>
-          <UpdateActionButton />
+          <button
+            type="button"
+            onClick={() => openModal('appSettings')}
+            aria-label="应用设置 / 关于"
+            className="p-1.5 hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] rounded transition shrink-0 min-h-8 min-w-8"
+            title="应用设置 / 关于"
+          >
+            <Info size={16} />
+          </button>
           <button
             onClick={() => openModal('help')}
             aria-label="使用帮助"
@@ -267,6 +275,14 @@ export default function TopBar() {
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
             >
               <BarChart3 size={14} /> 数据中心
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('appSettings')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <Info size={14} /> 应用设置 / 关于
             </button>
             <button
               role="menuitem"

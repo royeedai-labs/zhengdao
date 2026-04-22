@@ -18,11 +18,18 @@
 - **FR-AI-014**：AI 助手输出必须优先流式渲染，token 到达时实时更新 assistant 消息；完成后再持久化消息并生成草稿。
 - **FR-AI-015**：AI 对话默认应支持普通问答 / 自动识别意图，不因未显式选择能力卡而默认套用 `continue_writing`；只有用户点击能力卡、选择具体能力或由其他入口带入 skill 时才强制执行该能力卡。
 - **FR-AI-016**：AI 会话切换不使用标题栏紧凑原生下拉，改为 AI 面板右侧会话列表；列表支持切换、新建和删除历史会话，标题栏继续保留清空当前会话。
+- **FR-AI-017**：章节摘要、行内补全、角色一致性检查、风格分析等仍在使用中的 AI 入口必须统一走解析后的全局账号配置，不再直接消费 `project_config.ai_*` 运行时字段。
+- **FR-AI-018**：当作品上下文策略为 `manual` 时，AI 助手只发送用户显式勾选的上下文 chips；`smart_minimal` 继续自动裁剪，`full` 放宽范围。
+- **FR-AI-019**：AI 助手流式生成必须支持用户主动停止；停止后保留已收到内容，不将其作为错误提示。
+- **FR-AI-020**：`ai_conversations.title` 必须承载真实会话标题：默认取首条用户消息摘要，并支持用户手动重命名。
+- **FR-AI-021**：全局账号配置中的 OpenAI / Gemini / Ollama / custom provider 也必须支持真实连通性检测；Gemini CLI 继续保留登录检测与登录启动。
+- **FR-AI-022**：风格分析不再在 modal 打开后自动请求；全书分析需要采样 / 分段，避免直接拼接全书正文。
 
 ## 接口与数据
 
 - 新增表：`ai_accounts`、`ai_skill_templates`、`ai_work_profiles`、`ai_skill_overrides`、`ai_conversations`、`ai_messages`、`ai_drafts`。
 - 新增 preload / IPC：账号、能力卡、作品档案、覆盖、会话、消息、草稿、作品解析 AI 配置相关方法。
+- 新增 / 扩展 preload / IPC：会话标题更新、可取消流式请求、provider status probe。
 - `ai_drafts.kind` 白名单：`insert_text`、`replace_text`、`create_chapter`、`update_chapter_summary`、`create_character`、`create_wiki_entry`、`create_plot_node`、`create_foreshadowing`。
 - 旧 `project_config` AI 字段保留；迁移时生成默认全局账号和作品档案引用。
 
@@ -43,3 +50,9 @@
 - **AC-AI-013**：AI 回复在生成过程中实时渲染，完成后持久化最终 assistant message 并按现有草稿规则进入草稿篮。
 - **AC-AI-014**：在未显式选择能力卡时，用户询问“你能为我做什么”等泛问应得到普通助手答复，不创建正文/资产草稿；显式选择“续写正文”等能力后仍按对应 skill prompt 和草稿篮规则执行。
 - **AC-AI-015**：点击标题栏会话入口后，右侧弹出会话列表；用户可切换会话、删除历史会话，删除前二次确认，删除当前会话后自动切换或创建空会话。
+- **AC-AI-016**：章节摘要、行内补全、角色一致性检查、风格分析在只配置全局账号时也可正常使用，不要求旧项目级 provider 字段同步填写。
+- **AC-AI-017**：`manual` 上下文策略下，未勾选的 chips 不会进入 prompt；`smart_minimal` 不再把整本书首批角色 / 伏笔 / 节点笼统标为“相关”。
+- **AC-AI-018**：AI 助手生成中可点击“停止”；停止后保留已收到内容，UI 不显示失败错误。
+- **AC-AI-019**：新会话首条用户消息后自动生成标题；用户可手动重命名，会话列表显示真实标题而不是固定编号。
+- **AC-AI-020**：OpenAI / Gemini / Ollama / custom provider 在全局账号面板点击“检测”后能给出真实连通性结果或清晰错误。
+- **AC-AI-021**：风格分析默认不自动请求；用户手动点击后才分析，全书分析只发送采样结果而不是整本正文拼接。

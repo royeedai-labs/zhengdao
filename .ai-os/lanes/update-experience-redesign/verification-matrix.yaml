@@ -1,0 +1,24 @@
+impact_rules:
+  - when: "shared-or-main-updater-change"
+    run:
+      - "npx vitest run src/shared/__tests__/update.test.ts src/main/updater/__tests__/updater-controller.test.ts"
+      - "npm run build"
+  - when: "renderer-update-entry-change"
+    run:
+      - "npx vitest run src/renderer/src/utils/__tests__/install-update.test.ts src/renderer/src/utils/__tests__/update-prompt.test.ts"
+      - "npm run build"
+
+failure_modes:
+  - id: FM-UPD-001
+    scenario: "用户点击安装后 quitAndInstall 未触发应用退出，界面长期停留在“更新中…”"
+    expected: "15 秒 watchdog 将状态回退到 ready，并展示可重试安装的错误提示"
+    guard: "src/main/updater/__tests__/updater-controller.test.ts and src/shared/__tests__/update.test.ts"
+  - id: FM-UPD-002
+    scenario: "同一版本在后台多次检测到 update-available，应用反复自动弹出更新页"
+    expected: "同版本只自动弹出一次；仍可从全局应用设置 / 关于手动重新进入"
+    guard: "src/renderer/src/utils/__tests__/update-prompt.test.ts"
+
+guards:
+  - "src/shared/__tests__/update.test.ts"
+  - "src/main/updater/__tests__/updater-controller.test.ts"
+  - "src/renderer/src/utils/__tests__/update-prompt.test.ts"

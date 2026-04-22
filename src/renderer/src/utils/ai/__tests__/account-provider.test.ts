@@ -11,15 +11,15 @@ describe('getAiAccountProviderUiMeta', () => {
     })
   })
 
-  it('keeps API-key providers on secret-based configuration', () => {
+  it('keeps API-key providers on secret-based configuration with status checks', () => {
     expect(getAiAccountProviderUiMeta('gemini')).toMatchObject({
       showApiKeyField: true,
-      supportsStatusCheck: false,
+      supportsStatusCheck: true,
       supportsAuthLaunch: false
     })
     expect(getAiAccountProviderUiMeta('openai')).toMatchObject({
       showApiKeyField: true,
-      supportsStatusCheck: false,
+      supportsStatusCheck: true,
       supportsAuthLaunch: false
     })
   })

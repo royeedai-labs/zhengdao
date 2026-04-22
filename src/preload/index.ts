@@ -184,9 +184,24 @@ const api = {
     ipcRenderer.on('ai:streamComplete', handleComplete)
     ipcRenderer.on('ai:streamError', handleError)
     ipcRenderer.send('ai:streamComplete', requestId, request)
-    return cleanup
+    return {
+      requestId,
+      cleanup
+    }
   },
-  aiGetProviderStatus: (provider: string, options?: { probe?: boolean }) =>
+  aiCancelStream: (requestId: string) => ipcRenderer.send('ai:cancelStream', requestId),
+  aiGetProviderStatus: (
+    provider: string,
+    options?: {
+      probe?: boolean
+      config?: {
+        accountId?: number | null
+        api_key?: string
+        api_endpoint?: string
+        model?: string
+      }
+    }
+  ) =>
     ipcRenderer.invoke('ai:getProviderStatus', provider, options),
   aiSetupGeminiCli: () => ipcRenderer.invoke('ai:setupGeminiCli'),
   aiGetAccounts: () => ipcRenderer.invoke('ai:getAccounts'),
@@ -206,6 +221,8 @@ const api = {
   aiGetOrCreateConversation: (bookId: number) => ipcRenderer.invoke('ai:getOrCreateConversation', bookId),
   aiCreateConversation: (bookId: number) => ipcRenderer.invoke('ai:createConversation', bookId),
   aiGetConversations: (bookId: number) => ipcRenderer.invoke('ai:getConversations', bookId),
+  aiUpdateConversationTitle: (conversationId: number, title: string) =>
+    ipcRenderer.invoke('ai:updateConversationTitle', conversationId, title),
   aiClearConversation: (conversationId: number) => ipcRenderer.invoke('ai:clearConversation', conversationId),
   aiDeleteConversation: (conversationId: number) => ipcRenderer.invoke('ai:deleteConversation', conversationId),
   aiGetMessages: (conversationId: number) => ipcRenderer.invoke('ai:getMessages', conversationId),
@@ -248,6 +265,9 @@ const api = {
   dataExportFull: () => ipcRenderer.invoke('data:exportFull'),
   dataImportFull: () => ipcRenderer.invoke('data:importFull'),
 
+  getAppVersion: () => ipcRenderer.invoke('app:getAppVersion') as Promise<string>,
+  checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates') as Promise<UpdateSnapshot>,
+  downloadUpdate: () => ipcRenderer.invoke('app:downloadUpdate') as Promise<UpdateSnapshot>,
   getUpdateState: () => ipcRenderer.invoke('app:getUpdateState') as Promise<UpdateSnapshot>,
   onUpdateState: (listener: (snapshot: UpdateSnapshot) => void) => {
     const wrapped = (_event: unknown, snapshot: UpdateSnapshot) => listener(snapshot)

@@ -1,6 +1,7 @@
 import { getDb } from './connection'
 
 export type AiDraftStatus = 'pending' | 'applied' | 'dismissed'
+export const DEFAULT_AI_CONVERSATION_TITLE = 'AI 对话'
 
 const DEFAULT_PROFILE = {
   style_guide: '',
@@ -24,18 +25,80 @@ function stringify(value: unknown): string {
   return JSON.stringify(value ?? {})
 }
 
+type SafeStorageLike = {
+  isEncryptionAvailable: () => boolean
+  encryptString: (value: string) => Buffer
+  decryptString: (buffer: Buffer) => string
+}
+
+function getSafeStorage(): SafeStorageLike | null {
+  try {
+    // Electron safeStorage is only available in the desktop main process.
+    // Tests and non-Electron runtimes should transparently fall back.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const electron = require('electron') as { safeStorage?: SafeStorageLike }
+    return electron.safeStorage || null
+  } catch {
+    return null
+  }
+}
+
+function encodeSecret(value: string): string {
+  const safeStorage = getSafeStorage()
+  if (safeStorage?.isEncryptionAvailable()) {
+    try {
+      return `safe-storage:${safeStorage.encryptString(value).toString('base64')}`
+    } catch {
+      return value
+    }
+  }
+  return value
+}
+
+function decodeSecret(value: string): string {
+  if (!value.startsWith('safe-storage:')) return value
+
+  const safeStorage = getSafeStorage()
+  if (!safeStorage?.isEncryptionAvailable()) return ''
+
+  try {
+    const encoded = value.slice('safe-storage:'.length)
+    return safeStorage.decryptString(Buffer.from(encoded, 'base64'))
+  } catch {
+    return ''
+  }
+}
+
+function normalizeConversationTitle(title: string): string {
+  const oneLine = title.replace(/\s+/g, ' ').trim()
+  if (!oneLine) return DEFAULT_AI_CONVERSATION_TITLE
+  return oneLine.length > 32 ? `${oneLine.slice(0, 31)}…` : oneLine
+}
+
+function deriveAiConversationTitle(content: string): string {
+  return normalizeConversationTitle(content)
+}
+
 function upsertAppState(key: string, value: string): void {
   const db = getDb()
   db.prepare(
     `INSERT INTO app_state (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-  ).run(key, value)
+  ).run(key, encodeSecret(value))
 }
 
 function getAppState(key: string): string {
   const db = getDb()
   const row = db.prepare('SELECT value FROM app_state WHERE key = ?').get(key) as { value?: string } | undefined
-  return row?.value || ''
+  const raw = row?.value || ''
+  const decoded = decodeSecret(raw)
+  if (raw && decoded && raw === decoded) {
+    const safeStorage = getSafeStorage()
+    if (safeStorage?.isEncryptionAvailable()) {
+      upsertAppState(key, decoded)
+    }
+  }
+  return decoded
 }
 
 function deleteAppState(key: string): void {
@@ -77,6 +140,26 @@ export function getAiAccounts() {
        ORDER BY is_default DESC, id`
     )
     .all()
+}
+
+export function getAiAccountRuntimeConfig(accountId: number) {
+  const account = getDb().prepare('SELECT * FROM ai_accounts WHERE id = ?').get(accountId) as
+    | {
+        id: number
+        provider: string
+        api_endpoint: string
+        model: string
+        credential_ref: string
+      }
+    | undefined
+
+  if (!account) return null
+  return {
+    ai_provider: account.provider || 'openai',
+    ai_api_key: resolveCredential(account.credential_ref || ''),
+    ai_api_endpoint: account.api_endpoint || '',
+    ai_model: account.model || ''
+  }
 }
 
 export function saveAiAccount(data: {
@@ -286,7 +369,9 @@ export function getOrCreateAiConversation(bookId: number) {
 
 export function createAiConversation(bookId: number) {
   const db = getDb()
-  const result = db.prepare('INSERT INTO ai_conversations (book_id, title) VALUES (?, ?)').run(bookId, 'AI 对话')
+  const result = db
+    .prepare('INSERT INTO ai_conversations (book_id, title) VALUES (?, ?)')
+    .run(bookId, DEFAULT_AI_CONVERSATION_TITLE)
   return db.prepare('SELECT * FROM ai_conversations WHERE id = ?').get(result.lastInsertRowid)
 }
 
@@ -310,7 +395,9 @@ export function clearAiConversation(conversationId: number) {
   const tx = db.transaction(() => {
     db.prepare("DELETE FROM ai_drafts WHERE conversation_id = ? AND status = 'pending'").run(conversationId)
     db.prepare('DELETE FROM ai_messages WHERE conversation_id = ?').run(conversationId)
-    db.prepare("UPDATE ai_conversations SET updated_at = datetime('now','localtime') WHERE id = ?").run(conversationId)
+    db.prepare(
+      "UPDATE ai_conversations SET title = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+    ).run(DEFAULT_AI_CONVERSATION_TITLE, conversationId)
   })
   tx()
 }
@@ -338,7 +425,26 @@ export function addAiMessage(conversationId: number, role: 'user' | 'assistant' 
     .prepare('INSERT INTO ai_messages (conversation_id, role, content, metadata) VALUES (?, ?, ?, ?)')
     .run(conversationId, role, content, stringify(metadata))
   db.prepare("UPDATE ai_conversations SET updated_at = datetime('now','localtime') WHERE id = ?").run(conversationId)
+  if (role === 'user') {
+    const conversation = db.prepare('SELECT title FROM ai_conversations WHERE id = ?').get(conversationId) as
+      | { title?: string }
+      | undefined
+    const title = conversation?.title?.trim() || ''
+    if (!title || title === DEFAULT_AI_CONVERSATION_TITLE) {
+      db.prepare(
+        "UPDATE ai_conversations SET title = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+      ).run(deriveAiConversationTitle(content), conversationId)
+    }
+  }
   return db.prepare('SELECT * FROM ai_messages WHERE id = ?').get(result.lastInsertRowid)
+}
+
+export function updateAiConversationTitle(conversationId: number, title: string) {
+  const normalized = normalizeConversationTitle(title)
+  getDb()
+    .prepare("UPDATE ai_conversations SET title = ?, updated_at = datetime('now','localtime') WHERE id = ?")
+    .run(normalized, conversationId)
+  return getDb().prepare('SELECT * FROM ai_conversations WHERE id = ?').get(conversationId)
 }
 
 export function getAiDrafts(
@@ -398,17 +504,21 @@ export function setAiDraftStatus(id: number, status: AiDraftStatus) {
 export function getResolvedAiConfigForBook(bookId: number) {
   const db = getDb()
   const profile = getAiWorkProfile(bookId) as { default_account_id?: number | null }
-  const account =
-    profile.default_account_id != null
-      ? (db.prepare('SELECT * FROM ai_accounts WHERE id = ?').get(profile.default_account_id) as any)
-      : (db.prepare('SELECT * FROM ai_accounts ORDER BY is_default DESC, id LIMIT 1').get() as any)
+  const account = profile.default_account_id != null
+    ? getAiAccountRuntimeConfig(profile.default_account_id)
+    : (() => {
+        const row = db.prepare('SELECT id FROM ai_accounts ORDER BY is_default DESC, id LIMIT 1').get() as
+          | { id?: number }
+          | undefined
+        return row?.id ? getAiAccountRuntimeConfig(row.id) : null
+      })()
 
   if (account) {
     return {
-      ai_provider: account.provider || 'openai',
-      ai_api_key: resolveCredential(account.credential_ref || ''),
-      ai_api_endpoint: account.api_endpoint || '',
-      ai_model: account.model || ''
+      ai_provider: account.ai_provider,
+      ai_api_key: account.ai_api_key,
+      ai_api_endpoint: account.ai_api_endpoint,
+      ai_model: account.ai_model
     }
   }
 

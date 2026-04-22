@@ -1,4 +1,6 @@
-export type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'error'
+export type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'installing' | 'error'
+
+export type UpdateRecoveryAction = 'check' | 'download' | 'install'
 
 export interface UpdateSnapshot {
   status: UpdateStatus
@@ -7,15 +9,19 @@ export interface UpdateSnapshot {
   releaseDate: string | null
   releaseNotesSummary: string | null
   errorMessage: string | null
+  errorRecoveryAction: UpdateRecoveryAction | null
 }
 
 export type UpdateEvent =
   | { type: 'checking' }
+  | { type: 'download-started' }
   | { type: 'update-available'; payload?: UpdateMetadata | null }
   | { type: 'download-progress'; downloadPercent: number }
   | { type: 'update-downloaded'; payload?: UpdateMetadata | null }
   | { type: 'update-not-available' }
-  | { type: 'error'; errorMessage: string }
+  | { type: 'installing' }
+  | { type: 'install-failed'; errorMessage: string }
+  | { type: 'error'; errorMessage: string; recoveryAction: UpdateRecoveryAction }
 
 export interface UpdateMetadata {
   version?: string | null
@@ -30,7 +36,8 @@ export function createIdleUpdateSnapshot(): UpdateSnapshot {
     downloadPercent: 0,
     releaseDate: null,
     releaseNotesSummary: null,
-    errorMessage: null
+    errorMessage: null,
+    errorRecoveryAction: null
   }
 }
 
@@ -86,15 +93,25 @@ export function reduceUpdateSnapshot(current: UpdateSnapshot, event: UpdateEvent
       return {
         ...current,
         status: 'checking',
-        errorMessage: null
+        errorMessage: null,
+        errorRecoveryAction: null
+      }
+    case 'download-started':
+      return {
+        ...current,
+        status: 'downloading',
+        downloadPercent: clampPercent(current.downloadPercent),
+        errorMessage: null,
+        errorRecoveryAction: null
       }
     case 'update-available':
       return applyMetadata(
         {
           ...current,
-          status: 'downloading',
+          status: 'available',
           downloadPercent: 0,
-          errorMessage: null
+          errorMessage: null,
+          errorRecoveryAction: null
         },
         event.payload
       )
@@ -103,7 +120,8 @@ export function reduceUpdateSnapshot(current: UpdateSnapshot, event: UpdateEvent
         ...current,
         status: 'downloading',
         downloadPercent: clampPercent(event.downloadPercent),
-        errorMessage: null
+        errorMessage: null,
+        errorRecoveryAction: null
       }
     case 'update-downloaded':
       return applyMetadata(
@@ -111,17 +129,34 @@ export function reduceUpdateSnapshot(current: UpdateSnapshot, event: UpdateEvent
           ...current,
           status: 'ready',
           downloadPercent: 100,
-          errorMessage: null
+          errorMessage: null,
+          errorRecoveryAction: null
         },
         event.payload
       )
     case 'update-not-available':
       return createIdleUpdateSnapshot()
+    case 'installing':
+      return {
+        ...current,
+        status: 'installing',
+        errorMessage: null,
+        errorRecoveryAction: null
+      }
+    case 'install-failed':
+      return {
+        ...current,
+        status: 'ready',
+        downloadPercent: current.downloadPercent > 0 ? current.downloadPercent : 100,
+        errorMessage: event.errorMessage,
+        errorRecoveryAction: 'install'
+      }
     case 'error':
       return {
-        ...createIdleUpdateSnapshot(),
+        ...current,
         status: 'error',
-        errorMessage: event.errorMessage
+        errorMessage: event.errorMessage,
+        errorRecoveryAction: event.recoveryAction
       }
   }
 }

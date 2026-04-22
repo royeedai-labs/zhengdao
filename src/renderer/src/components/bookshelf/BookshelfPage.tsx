@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { PenTool, Plus, HelpCircle, Search, LayoutGrid, List, Trash2 } from 'lucide-react'
+import { PenTool, Plus, HelpCircle, Search, LayoutGrid, List, Trash2, Info } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useUIStore } from '@/stores/ui-store'
 import BookCard from './BookCard'
-import UpdateActionButton from '@/components/shared/UpdateActionButton'
 import AppBrand from '@/components/shared/AppBrand'
 import { getCurrentTitlebarSafeArea } from '@/utils/window-shell'
 
@@ -57,7 +56,15 @@ export default function BookshelfPage() {
           <AppBrand />
         </div>
         <div className="no-drag flex items-center gap-2">
-          <UpdateActionButton variant="bookshelf" />
+          <button
+            type="button"
+            onClick={() => openModal('appSettings')}
+            className="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded transition"
+            aria-label="应用设置 / 关于"
+            title="应用设置 / 关于"
+          >
+            <Info size={18} />
+          </button>
           <button
             onClick={() => openModal('help')}
             className="p-2 text-[var(--text-muted)] hover:text-[var(--accent-primary)] rounded transition"

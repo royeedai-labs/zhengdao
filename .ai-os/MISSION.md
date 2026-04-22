@@ -52,6 +52,7 @@
 - **默认会话恢复入口**：`.ai-os/lanes/default/STATE.md`
 - **现有 lane**：
   - `default`：Windows 安装版桌面壳层与品牌图标收口
+  - `update-experience-redesign`：应用内更新体验重构与全局“应用设置 / 关于”入口
   - `gemini-free-ai`：Gemini API Key 免费层与 Gemini CLI 登录双通道
   - `ai-chat-assistant`：AI 创作助手、会话、草稿篮和 Gemini 3 Pro 流式体验
   - `license-policy`：开源许可证收紧与授权口径统一

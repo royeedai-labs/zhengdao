@@ -1,0 +1,74 @@
+version: 1
+baseline_id: "CR-20260423-013500-update-experience-redesign"
+scope:
+  mode: "change"
+  focus: "app-update-experience"
+  quality_tier: "standard"
+
+tasks:
+  - id: TASK-UPD-001
+    title: "建立 update-experience-redesign lane 工件"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    requirement_refs:
+      - "REQ-UPD-001"
+      - "REQ-UPD-002"
+      - "REQ-UPD-003"
+      - "REQ-UPD-004"
+      - "REQ-UPD-005"
+    verification_required:
+      - "artifact-review"
+
+  - id: TASK-UPD-002
+    title: "重构 shared / main / preload 更新状态机与手动下载链路"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "shared-update"
+      - "main-updater"
+      - "ipc-preload"
+    verification_required:
+      - "targeted vitest"
+      - "npm run build"
+
+  - id: TASK-UPD-003
+    title: "新增全局应用设置 / 关于模态页并接入自动弹框"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    affected_components:
+      - "renderer-modal"
+      - "workspace-topbar"
+      - "bookshelf-topbar"
+    verification_required:
+      - "targeted vitest"
+      - "npm run build"
+
+  - id: TASK-UPD-004
+    title: "同步 README / SUPPORT / Help 更新口径"
+    status: done
+    owner: AI
+    risk: low
+    priority: P2
+    approval_required: "confirmed"
+    verification_required:
+      - "doc-review"
+
+  - id: TASK-UPD-005
+    title: "执行 updater focused 验证并补 failure mode guard"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: "confirmed"
+    verification_required:
+      - "npx vitest run updater-focused"
+      - "npm run build"

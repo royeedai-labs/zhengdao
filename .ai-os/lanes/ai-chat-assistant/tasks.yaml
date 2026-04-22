@@ -68,3 +68,23 @@ tasks:
     title: "调整 AI 悬浮入口拖拽与展开态遮挡"
     status: completed
     acceptance: ["AC-AI-001"]
+  - id: TASK-AI-CHAT-018
+    title: "统一所有活跃 AI 入口到解析后的全局账号配置链路"
+    status: in_progress
+    acceptance: ["AC-AI-016"]
+  - id: TASK-AI-CHAT-019
+    title: "实现 manual 上下文勾选与 smart-minimal 上下文裁剪修正"
+    status: pending
+    acceptance: ["AC-AI-005", "AC-AI-017"]
+  - id: TASK-AI-CHAT-020
+    title: "补齐 AI Dock 停止生成、会话标题自动生成与手动重命名"
+    status: pending
+    acceptance: ["AC-AI-018", "AC-AI-019"]
+  - id: TASK-AI-CHAT-021
+    title: "扩展全局账号 provider 连通性检测并收口风格分析触发方式"
+    status: pending
+    acceptance: ["AC-AI-020", "AC-AI-021"]
+  - id: TASK-AI-CHAT-022
+    title: "补充 focused tests 与构建验证"
+    status: pending
+    acceptance: ["AC-AI-016", "AC-AI-017", "AC-AI-018", "AC-AI-019", "AC-AI-020", "AC-AI-021"]

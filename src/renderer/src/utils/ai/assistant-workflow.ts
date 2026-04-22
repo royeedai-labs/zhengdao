@@ -52,9 +52,15 @@ export type AiContextChip = {
   enabled: boolean
 }
 
+export type AiContextBlock = {
+  chip: AiContextChip
+  body: string
+}
+
 export type AiAssistantContext = {
   contextText: string
   chips: AiContextChip[]
+  blocks?: AiContextBlock[]
 }
 
 export type AiSelectionSnapshot = {
@@ -106,6 +112,68 @@ function section(title: string, body: string | null | undefined): string {
   return `## ${title}\n${body!.trim()}`
 }
 
+function buildContextText(blocks: AiContextBlock[]): string {
+  return blocks
+    .filter((block) => block.chip.enabled && nonEmpty(block.body))
+    .map((block) => block.body)
+    .join('\n\n')
+}
+
+function normalizeMatchCandidate(value: string, maxLength = 24): string {
+  const text = value.replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  return text.length > maxLength ? text.slice(0, maxLength) : text
+}
+
+function isMentioned(source: string, candidate: string): boolean {
+  const haystack = source.replace(/\s+/g, ' ').trim()
+  const needle = normalizeMatchCandidate(candidate)
+  if (!haystack || !needle || needle.length < 2) return false
+  return haystack.includes(needle)
+}
+
+function createContextBlock(input: {
+  id: string
+  kind: AiContextChipKind
+  label: string
+  enabled: boolean
+  body: string
+}): AiContextBlock | null {
+  if (!nonEmpty(input.body)) return null
+  return {
+    chip: {
+      id: input.id,
+      kind: input.kind,
+      label: input.label,
+      enabled: input.enabled
+    },
+    body: input.body
+  }
+}
+
+export function applyAssistantContextSelection(
+  context: AiAssistantContext,
+  enabledChipIds: Iterable<string>
+): AiAssistantContext {
+  if (!context.blocks) return context
+
+  const enabled = new Set(enabledChipIds)
+  const blocks = context.blocks.map((block) => ({
+    ...block,
+    chip: {
+      ...block.chip,
+      enabled: enabled.has(block.chip.id)
+    }
+  }))
+
+  return {
+    ...context,
+    blocks,
+    chips: blocks.map((block) => block.chip),
+    contextText: buildContextText(blocks)
+  }
+}
+
 export function resolveSkillForBook(
   base: AiSkillTemplate,
   override?: AiSkillOverride | null
@@ -144,73 +212,95 @@ export function buildAssistantContext(input: {
   foreshadowings?: Array<{ id: number; text: string; status: string }>
   plotNodes?: Array<{ id: number; title: string; description?: string; chapter_number?: number }>
 }): AiAssistantContext {
-  const chips: AiContextChip[] = []
-  const blocks: string[] = []
   const policy = input.policy || 'smart_minimal'
   const maxChapterChars = policy === 'full' ? 16000 : 2600
+  const defaultEnabled = policy !== 'manual'
+  const referenceText = `${input.selectedText || ''}\n${input.currentChapter?.plainText || ''}`.trim()
+  const blocks: AiContextBlock[] = []
 
-  if (nonEmpty(input.selectedText)) {
-    chips.push({ id: 'selection', kind: 'selection', label: '选中文本', enabled: true })
-    blocks.push(section('选中文本', clip(input.selectedText || '', 1600)))
-  }
+  const selectionBlock = createContextBlock({
+    id: 'selection',
+    kind: 'selection',
+    label: '选中文本',
+    enabled: defaultEnabled,
+    body: section('选中文本', clip(input.selectedText || '', 1600))
+  })
+  if (selectionBlock) blocks.push(selectionBlock)
 
-  if (input.currentChapter) {
-    chips.push({
-      id: `chapter:${input.currentChapter.id}`,
-      kind: 'chapter',
-      label: input.currentChapter.title,
-      enabled: true
-    })
-    blocks.push(
-      section(
-        `当前章节：${input.currentChapter.title}`,
-        clip(input.currentChapter.plainText || '', maxChapterChars)
-      )
+  const chapterBlock = input.currentChapter
+    ? createContextBlock({
+        id: `chapter:${input.currentChapter.id}`,
+        kind: 'chapter',
+        label: input.currentChapter.title,
+        enabled: defaultEnabled,
+        body: section(
+          `当前章节：${input.currentChapter.title}`,
+          clip(input.currentChapter.plainText || '', maxChapterChars)
+        )
+      })
+    : null
+  if (chapterBlock) blocks.push(chapterBlock)
+
+  const rawCharacters =
+    policy === 'smart_minimal'
+      ? (input.characters || []).filter((character) => isMentioned(referenceText, character.name)).slice(0, 10)
+      : (input.characters || []).slice(0, policy === 'full' ? 20 : 12)
+  const charactersBlock = createContextBlock({
+    id: 'characters',
+    kind: 'characters',
+    label: '角色',
+    enabled: defaultEnabled,
+    body: section(
+      '角色',
+      rawCharacters
+        .map((character) => `- ${character.name}${character.description ? `：${character.description}` : ''}`)
+        .join('\n')
     )
-  }
+  })
+  if (charactersBlock) blocks.push(charactersBlock)
 
-  if ((input.characters || []).length > 0) {
-    chips.push({ id: 'characters', kind: 'characters', label: '相关角色', enabled: true })
-    blocks.push(
-      section(
-        '相关角色',
-        (input.characters || [])
-          .slice(0, 12)
-          .map((character) => `- ${character.name}${character.description ? `：${character.description}` : ''}`)
-          .join('\n')
-      )
+  const rawForeshadowings =
+    policy === 'smart_minimal'
+      ? (input.foreshadowings || []).filter((item) => isMentioned(referenceText, item.text)).slice(0, 8)
+      : (input.foreshadowings || []).slice(0, policy === 'full' ? 16 : 10)
+  const foreshadowingsBlock = createContextBlock({
+    id: 'foreshadowings',
+    kind: 'foreshadowings',
+    label: '伏笔',
+    enabled: defaultEnabled,
+    body: section(
+      '伏笔',
+      rawForeshadowings
+        .map((item) => `- [${item.status}] ${item.text}`)
+        .join('\n')
     )
-  }
+  })
+  if (foreshadowingsBlock) blocks.push(foreshadowingsBlock)
 
-  if ((input.foreshadowings || []).length > 0) {
-    chips.push({ id: 'foreshadowings', kind: 'foreshadowings', label: '伏笔', enabled: true })
-    blocks.push(
-      section(
-        '相关伏笔',
-        (input.foreshadowings || [])
-          .slice(0, 10)
-          .map((item) => `- [${item.status}] ${item.text}`)
-          .join('\n')
-      )
+  const rawPlotNodes =
+    policy === 'smart_minimal'
+      ? (input.plotNodes || [])
+          .filter((node) => isMentioned(referenceText, node.title) || isMentioned(referenceText, node.description || ''))
+          .slice(0, 8)
+      : (input.plotNodes || []).slice(0, policy === 'full' ? 16 : 10)
+  const plotNodesBlock = createContextBlock({
+    id: 'plot_nodes',
+    kind: 'plot_nodes',
+    label: '剧情节点',
+    enabled: defaultEnabled,
+    body: section(
+      '剧情节点',
+      rawPlotNodes
+        .map((node) => `- Ch${node.chapter_number ?? '?'} ${node.title}${node.description ? `：${node.description}` : ''}`)
+        .join('\n')
     )
-  }
-
-  if ((input.plotNodes || []).length > 0) {
-    chips.push({ id: 'plot_nodes', kind: 'plot_nodes', label: '剧情节点', enabled: true })
-    blocks.push(
-      section(
-        '相关剧情节点',
-        (input.plotNodes || [])
-          .slice(0, 10)
-          .map((node) => `- Ch${node.chapter_number ?? '?'} ${node.title}${node.description ? `：${node.description}` : ''}`)
-          .join('\n')
-      )
-    )
-  }
+  })
+  if (plotNodesBlock) blocks.push(plotNodesBlock)
 
   return {
-    contextText: blocks.filter(Boolean).join('\n\n'),
-    chips
+    blocks,
+    chips: blocks.map((block) => block.chip),
+    contextText: buildContextText(blocks)
   }
 }
 

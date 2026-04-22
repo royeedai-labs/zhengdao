@@ -3,6 +3,10 @@ impact_rules:
     run:
       - "npx vitest run src/renderer/src/components/ai/__tests__/*.test.ts"
       - "npm run build"
+  - when: "ai-config-truth-source-change"
+    run:
+      - "npx vitest run src/renderer/src/utils/ai/__tests__/provider-routing.test.ts src/renderer/src/utils/ai/__tests__/assistant-workflow.test.ts"
+      - "npm run build"
   - when: "ai-repository-or-migration-change"
     run:
       - "npx vitest run src/main/database/__tests__/ai-assistant-repo.test.ts src/main/database/__tests__/migrations.test.ts"
@@ -38,6 +42,18 @@ failure_modes:
     scenario: "AI assistant is open but the collapsed floating X remains over the input area or send button"
     expected: "Collapsed launcher only renders when the assistant is closed; open assistant is collapsed from its title bar"
     guard: "src/renderer/src/components/ai/__tests__/panel-layout.test.ts and manual UI check"
+  - id: FM-AI-006
+    scenario: "User has already migrated to global accounts, but summary / inline complete / consistency check / style analysis still read empty project_config AI fields and fail"
+    expected: "All active AI entry points resolve config from the shared account chain before calling providers"
+    guard: "provider-routing focused tests and manual smoke on legacy entry points"
+  - id: FM-AI-007
+    scenario: "Profile context_policy is manual, but assistant still silently sends all context chips"
+    expected: "Only explicitly enabled chips appear in prompt context"
+    guard: "assistant-workflow focused tests and manual UI check"
+  - id: FM-AI-008
+    scenario: "User stops an in-flight generation and the UI shows a failure or loses all partial output"
+    expected: "Stop ends the request without an error banner and preserves partial content"
+    guard: "gemini-cli-service / provider-routing focused tests and manual UI check"
 
 guards:
   - ".ai-os/lanes/ai-chat-assistant/evals/gemini-cli-stream-empty-response.md"

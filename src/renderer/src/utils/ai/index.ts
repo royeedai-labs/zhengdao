@@ -34,6 +34,13 @@ type PromptRequest = {
   temperature: number
 }
 
+type AiStreamBridgeHandle =
+  | {
+      requestId?: string
+      cleanup?: () => void
+    }
+  | (() => void)
+
 function normalizeProvider(provider?: string): AiProvider {
   if (provider && PROVIDERS.has(provider as AiProvider)) return provider as AiProvider
   return 'openai'
@@ -62,6 +69,14 @@ export function isAiConfigReady(config?: Partial<AiCallerConfig> | null): boolea
   return Boolean(config.ai_api_key?.trim())
 }
 
+export async function getResolvedAiConfigForBook(
+  bookId: number | null | undefined
+): Promise<AiCallerConfig | null> {
+  if (bookId == null) return null
+  if (typeof window === 'undefined' || !window.api?.aiGetResolvedConfigForBook) return null
+  return (window.api.aiGetResolvedConfigForBook(bookId) as Promise<AiCallerConfig>) || null
+}
+
 function bridgeComplete(request: AiBridgeCompleteRequest): Promise<AiResponse> {
   if (typeof window === 'undefined' || !window.api?.aiComplete) {
     return Promise.resolve({
@@ -72,12 +87,20 @@ function bridgeComplete(request: AiBridgeCompleteRequest): Promise<AiResponse> {
   return window.api.aiComplete(request) as Promise<AiResponse>
 }
 
-async function bridgeStreamComplete(request: AiBridgeCompleteRequest, callbacks: AiStreamCallbacks): Promise<boolean> {
+async function bridgeStreamComplete(
+  request: AiBridgeCompleteRequest,
+  callbacks: AiStreamCallbacks,
+  opts?: AiFetchOpts
+): Promise<boolean> {
   if (typeof window === 'undefined' || !window.api?.aiStreamComplete) return false
   await new Promise<void>((resolve) => {
-    let cleanup: (() => void) | void
+    let cleanup: (() => void) | undefined
+    let requestId = ''
     let settled = false
+    let removeAbortListener: (() => void) | undefined
     const runCleanup = () => {
+      removeAbortListener?.()
+      removeAbortListener = undefined
       cleanup?.()
       cleanup = undefined
     }
@@ -87,7 +110,7 @@ async function bridgeStreamComplete(request: AiBridgeCompleteRequest, callbacks:
       runCleanup()
       resolve()
     }
-    cleanup = window.api.aiStreamComplete(request, {
+    const bridgeHandle = window.api.aiStreamComplete(request, {
       onToken: callbacks.onToken,
       onComplete: (content) => {
         callbacks.onComplete(content)
@@ -97,7 +120,29 @@ async function bridgeStreamComplete(request: AiBridgeCompleteRequest, callbacks:
         callbacks.onError(error)
         finish()
       }
-    }) as (() => void) | void
+    }) as AiStreamBridgeHandle
+
+    if (typeof bridgeHandle === 'function') {
+      cleanup = bridgeHandle
+    } else if (bridgeHandle) {
+      cleanup = bridgeHandle.cleanup
+      requestId = bridgeHandle.requestId || ''
+    }
+
+    if (opts?.signal) {
+      const cancelOnAbort = () => {
+        if (!requestId || typeof window === 'undefined' || !window.api?.aiCancelStream) return
+        window.api.aiCancelStream(requestId)
+      }
+      if (opts.signal.aborted) {
+        cancelOnAbort()
+      } else {
+        opts.signal.addEventListener('abort', cancelOnAbort, { once: true })
+        removeAbortListener = () => {
+          opts.signal?.removeEventListener('abort', cancelOnAbort)
+        }
+      }
+    }
     if (settled) runCleanup()
   })
   return true
@@ -159,7 +204,7 @@ async function streamWithProvider(
       maxTokens: request.maxTokens,
       temperature: request.temperature
     } satisfies AiBridgeCompleteRequest
-    if (await bridgeStreamComplete(bridgeRequest, callbacks)) return
+    if (await bridgeStreamComplete(bridgeRequest, callbacks, opts)) return
     const result = await bridgeComplete(bridgeRequest)
     if (result.error) {
       callbacks.onError(result.error)

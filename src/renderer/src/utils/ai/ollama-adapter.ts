@@ -150,6 +150,10 @@ export class OllamaAdapter implements AiProviderAdapter {
 
       callbacks.onComplete(full)
     } catch (err: unknown) {
+      if ((err as Error).name === 'AbortError') {
+        callbacks.onComplete(full)
+        return
+      }
       callbacks.onError(`AI 请求失败: ${(err as Error).message}`)
     }
   }
