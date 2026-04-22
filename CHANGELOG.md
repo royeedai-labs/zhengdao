@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.2.2 - 2026-04-22
+
+### Release
+
+- Fix native rebuild scope for release packaging
+
+### Changed
+
+- Publish the AI creative assistant release as `v1.2.2` after `v1.2.1` exposed a native rebuild scope issue in GitHub Actions.
+- Keep the AI feature scope unchanged from `v1.2.0`; this patch only changes release infrastructure.
+
+### Fixed
+
+- Limit Electron native rebuilds to `better-sqlite3` with `@electron/rebuild --only better-sqlite3`, avoiding unintended rebuilds of Gemini CLI transitive native modules such as `node-pty`.
+- Add release script coverage so the rebuild command cannot regress back to `--which-module`.
+
+### Docs
+
+- Document why release packaging must rebuild only `better-sqlite3`.
+
 ## v1.2.1 - 2026-04-22
 
 ### Release
