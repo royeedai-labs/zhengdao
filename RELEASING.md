@@ -84,9 +84,14 @@ npm run release:publish -- patch "简短发布摘要"
 
 ## CI 原生模块注意事项
 
-`npm ci` 会触发 `postinstall -> electron-builder install-app-deps`，这会把 `better-sqlite3`
-重编到 Electron ABI。GitHub Actions 中测试运行在 Node.js 下，所以 release workflow 会在
-`npm ci` 后、`npm test` 前执行一次 `npm rebuild better-sqlite3`，把测试阶段恢复到 Node ABI。
+release workflow 会先把 npm 固定到 `10.9.8`，规避部分 Node 20 runner 自带 npm 在
+`npm ci` 结束阶段触发 `Exit handler never called` 的问题。随后使用
+`npm ci --ignore-scripts` 安装依赖，避免 `postinstall -> electron-builder install-app-deps`
+提前把原生模块切到 Electron ABI。
+
+跳过安装脚本后，release workflow 会显式执行 `npm rebuild electron` 恢复 Electron runtime。
+GitHub Actions 中测试运行在 Node.js 下，所以 workflow 随后会在 `npm test` 前执行一次
+`npm rebuild better-sqlite3`，把测试阶段恢复到 Node ABI。
 测试和构建完成后，release workflow 必须在打包前执行
 `node scripts/release/rebuild-electron-native.mjs <arch>`，强制把 `better-sqlite3`
 切回 Electron ABI；随后执行 `node scripts/release/verify-electron-native.mjs`，用 Electron runtime

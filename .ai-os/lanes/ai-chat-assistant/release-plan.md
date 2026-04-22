@@ -43,3 +43,4 @@
 - macOS 仍按现有配置产出未签名/未公证包，适合公开测试分发，不等于完成正式签名自动更新链路。
 - Gemini 3 Pro 首 token 延迟取决于上游 Gemini CLI / 模型；应用侧只保证等待态与真实 chunk 队列渲染。
 - 发布前必须提交所有功能改动，让 `release:publish` 的 clean worktree 检查通过。
+- 2026-04-22 发布后检查发现 `v1.2.0` 首次 release workflow 在 macOS / Windows 的 `npm ci` 步骤失败，仅生成 Source code 资产；修复策略为 CI 固定 npm `10.9.8`、改用 `npm ci --ignore-scripts`，并显式执行 `npm rebuild electron` / `npm rebuild better-sqlite3`，后续需重新触发 tag workflow 或改发补丁版本。
