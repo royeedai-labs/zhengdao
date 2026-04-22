@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.2.3 - 2026-04-22
+
+### Release
+
+- Fix release packaging native rebuild
+
+### Changed
+
+- Publish the AI creative assistant release as `v1.2.3` after `v1.2.2` exposed an electron-builder packaging rebuild issue in GitHub Actions.
+- Keep the AI feature scope unchanged from `v1.2.0`; this patch only changes release packaging infrastructure.
+
+### Fixed
+
+- Disable electron-builder's default all-dependency native rebuild so release jobs use the controlled `better-sqlite3` Electron ABI rebuild that is already verified before packaging.
+- Add release config coverage to prevent accidentally re-enabling electron-builder's default native rebuild.
+
+### Docs
+
+- Document why `electron-builder.config.ts` must keep `npmRebuild: false` for release packaging.
+
 ## v1.2.2 - 2026-04-22
 
 ### Release
