@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.3.1 - 2026-04-23
+
+### Release
+
+- Publish an updater reliability patch after `v1.3.0`.
+
+### Changed
+
+- Trigger a debounced update check when the packaged app launches, reopens a window, or becomes active, so long-running sessions can still discover new releases.
+- Clean GitHub / `electron-updater` release notes into plain text before showing them in Application Settings -> Updates and About.
+- On the current unsigned macOS public builds, replace in-app download / install with a direct download-page action until signing and notarization are available.
+
+### Fixed
+
+- Prevent users from missing an available update after reopening the app without quitting it first.
+- Avoid rendering raw HTML tags inside the update log panel.
+- Avoid ShipIt / Squirrel.Mac signature-validation failures caused by trying to install unsigned macOS builds from inside the app.
+
+### Docs
+
+- Record the updater reopen-check, HTML release-notes cleanup, macOS manual-download fallback, and release verification guards in the lane artifacts.
+
 ## v1.3.0 - 2026-04-23
 
 ### Release
