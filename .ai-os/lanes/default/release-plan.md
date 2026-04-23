@@ -1,5 +1,40 @@
 # 证道发布计划
 
+## Windows 安装 / 覆盖安装修复计划
+
+> 本节记录 2026-04-23 的 `CR-20260423-235246-windows-install-upgrade-repair`。该修复属于 high-risk，因为它影响 Windows 安装目录、卸载入口和用户数据保护。
+
+### 1. 交付前检查
+
+- [x] 用户确认 Windows 卸载错误与覆盖安装仍为老版问题可执行
+- [x] high-risk CR 已记录：`CR-20260423-235246-windows-install-upgrade-repair`
+- [x] 风险登记已补：安装目录分叉、旧卸载器损坏、用户数据保护
+- [x] `electron-builder.config.ts` 已禁止修改安装目录
+- [x] `deleteAppDataOnUninstall` 明确为 `false`
+- [x] `npm test -- scripts/release/electron-builder-config.test.ts` 已通过
+- [x] `npm run build` 已通过
+- [x] `git diff --check` 已通过
+- [ ] Windows 覆盖安装实机 smoke 完成
+- [ ] Windows 旧损坏卸载器恢复路径人工确认
+
+### 2. 发布步骤
+
+1. [AI 已执行] 排查 NSIS 完整性错误与覆盖安装路径风险。
+2. [AI 已执行] 收口 NSIS 安装目录、快捷方式和卸载显示配置。
+3. [AI 已执行] 补安装器配置测试与发布说明恢复步骤。
+4. [AI 已执行] 运行 `npm test -- scripts/release/electron-builder-config.test.ts`。
+5. [AI 已执行] 运行 `npm run build` 与 `git diff --check`。
+6. [需人工执行] 在 Windows 上用新版安装包覆盖安装旧版，确认开始菜单 / 桌面快捷方式打开新版本。
+7. [需人工执行] 对旧损坏卸载器场景按 `RELEASING.md` 恢复步骤清理，不删除用户数据。
+
+### 3. 回滚触发条件
+
+- 新版 Windows installer 无法正常安装。
+- 覆盖安装后快捷方式仍指向旧目录。
+- 卸载流程误删用户数据目录或 `zhengdao.db`。
+
+---
+
 ## v1.2.4 本地未提交改动发布收口
 
 > 本节记录 2026-04-23 的 `v1.2.4` patch release。该版本纳入当前已验证的本地未提交改动：AI-OS v9 交付治理迁移、工作区与主题视觉收口、AI 助手入口拖动、关系图谱布局修复和发布说明补齐。

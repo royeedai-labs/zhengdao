@@ -23,6 +23,17 @@ impact_rules:
       - "code review: AppSettings appearance/account/update tabs"
       - "code review: TopBar has no theme/account settings menu"
       - "code review: AI global accounts are under AppSettings"
+  - when: "windows-tray-icon-fix"
+    run:
+      - "npm test -- src/shared/__tests__/desktop-tray.test.ts src/shared/__tests__/window-shell.test.ts"
+      - "npm run build"
+      - "Windows real-device tray visibility check or explicit manual blocker"
+  - when: "windows-installer-upgrade-fix"
+    run:
+      - "npm test -- scripts/release/electron-builder-config.test.ts"
+      - "npm run build"
+      - "git diff --check"
+      - "Windows real-device uninstall / overwrite install smoke or explicit manual blocker"
 
 failure_modes:
   - id: FM-DEF-001
@@ -69,6 +80,18 @@ failure_modes:
     scenario: "AI global account status detection ignores the current draft token or the saved account secret and always reports API Key / Token missing"
     expected: "Status checks forward the draft provider config and saved account id so unsaved drafts and persisted accounts can both be probed correctly"
     guard: "src/renderer/src/utils/ai/__tests__/global-account-status.test.ts plus npm run build"
+  - id: FM-DEF-012
+    scenario: "Windows installer has icon resources but the running app never creates a system tray icon"
+    expected: "Windows runtime creates an Electron Tray, close hides the main window to tray, and the tray menu has a clear quit action"
+    guard: "src/shared/__tests__/desktop-tray.test.ts plus npm run build"
+  - id: FM-DEF-013
+    scenario: "Windows overwrite install is allowed to pick a different directory, leaving shortcuts or pinned entries opening the old version"
+    expected: "NSIS assisted installer cannot change the installation directory and keeps shortcuts bound to the upgraded installation"
+    guard: "scripts/release/electron-builder-config.test.ts plus Windows overwrite install smoke"
+  - id: FM-DEF-014
+    scenario: "Uninstall recovery deletes user writing data while repairing a broken NSIS uninstaller"
+    expected: "Uninstall configuration and recovery docs explicitly preserve userData and zhengdao.db"
+    guard: "scripts/release/electron-builder-config.test.ts plus RELEASING.md recovery checklist"
 
 guards:
   - ".ai-os/lanes/default/evals/ai-os-v9-lane-normalization.md"

@@ -85,6 +85,22 @@ Release 正文；如果正文缺少更新日志，本次发布不算完成。
 - Release 中能看到安装包和 `latest*.yml`
 - `package.json` 版本、Git tag 和 `CHANGELOG.md` 顶部版本一致
 - Windows 打包版能正常拉到更新元数据
+- Windows 覆盖安装会复用旧安装路径，开始菜单 / 桌面快捷方式打开的是新版本
+- Windows 控制面板只保留稳定的“证道”卸载入口，卸载不会删除用户作品数据库
+
+## Windows 安装 / 卸载恢复
+
+Windows NSIS 报 `Installer integrity check has failed` 时，错误发生在安装 / 卸载脚本运行前，通常表示当前运行的 installer 或旧安装目录中的 uninstaller 二进制已经损坏。先重新下载 GitHub Release 里的完整安装包，并核对 `latest.yml` 中的文件大小；不要继续使用微信、浏览器缓存或中断下载得到的旧文件。
+
+如果控制面板卸载旧版仍报完整性错误，按以下顺序恢复：
+
+1. 退出证道，包括托盘中的后台进程。
+2. 备份用户数据目录中的 `zhengdao.db`。
+3. 删除旧安装目录中损坏的程序文件，不删除用户数据目录。
+4. 如控制面板仍残留旧条目，使用 Windows “程序安装和卸载疑难解答”清理损坏卸载项。
+5. 运行新版 `zhengdao-<version>-x64-setup.exe`，不要改安装目录。
+
+`electron-builder.config.ts` 中的 Windows NSIS 配置必须保持 `allowToChangeInstallationDirectory: false`，避免覆盖安装时装到新目录而旧快捷方式仍打开老版本。
 
 ## GitHub Release 正文必要内容
 

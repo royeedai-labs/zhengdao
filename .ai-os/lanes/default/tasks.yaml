@@ -209,6 +209,96 @@ milestones:
       - "artifact-proof"
       - "package-smoke"
 
+  - id: TASK-AI-SHELL-005
+    title: "补齐 Windows 系统托盘图标与显式退出路径"
+    milestone: M4
+    parent: null
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    wave: 12
+    execution_role: "implementer"
+    approval_required: "confirmed"
+    depends_on:
+      - "TASK-AI-SHELL-004"
+    requirement_refs:
+      - "REQ-SHELL-005"
+    acceptance_refs:
+      - "AC-SHELL-005"
+    context_files:
+      - "src/main/index.ts"
+      - "src/main/window-shell.ts"
+      - "src/shared/window-shell.ts"
+      - "resources/icon.png"
+    outputs:
+      - "src/main/desktop-tray.ts"
+      - "src/shared/desktop-tray.ts"
+      - "src/shared/__tests__/desktop-tray.test.ts"
+    affected_components:
+      - "main"
+      - "shared"
+      - "desktop-shell"
+    verification_required:
+      - "npm test -- src/shared/__tests__/desktop-tray.test.ts src/shared/__tests__/window-shell.test.ts"
+      - "npm run build"
+    measurable_outcome:
+      - "Windows 运行后创建通知区域托盘图标，关闭窗口隐藏到托盘，托盘菜单可显式退出"
+    definition_of_done:
+      - "Windows 平台启用托盘，macOS / Linux 不改变当前行为"
+      - "托盘菜单具备显示、隐藏和退出"
+      - "关闭窗口隐藏到托盘，但显式退出仍关闭应用"
+    evidence_required:
+      - "test-log"
+      - "build-log"
+
+  - id: TASK-AI-SHELL-006
+    title: "修复 Windows 卸载错误与覆盖安装路径分叉风险"
+    milestone: M4
+    parent: null
+    status: done
+    owner: AI
+    risk: high
+    priority: P0
+    wave: 13
+    execution_role: "implementer"
+    approval_required: true
+    approval_status: "user-confirmed"
+    depends_on:
+      - "TASK-AI-SHELL-004"
+    requirement_refs:
+      - "REQ-SHELL-006"
+    acceptance_refs:
+      - "AC-SHELL-006"
+    context_files:
+      - "electron-builder.config.ts"
+      - "scripts/release/electron-builder-config.test.ts"
+      - "RELEASING.md"
+    outputs:
+      - "electron-builder.config.ts"
+      - "scripts/release/electron-builder-config.test.ts"
+      - "RELEASING.md"
+    affected_components:
+      - "release"
+      - "installer"
+      - "desktop-shell"
+    verification_required:
+      - "npm test -- scripts/release/electron-builder-config.test.ts"
+      - "npm run build"
+      - "git diff --check"
+      - "Windows real-device uninstall / overwrite install smoke or explicit manual blocker"
+    measurable_outcome:
+      - "Windows 覆盖安装不会允许选择新目录，卸载配置不删除用户数据，发布说明包含旧卸载器损坏恢复步骤"
+    definition_of_done:
+      - "NSIS assisted installer 不再展示目录选择页"
+      - "卸载显示名稳定为证道"
+      - "卸载配置明确不删除 userData"
+      - "配置测试和构建通过"
+    evidence_required:
+      - "test-log"
+      - "build-log"
+      - "manual-windows-smoke-or-blocker"
+
 tasks:
   - id: TASK-AI-OSS-001
     title: "同步开源发布与版本治理变更基线"

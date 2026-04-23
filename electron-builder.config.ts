@@ -10,13 +10,15 @@ const config: Configuration = {
     buildResources: 'resources',
     output: 'dist'
   },
-  asarUnpack: [
-    'node_modules/@google/gemini-cli/**'
-  ],
+  asarUnpack: ['node_modules/@google/gemini-cli/**'],
   extraResources: [
     {
       from: 'resources/icon.png',
       to: 'icon.png'
+    },
+    {
+      from: 'resources/icon.ico',
+      to: 'icon.ico'
     }
   ],
   npmRebuild: false,
@@ -53,10 +55,14 @@ const config: Configuration = {
   nsis: {
     oneClick: false,
     perMachine: false,
-    allowToChangeInstallationDirectory: true,
+    allowToChangeInstallationDirectory: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    deleteAppDataOnUninstall: false,
     installerIcon: 'resources/icon.ico',
     installerHeaderIcon: 'resources/icon.ico',
     uninstallerIcon: 'resources/icon.ico',
+    uninstallDisplayName: '证道',
     shortcutName: '证道'
   },
   linux: {

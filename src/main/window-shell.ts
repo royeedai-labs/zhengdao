@@ -1,20 +1,17 @@
 import { app, BrowserWindow, type BrowserWindowConstructorOptions } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import {
-  getDesktopWindowChrome,
-  normalizeDesktopShellPlatform,
-  shouldStripNativeMenu
-} from '../shared/window-shell'
+import { getDesktopWindowChrome, normalizeDesktopShellPlatform, shouldStripNativeMenu } from '../shared/window-shell'
 
-function resolveRuntimeIconPath(): string | undefined {
-  const candidates = [
-    join(process.resourcesPath, 'icon.png'),
-    join(process.resourcesPath, 'resources', 'icon.png'),
-    join(app.getAppPath(), 'resources', 'icon.png'),
-    join(__dirname, '../../resources/icon.png'),
-    join(process.cwd(), 'resources/icon.png')
+export function resolveRuntimeIconPath(fileNames: string[] = ['icon.png']): string | undefined {
+  const baseDirs = [
+    process.resourcesPath,
+    join(process.resourcesPath, 'resources'),
+    join(app.getAppPath(), 'resources'),
+    join(__dirname, '../../resources'),
+    join(process.cwd(), 'resources')
   ]
+  const candidates = baseDirs.flatMap((baseDir) => fileNames.map((fileName) => join(baseDir, fileName)))
 
   return candidates.find((candidate) => existsSync(candidate))
 }
