@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
-import { UpdaterController } from '../updater-controller'
+import { createIdleUpdateSnapshot } from '../../../shared/update'
+import { canStartLifecycleUpdateCheck, UpdaterController } from '../updater-controller'
 
 class FakeUpdater extends EventEmitter {
   autoDownload = false
@@ -23,6 +24,18 @@ class FakeUpdater extends EventEmitter {
 }
 
 describe('UpdaterController', () => {
+  it('only starts lifecycle checks from idle or retryable error states', () => {
+    const idle = createIdleUpdateSnapshot()
+
+    expect(canStartLifecycleUpdateCheck(idle)).toBe(true)
+    expect(canStartLifecycleUpdateCheck({ ...idle, status: 'error' })).toBe(true)
+    expect(canStartLifecycleUpdateCheck({ ...idle, status: 'checking' })).toBe(false)
+    expect(canStartLifecycleUpdateCheck({ ...idle, status: 'available' })).toBe(false)
+    expect(canStartLifecycleUpdateCheck({ ...idle, status: 'downloading' })).toBe(false)
+    expect(canStartLifecycleUpdateCheck({ ...idle, status: 'ready' })).toBe(false)
+    expect(canStartLifecycleUpdateCheck({ ...idle, status: 'installing' })).toBe(false)
+  })
+
   it('marks an update as available and only starts downloading after explicit user action', async () => {
     const updater = new FakeUpdater()
     const seen: Array<{ status: string; version: string | null }> = []
@@ -82,17 +95,13 @@ describe('UpdaterController', () => {
   it('falls back to a retryable ready state when quitAndInstall does not exit the app', () => {
     const updater = new FakeUpdater()
     let watchdog: (() => void) | null = null
-    const controller = new UpdaterController(
-      updater,
-      () => void 0,
-      {
-        setTimeout: (callback) => {
-          watchdog = callback
-          return 1 as unknown as ReturnType<typeof setTimeout>
-        },
-        clearTimeout: () => void 0
-      }
-    )
+    const controller = new UpdaterController(updater, () => void 0, {
+      setTimeout: (callback) => {
+        watchdog = callback
+        return 1 as unknown as ReturnType<typeof setTimeout>
+      },
+      clearTimeout: () => void 0
+    })
 
     controller.bind()
     updater.emit('update-downloaded', {

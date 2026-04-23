@@ -8,6 +8,8 @@ export interface UpdateSnapshot {
   downloadPercent: number
   releaseDate: string | null
   releaseNotesSummary: string | null
+  automaticUpdateUnsupportedReason: string | null
+  manualDownloadUrl: string | null
   errorMessage: string | null
   errorRecoveryAction: UpdateRecoveryAction | null
 }
@@ -36,6 +38,8 @@ export function createIdleUpdateSnapshot(): UpdateSnapshot {
     downloadPercent: 0,
     releaseDate: null,
     releaseNotesSummary: null,
+    automaticUpdateUnsupportedReason: null,
+    manualDownloadUrl: null,
     errorMessage: null,
     errorRecoveryAction: null
   }
@@ -52,19 +56,69 @@ function normalizeReleaseDate(value: string | Date | null | undefined): string |
   return value
 }
 
+const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*?>/i
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  apos: "'",
+  gt: '>',
+  lt: '<',
+  nbsp: ' ',
+  quot: '"'
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, raw: string) => {
+    const key = raw.toLowerCase()
+    if (key.startsWith('#x')) {
+      const codePoint = Number.parseInt(key.slice(2), 16)
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : entity
+    }
+    if (key.startsWith('#')) {
+      const codePoint = Number.parseInt(key.slice(1), 10)
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : entity
+    }
+    return HTML_ENTITIES[key] ?? entity
+  })
+}
+
+function normalizeReleaseNoteText(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const text = HTML_TAG_PATTERN.test(trimmed)
+    ? trimmed
+        .replace(/<\s*(script|style)[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+        .replace(/<\s*br\s*\/?>/gi, '\n')
+        .replace(/<\s*\/\s*(p|div|h[1-6]|tr|ul|ol)\s*>/gi, '\n')
+        .replace(/<\s*li(?:\s[^>]*)?>/gi, '\n- ')
+        .replace(/<\s*\/\s*li\s*>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+    : trimmed
+
+  const normalized = decodeHtmlEntities(text)
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+
+  return normalized || null
+}
+
 export function summarizeReleaseNotes(releaseNotes: unknown): string | null {
   if (typeof releaseNotes === 'string') {
-    const trimmed = releaseNotes.trim()
-    return trimmed ? trimmed : null
+    return normalizeReleaseNoteText(releaseNotes)
   }
 
   if (Array.isArray(releaseNotes)) {
     const text = releaseNotes
       .map((entry) => {
-        if (typeof entry === 'string') return entry.trim()
+        if (typeof entry === 'string') return normalizeReleaseNoteText(entry) ?? ''
         if (entry && typeof entry === 'object' && 'note' in entry) {
           const note = (entry as { note?: unknown }).note
-          return typeof note === 'string' ? note.trim() : ''
+          return typeof note === 'string' ? (normalizeReleaseNoteText(note) ?? '') : ''
         }
         return ''
       })
@@ -158,6 +212,18 @@ export function reduceUpdateSnapshot(current: UpdateSnapshot, event: UpdateEvent
         errorMessage: event.errorMessage,
         errorRecoveryAction: event.recoveryAction
       }
+  }
+}
+
+export function withManualUpdateFallback(
+  snapshot: UpdateSnapshot,
+  reason: string | null,
+  manualDownloadUrl: string | null
+): UpdateSnapshot {
+  return {
+    ...snapshot,
+    automaticUpdateUnsupportedReason: reason,
+    manualDownloadUrl
   }
 }
 

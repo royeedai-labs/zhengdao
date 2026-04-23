@@ -9,6 +9,13 @@
 - **核心设计决策**：自动检查但手动下载；更新入口从标题栏按钮迁移到全局模态页；安装失败 15 秒回退到可重试状态。
 - **确认状态**：confirmed。
 
+### 2026-04-23 修复设计补充
+
+- **生命周期检查**：打包版在窗口 attach 和应用 activate 时请求一次去抖检查；`checking/downloading/installing` 状态不重复触发；后台 6 小时定时检查保留。
+- **日志展示**：shared update 层负责把 updater `releaseNotes` 归一化为纯文本，renderer 不直接渲染 HTML。
+- **macOS 降级策略**：当前未签名公开测试包在 macOS 上只允许检查并提示手动下载；应用内下载 / 安装按钮隐藏，避免触发 Squirrel.Mac / ShipIt 签名校验失败。
+- **共享层副作用**：`UpdateSnapshot` 增加自动更新不支持原因和手动下载 URL；renderer 更新页依据 snapshot 控制主按钮。
+
 ## 2. 信息架构
 
 - **全局入口**：书架页和工作区标题栏新增“应用设置 / 关于”入口。
@@ -64,4 +71,5 @@ gates:
 risks:
   - "macOS 自动更新上线仍受签名 / 公证约束，本轮只保持现有提示，不解决平台签名问题。"
   - "GitHub Releases 元数据若缺失 release notes，模态页只能展示空日志占位。"
+  - "macOS 未签名包不能通过 Squirrel.Mac 自动安装；签名 / 公证链路完成前必须保持手动下载降级。"
 ```

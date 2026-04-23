@@ -7,6 +7,10 @@ impact_rules:
     run:
       - "npx vitest run src/renderer/src/utils/__tests__/install-update.test.ts src/renderer/src/utils/__tests__/update-prompt.test.ts"
       - "npm run build"
+  - when: "macos-auto-update-install-boundary-change"
+    run:
+      - "npx vitest run src/shared/__tests__/update.test.ts src/main/updater/__tests__/updater-controller.test.ts src/renderer/src/utils/__tests__/update-prompt.test.ts"
+      - "npm run build"
 
 failure_modes:
   - id: FM-UPD-001
@@ -17,6 +21,18 @@ failure_modes:
     scenario: "同一版本在后台多次检测到 update-available，应用反复自动弹出更新页"
     expected: "同版本只自动弹出一次；仍可从全局应用设置 / 关于手动重新进入"
     guard: "src/renderer/src/utils/__tests__/update-prompt.test.ts"
+  - id: FM-UPD-003
+    scenario: "应用已安装但长期未退出，发布新版本后用户重新打开窗口没有触发检查"
+    expected: "窗口 attach / 应用 activate 会请求去抖检查，非空闲更新状态不重复触发"
+    guard: "src/main/updater/__tests__/updater-controller.test.ts"
+  - id: FM-UPD-004
+    scenario: "GitHub / updater 返回 HTML release notes，更新页直接展示标签"
+    expected: "shared update 层输出纯文本更新日志"
+    guard: "src/shared/__tests__/update.test.ts"
+  - id: FM-UPD-005
+    scenario: "macOS 未签名公开测试包触发 ShipIt 自动安装并因签名资源校验失败"
+    expected: "macOS 当前未签名分发只展示手动下载入口，不触发应用内下载 / 安装"
+    guard: "src/shared/__tests__/update.test.ts and src/renderer/src/utils/__tests__/update-prompt.test.ts"
 
 guards:
   - "src/shared/__tests__/update.test.ts"

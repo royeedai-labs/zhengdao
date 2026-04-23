@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase } from './database/connection'
 import { registerIpcHandlers } from './ipc-handlers'
-import { attachUpdaterWindow } from './updater/service'
+import { attachUpdaterWindow, notifyUpdaterAppActivated } from './updater/service'
 import { applyDesktopWindowShell, getMainWindowShellOptions } from './window-shell'
 
 process.on('uncaughtException', (error) => {
@@ -75,6 +75,7 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    notifyUpdaterAppActivated()
   })
 })
 

@@ -3,6 +3,7 @@ import {
   CheckCircle,
   Cloud,
   Download,
+  ExternalLink,
   Info,
   KeyRound,
   Monitor,
@@ -17,6 +18,7 @@ import AppBrand from '@/components/shared/AppBrand'
 import { AccountSyncSettings } from '@/components/modals/LoginModal'
 import { useUIStore } from '@/stores/ui-store'
 import { useUpdateStore } from '@/stores/update-store'
+import { buildManualUpdateMessage, shouldUseManualUpdate } from '@/utils/update-prompt'
 import { THEME_IDS, THEME_LABELS, THEME_TOKENS, resolveThemeMode, type ThemeId } from '@/utils/themes'
 import type { UpdateStatus } from '../../../../shared/update'
 
@@ -134,29 +136,41 @@ export default function AppSettingsModal() {
   }, [modalData?.tab])
 
   const closeDisabled = snapshot.status === 'installing'
-  const actionBusy = snapshot.status === 'checking' || snapshot.status === 'downloading' || snapshot.status === 'installing'
+  const actionBusy =
+    snapshot.status === 'checking' || snapshot.status === 'downloading' || snapshot.status === 'installing'
   const releaseVersion = snapshot.version ?? '未发现新版本'
   const primaryButtonClass =
     'inline-flex min-w-[132px] items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-[var(--text-inverse)] transition disabled:cursor-not-allowed disabled:opacity-60'
   const secondaryButtonClass =
     'inline-flex items-center justify-center gap-2 rounded-md border border-[var(--border-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--bg-tertiary)] disabled:cursor-not-allowed disabled:opacity-60'
 
-  let primaryAction:
-    | {
-        label: string
-        onClick: () => void
-        disabled?: boolean
-        className?: string
-      }
-    | null = null
+  let primaryAction: {
+    label: string
+    onClick: () => void
+    disabled?: boolean
+    className?: string
+    icon?: 'download' | 'external'
+  } | null = null
 
-  if (snapshot.status === 'available') {
+  const manualUpdate = shouldUseManualUpdate(snapshot)
+
+  if (manualUpdate) {
+    primaryAction = {
+      label: '打开下载页',
+      onClick: () => {
+        if (snapshot.manualDownloadUrl) window.open(snapshot.manualDownloadUrl, '_blank', 'noopener,noreferrer')
+      },
+      className: 'bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)]',
+      icon: 'external'
+    }
+  } else if (snapshot.status === 'available') {
     primaryAction = {
       label: '下载更新',
       onClick: () => {
         void downloadAvailableUpdate()
       },
-      className: 'bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)]'
+      className: 'bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)]',
+      icon: 'download'
     }
   } else if (snapshot.status === 'ready') {
     primaryAction = {
@@ -218,8 +232,9 @@ export default function AppSettingsModal() {
     }
   }
 
-  const summaryText =
-    snapshot.status === 'available'
+  const summaryText = manualUpdate
+    ? '已发现新版本。当前平台暂不使用应用内自动安装，请打开下载页获取最新安装包。'
+    : snapshot.status === 'available'
       ? '已发现新版本，你可以先查看更新日志，再决定是否下载。'
       : snapshot.status === 'downloading'
         ? '下载会在后台继续进行，关闭弹框不会中断当前下载。'
@@ -279,7 +294,9 @@ export default function AppSettingsModal() {
             <div className="mt-6 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-3 text-xs text-[var(--text-secondary)]">
               <div className="font-semibold text-[var(--text-primary)]">当前版本</div>
               <div className="mt-1 text-lg font-semibold text-[var(--accent-secondary)]">v{appVersion || '—'}</div>
-              <div className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${getStatusTone(snapshot.status)}`}>
+              <div
+                className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${getStatusTone(snapshot.status)}`}
+              >
                 {getStatusLabel(snapshot.status)}
               </div>
             </div>
@@ -332,7 +349,9 @@ export default function AppSettingsModal() {
                 <div className="border-b border-[var(--border-primary)] pb-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">版本与更新</div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">
+                        版本与更新
+                      </div>
                       <div className="text-2xl font-semibold text-[var(--text-primary)]">
                         {snapshot.version ? `v${releaseVersion}` : '当前已安装版本'}
                       </div>
@@ -380,12 +399,22 @@ export default function AppSettingsModal() {
                         <div className="mt-1 leading-relaxed">{snapshot.errorMessage}</div>
                       </div>
                     </div>
+                  ) : manualUpdate ? (
+                    <div className="mt-4 flex items-start gap-3 rounded-lg border border-[var(--warning-primary)] bg-[var(--warning-surface)] px-4 py-3 text-sm text-[var(--text-primary)]">
+                      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[var(--warning-primary)]" />
+                      <div>
+                        <div className="font-semibold text-[var(--warning-primary)]">需要手动下载</div>
+                        <div className="mt-1 leading-relaxed">{buildManualUpdateMessage(snapshot)}</div>
+                      </div>
+                    </div>
                   ) : snapshot.status === 'ready' ? (
                     <div className="mt-4 flex items-start gap-3 rounded-lg border border-[var(--success-border)] bg-[var(--success-surface)] px-4 py-3 text-sm text-[var(--text-primary)]">
                       <CheckCircle size={18} className="mt-0.5 shrink-0 text-[var(--success-primary)]" />
                       <div>
                         <div className="font-semibold text-[var(--success-primary)]">更新包已准备好</div>
-                        <div className="mt-1 leading-relaxed">点击“立即安装”后，应用会先退出，再启动安装器完成升级。</div>
+                        <div className="mt-1 leading-relaxed">
+                          点击“立即安装”后，应用会先退出，再启动安装器完成升级。
+                        </div>
                       </div>
                     </div>
                   ) : null}
@@ -424,12 +453,7 @@ export default function AppSettingsModal() {
               : '系统级设置会保存在本机。'}
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={closeModal}
-              disabled={closeDisabled}
-              className={secondaryButtonClass}
-            >
+            <button type="button" onClick={closeModal} disabled={closeDisabled} className={secondaryButtonClass}>
               {tab === 'updates' && (snapshot.status === 'available' || snapshot.status === 'ready') ? '稍后' : '关闭'}
             </button>
             {tab === 'updates' && primaryAction ? (
@@ -439,9 +463,13 @@ export default function AppSettingsModal() {
                 disabled={primaryAction.disabled}
                 className={`${primaryButtonClass} ${primaryAction.className ?? 'bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)]'}`}
               >
-                {snapshot.status === 'checking' || snapshot.status === 'downloading' || snapshot.status === 'installing' ? (
+                {snapshot.status === 'checking' ||
+                snapshot.status === 'downloading' ||
+                snapshot.status === 'installing' ? (
                   <RefreshCw size={16} className="animate-spin" />
-                ) : primaryAction.label.includes('下载') ? (
+                ) : primaryAction.icon === 'external' ? (
+                  <ExternalLink size={16} />
+                ) : primaryAction.icon === 'download' ? (
                   <Download size={16} />
                 ) : null}
                 <span>{primaryAction.label}</span>

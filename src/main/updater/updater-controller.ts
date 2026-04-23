@@ -26,6 +26,10 @@ interface TimeoutScheduler {
 const INSTALL_WATCHDOG_MS = 15_000
 const INSTALL_WATCHDOG_MESSAGE = '未能自动退出，请手动关闭应用后重试'
 
+export function canStartLifecycleUpdateCheck(snapshot: UpdateSnapshot): boolean {
+  return snapshot.status === 'idle' || snapshot.status === 'error'
+}
+
 function toMetadata(payload: any): UpdateMetadata {
   return {
     version: payload?.version ?? null,

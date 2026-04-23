@@ -52,7 +52,13 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
 
   downloadAvailableUpdate: async () => {
     const { snapshot } = get()
-    if (snapshot.status !== 'available' && !(snapshot.status === 'error' && snapshot.errorRecoveryAction === 'download')) {
+    if (snapshot.automaticUpdateUnsupportedReason) {
+      throw new Error(snapshot.automaticUpdateUnsupportedReason)
+    }
+    if (
+      snapshot.status !== 'available' &&
+      !(snapshot.status === 'error' && snapshot.errorRecoveryAction === 'download')
+    ) {
       throw new Error('当前没有可下载的新版本')
     }
 
@@ -70,6 +76,9 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
   installReadyUpdate: async () => {
     const { snapshot, prepareInstallHandler } = get()
     if (snapshot.status === 'installing') return
+    if (snapshot.automaticUpdateUnsupportedReason) {
+      throw new Error(snapshot.automaticUpdateUnsupportedReason)
+    }
     if (snapshot.status !== 'ready') {
       throw new Error('当前没有可安装的新版本')
     }

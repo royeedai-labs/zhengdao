@@ -72,3 +72,54 @@ tasks:
     verification_required:
       - "npx vitest run updater-focused"
       - "npm run build"
+
+  - id: TASK-UPD-006
+    title: "修复启动 / 重开 / 激活应用时的更新检查触发"
+    status: done
+    owner: AI
+    risk: high
+    priority: P1
+    approval_required: true
+    approval_status: "confirmed by user: 可执行"
+    affected_components:
+      - "main-updater"
+      - "main-window-lifecycle"
+    requirement_refs:
+      - "REQ-UPD-006"
+    verification_required:
+      - "updater focused vitest"
+      - "npm run build"
+
+  - id: TASK-UPD-007
+    title: "清洗 HTML 更新日志并补 guard"
+    status: done
+    owner: AI
+    risk: medium
+    priority: P1
+    approval_required: true
+    approval_status: "confirmed by user: 可执行"
+    affected_components:
+      - "shared-update"
+      - "renderer-update-modal"
+    requirement_refs:
+      - "REQ-UPD-007"
+    verification_required:
+      - "src/shared/__tests__/update.test.ts"
+
+  - id: TASK-UPD-008
+    title: "macOS 未签名公开测试包降级为手动下载"
+    status: done
+    owner: AI
+    risk: high
+    priority: P0
+    approval_required: true
+    approval_status: "confirmed by user: 可执行"
+    affected_components:
+      - "main-updater"
+      - "renderer-update-modal"
+      - "release-signing-boundary"
+    requirement_refs:
+      - "REQ-UPD-008"
+    verification_required:
+      - "updater focused vitest"
+      - "npm run build"

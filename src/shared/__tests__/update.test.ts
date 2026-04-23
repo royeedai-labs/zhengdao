@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createIdleUpdateSnapshot, reduceUpdateSnapshot } from '../update'
+import {
+  createIdleUpdateSnapshot,
+  reduceUpdateSnapshot,
+  summarizeReleaseNotes,
+  withManualUpdateFallback
+} from '../update'
 
 describe('reduceUpdateSnapshot', () => {
   it('transitions from checking to available to downloading to ready with release info', () => {
@@ -88,6 +93,29 @@ describe('reduceUpdateSnapshot', () => {
       version: '1.2.3',
       errorMessage: '未能自动退出，请手动关闭应用后重试',
       errorRecoveryAction: 'install'
+    })
+  })
+
+  it('cleans html release notes before they reach the renderer', () => {
+    expect(
+      summarizeReleaseNotes('<h2>更新日志</h2><ul><li>修复启动检查</li><li>清理 &amp; 展示更新日志</li></ul>')
+    ).toBe('更新日志\n- 修复启动检查\n- 清理 & 展示更新日志')
+    expect(
+      summarizeReleaseNotes([{ version: '1.3.0', note: '<p>新增手动下载入口</p>' }, '<p>避免触发 ShipIt 自动安装</p>'])
+    ).toBe('新增手动下载入口\n避免触发 ShipIt 自动安装')
+  })
+
+  it('adds manual update fallback metadata without changing update state', () => {
+    const snapshot = withManualUpdateFallback(
+      createIdleUpdateSnapshot(),
+      '需要手动下载',
+      'https://example.test/releases/latest'
+    )
+
+    expect(snapshot).toMatchObject({
+      status: 'idle',
+      automaticUpdateUnsupportedReason: '需要手动下载',
+      manualDownloadUrl: 'https://example.test/releases/latest'
     })
   })
 })

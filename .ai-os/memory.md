@@ -65,6 +65,14 @@
 - **影响范围**：GitHub Actions release、macOS / Windows 打包、Gemini CLI 运行依赖。
 - **日期**：2026-04-22
 
+#### PT-002: macOS Squirrel 自动更新必须依赖有效签名 / 公证链路
+
+- **问题**：未签名公开测试包触发 Squirrel.Mac / ShipIt 自动安装时，会因代码签名资源校验失败而无法完成更新。
+- **根因**：当前 release workflow 明确 `CSC_IDENTITY_AUTO_DISCOVERY=false`，产物为 ad-hoc / 未签名包；macOS 自动安装需要可校验签名。
+- **绕行方案**：签名 / 公证链路完成前，macOS 发现新版本只展示手动下载入口；Windows NSIS 自动更新路径保持应用内下载 / 安装。
+- **影响范围**：macOS 自动更新、GitHub Releases 分发、release workflow、更新设置页。
+- **日期**：2026-04-23
+
 ### 5. 技术债追踪
 
 #### TD-001: 多条 active lane 需要后续收口

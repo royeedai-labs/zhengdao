@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createIdleUpdateSnapshot } from '../../../../shared/update'
-import { buildReadyToInstallMessage, shouldAutoOpenUpdateDialog } from '../update-prompt'
+import {
+  buildManualUpdateMessage,
+  buildReadyToInstallMessage,
+  shouldAutoOpenUpdateDialog,
+  shouldUseManualUpdate
+} from '../update-prompt'
 
 describe('update prompt helpers', () => {
   it('auto-opens only when a newly available version has not been prompted yet', () => {
@@ -32,5 +37,24 @@ describe('update prompt helpers', () => {
         version: null
       })
     ).toContain('应用设置 / 更新与关于')
+  })
+
+  it('uses a manual download action when automatic updates are unsupported', () => {
+    const available = {
+      ...createIdleUpdateSnapshot(),
+      status: 'available' as const,
+      version: '1.3.0',
+      automaticUpdateUnsupportedReason: '当前 macOS 公测包未完成签名与公证',
+      manualDownloadUrl: 'https://example.test/releases/latest'
+    }
+
+    expect(shouldUseManualUpdate(available)).toBe(true)
+    expect(buildManualUpdateMessage(available)).toContain('macOS')
+    expect(
+      shouldUseManualUpdate({
+        ...available,
+        status: 'checking' as const
+      })
+    ).toBe(false)
   })
 })
