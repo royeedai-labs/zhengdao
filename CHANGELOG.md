@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.4.1 - 2026-04-24
+
+### Release
+
+- Publish a Windows tray and installer reliability patch after `v1.4.0`.
+
+### Added
+
+- Add a Windows runtime system tray with show, hide-to-tray, and explicit quit actions.
+- Package the Windows `.ico` as a runtime resource so the tray can use the formal application icon.
+- Add release documentation for recovering from NSIS installer / uninstaller integrity errors without deleting user data.
+
+### Changed
+
+- Change Windows close behavior to hide the main window to the tray unless the user explicitly quits.
+- Lock the Windows assisted installer to the existing install path and keep desktop / Start Menu shortcuts enabled.
+- Stabilize the Windows uninstall display name as `证道`.
+
+### Fixed
+
+- Prevent overwrite installs from landing in a different directory and leaving old shortcuts or pinned entries opening the previous version.
+- Ensure uninstall configuration does not delete `userData` or `zhengdao.db`.
+- Keep macOS and Linux behavior unchanged for tray and close-window flows.
+
+### Docs
+
+- Record Windows tray, overwrite-install, uninstall-recovery risks and verification guards in the default lane artifacts.
+
 ## v1.4.0 - 2026-04-23
 
 ### Release
