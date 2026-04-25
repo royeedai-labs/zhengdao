@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.5.1 - 2026-04-25
+
+### Release
+
+- 发布官方 AI 与本地 RAG 桌面体验优化
+
+### Added
+
+- 新增证道官方 AI 桌面端接入，默认走 `agent.xiangweihu.com` 的账号与官方模型配置。
+- 新增本地优先 RAG：使用官方 AI 时只检索当前请求相关的少量本地章节片段，并随请求作为 `[L1]` 等引用上下文发送。
+- 新增本地 RAG 排序与提示词 guard，要求作品事实只依据本地片段或当前上下文，证据不足时明确说明“书中未明确”。
+
+### Changed
+
+- AI 助手普通对话会在官方 AI 模式下展示“本地片段”上下文 chip，方便用户知道本轮已结合本地作品证据。
+- 官方 AI、Gemini CLI、Gemini API、Ollama 和 OpenAI 兼容账号继续保持“应用设置全局账号 + 作品 AI 档案”的分层边界。
+- 桌面端官方 AI 请求不默认上传整本作品，也不自动创建云端语义索引。
+
+### Fixed
+
+- 修复官方 AI / Gemini CLI 流式桥接中的类型与取消清理边界，避免停止生成后残留错误状态。
+- 修复应用设置与 AI 全局账号面板在未登录、状态检测和密钥草稿场景下的显示与验证问题。
+- 补齐本地 RAG、官方 AI provider routing 和应用设置弹窗的回归测试。
+
+### Docs
+
+- 更新默认 lane 验证 guard，记录官方 AI 与本地 RAG 的发布前验证要求。
+
 ## v1.5.0 - 2026-04-25
 
 ### Release
