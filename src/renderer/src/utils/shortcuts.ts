@@ -13,8 +13,7 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'globalSearch', label: '全局搜索', defaultKeys: 'Ctrl+Shift+F', category: '导航' },
   { id: 'blackRoom', label: '小黑屋模式', defaultKeys: 'F11', category: '视图' },
   { id: 'bottomPanel', label: '底部沙盘', defaultKeys: 'Ctrl+`', category: '视图' },
-  { id: 'splitView', label: '分屏编辑', defaultKeys: 'Ctrl+\\', category: '视图' },
-  { id: 'help', label: '使用帮助', defaultKeys: 'F1', category: '其他' }
+  { id: 'splitView', label: '分屏编辑', defaultKeys: 'Ctrl+\\', category: '视图' }
 ]
 
 export function defaultChordForAction(id: string): string {

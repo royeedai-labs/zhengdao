@@ -284,7 +284,6 @@ export function getAiWorkProfile(bookId: number) {
 export function saveAiWorkProfile(bookId: number, updates: Record<string, unknown>) {
   getAiWorkProfile(bookId)
   const allowed = [
-    'default_account_id',
     'style_guide',
     'genre_rules',
     'content_boundaries',
@@ -294,6 +293,9 @@ export function saveAiWorkProfile(bookId: number, updates: Record<string, unknow
   ]
   const fields: string[] = []
   const values: unknown[] = []
+  if ('default_account_id' in updates) {
+    fields.push('default_account_id = NULL')
+  }
   for (const field of allowed) {
     if (field in updates) {
       fields.push(`${field} = ?`)
@@ -306,6 +308,13 @@ export function saveAiWorkProfile(bookId: number, updates: Record<string, unknow
     getDb().prepare(`UPDATE ai_work_profiles SET ${fields.join(', ')} WHERE book_id = ?`).run(...values)
   }
   return getAiWorkProfile(bookId)
+}
+
+function getDefaultAiAccountRuntimeConfig() {
+  const row = getDb().prepare('SELECT id FROM ai_accounts ORDER BY is_default DESC, id LIMIT 1').get() as
+    | { id?: number }
+    | undefined
+  return row?.id ? getAiAccountRuntimeConfig(row.id) : null
 }
 
 export function getAiSkillOverrides(bookId: number) {
@@ -503,15 +512,7 @@ export function setAiDraftStatus(id: number, status: AiDraftStatus) {
 
 export function getResolvedAiConfigForBook(bookId: number) {
   const db = getDb()
-  const profile = getAiWorkProfile(bookId) as { default_account_id?: number | null }
-  const account = profile.default_account_id != null
-    ? getAiAccountRuntimeConfig(profile.default_account_id)
-    : (() => {
-        const row = db.prepare('SELECT id FROM ai_accounts ORDER BY is_default DESC, id LIMIT 1').get() as
-          | { id?: number }
-          | undefined
-        return row?.id ? getAiAccountRuntimeConfig(row.id) : null
-      })()
+  const account = getDefaultAiAccountRuntimeConfig()
 
   if (account) {
     return {

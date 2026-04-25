@@ -33,12 +33,6 @@ export function useKeyboardShortcuts() {
         return
       }
 
-      if (matchesShortcutChord(e, getChord('help'))) {
-        e.preventDefault()
-        openModal('help')
-        return
-      }
-
       if (matchesShortcutChord(e, getChord('blackRoom'))) {
         e.preventDefault()
         setBlackRoomMode(true)

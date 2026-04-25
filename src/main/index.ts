@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase } from './database/connection'
-import { registerIpcHandlers } from './ipc-handlers'
+import { handleZhengdaoAuthCallbackUrl, registerIpcHandlers } from './ipc-handlers'
 import { attachUpdaterWindow, notifyUpdaterAppActivated } from './updater/service'
 import {
   createDesktopTray,
@@ -22,6 +22,29 @@ process.on('unhandledRejection', (reason) => {
 })
 
 let mainWindow: BrowserWindow | null = null
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+
+function handleDeepLink(rawUrl: string): void {
+  if (!rawUrl.startsWith('zhengdao://auth/callback')) return
+  handleZhengdaoAuthCallbackUrl(rawUrl).catch((error) => {
+    console.error('[Main] Zhengdao auth callback failed:', error)
+    dialog.showErrorBox('证道账号登录失败', error instanceof Error ? error.message : String(error))
+  })
+}
+
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const url = argv.find((item) => item.startsWith('zhengdao://'))
+    if (url) handleDeepLink(url)
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
 
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
@@ -76,6 +99,11 @@ app.on('before-quit', markDesktopTrayQuitRequested)
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.zhengdao.app')
+  if (!app.isDefaultProtocolClient('zhengdao')) {
+    app.setAsDefaultProtocolClient('zhengdao')
+  }
+  const initialDeepLink = process.argv.find((item) => item.startsWith('zhengdao://'))
+  if (initialDeepLink) handleDeepLink(initialDeepLink)
   if (process.platform === 'darwin') {
     app.setName('证道')
   }
@@ -93,6 +121,11 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
     notifyUpdaterAppActivated()
   })
+})
+
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  handleDeepLink(url)
 })
 
 app.on('window-all-closed', () => {

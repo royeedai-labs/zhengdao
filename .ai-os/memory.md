@@ -15,6 +15,14 @@
 - **确认来源**：`ai-chat-assistant` lane 多个已确认 CR 与验收记录。
 - **日期**：2026-04-22
 
+#### DD-002: 桌面端登录与云备份默认走 Agent X 官网域名
+
+- **决策**：桌面端账号登录和官网云备份默认访问 `https://agent.xiangweihu.com`；API 默认拼接为 `/api/v1`。
+- **原因**：生产入口由 `agent.xiangweihu.com` 统一承载网页登录授权、官网信息和 Agent X backend API，桌面端不直接面向裸后端域名。
+- **影响范围**：`src/main/auth/zhengdao-auth.ts`、`src/main/sync/cloud-sync.ts`、应用设置账号入口、本地 dev smoke。
+- **覆盖方式**：本地调试可用 `ZHENGDAO_WEBSITE_URL` 或 `ZHENGDAO_API_URL` 覆盖；正式打包另行处理，不应在 server-only 发布中打包桌面端。
+- **日期**：2026-04-25
+
 ### 2. 工程约束
 
 #### EC-001: 项目顶层授权采用 AGPL-3.0-only
@@ -72,6 +80,12 @@
 - **绕行方案**：签名 / 公证链路完成前，macOS 发现新版本只展示手动下载入口；Windows NSIS 自动更新路径保持应用内下载 / 安装。
 - **影响范围**：macOS 自动更新、GitHub Releases 分发、release workflow、更新设置页。
 - **日期**：2026-04-23
+
+#### PT-003: server-only 发布不得顺手打包桌面端
+
+- **问题**：Agent X server/官网更新和 Zhengdao 桌面安装包发布是两条不同交付线，混在一起会拉入 Electron native rebuild、签名、公证、GitHub Release 等额外风险。
+- **约束**：用户要求“服务器上要部署的现在部署，桌面端暂时不打包”时，只允许本地运行 `npm run dev` 做 smoke，不运行 `release:*`、`electron-builder` 或安装包发布命令。
+- **日期**：2026-04-25
 
 ### 5. 技术债追踪
 

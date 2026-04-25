@@ -21,11 +21,7 @@ const baseInput = {
   snapshotCount: 2,
   latestSnapshotAt: '2026-04-23T08:20:00.000Z',
   backups: [{ name: 'a.db', path: '/tmp/a.db', mtime: 100, size: 1 }],
-  backupError: null,
-  syncEnabled: true,
-  syncUserPresent: true,
-  syncing: false,
-  lastBookSyncAt: '2026-04-23T08:25:00.000Z'
+  backupError: null
 }
 
 describe('daily workbench model', () => {
@@ -34,14 +30,13 @@ describe('daily workbench model', () => {
     expect(getLocalDateKey(date)).toBe('2026-04-23')
   })
 
-  it('calculates goal progress and separates save, snapshot, local backup, and cloud backup states', () => {
+  it('calculates goal progress and separates save, snapshot, and local backup states', () => {
     const model = buildDailyWorkbenchModel(baseInput)
     expect(model.remainingWords).toBe(1800)
     expect(model.progressPercent).toBe(40)
     expect(model.save).toMatchObject({ tone: 'ok', label: '正文已保存' })
     expect(model.snapshot).toMatchObject({ tone: 'ok', label: '2 个快照' })
     expect(model.localBackup).toMatchObject({ tone: 'ok', label: '本地备份可用' })
-    expect(model.cloudBackup).toMatchObject({ tone: 'ok', label: '云备份可用' })
   })
 
   it('surfaces backup and save failures without confusing them with code runtime', () => {
@@ -54,14 +49,10 @@ describe('daily workbench model', () => {
         error: 'disk full'
       },
       backups: [],
-      backupError: 'permission denied',
-      syncUserPresent: false,
-      syncEnabled: false,
-      lastBookSyncAt: null
+      backupError: 'permission denied'
     })
     expect(model.save).toMatchObject({ tone: 'danger', label: '保存失败', detail: 'disk full' })
     expect(model.localBackup).toMatchObject({ tone: 'danger', label: '本地备份失败' })
-    expect(model.cloudBackup).toMatchObject({ tone: 'muted', label: '未登录云同步' })
   })
 
   it('selects the newest backup by mtime', () => {

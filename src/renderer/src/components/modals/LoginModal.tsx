@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Cloud, ExternalLink, LogIn, X, Loader2 } from 'lucide-react'
+import { ArrowUpRight, BadgeCheck, Cloud, Coins, LogIn, X, Loader2, RefreshCw, UserRound } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useBookStore } from '@/stores/book-store'
@@ -14,16 +14,17 @@ export function AccountSyncSettings() {
   const logout = useAuthStore((s) => s.logout)
   const syncUploadBook = useAuthStore((s) => s.syncUploadBook)
   const setSyncEnabled = useAuthStore((s) => s.setSyncEnabled)
+  const applyAuthUpdate = useAuthStore((s) => s.applyAuthUpdate)
 
   const currentBookId = useBookStore((s) => s.currentBookId)
   const books = useBookStore((s) => s.books)
   const currentBook = books.find((b) => b.id === currentBookId)
 
-  const [clientId, setClientId] = useState('')
-  const [clientSecret, setClientSecret] = useState('')
   const [cloudList, setCloudList] = useState<Array<{ id: string; name: string; modifiedTime: string }>>([])
   const [cloudLoading, setCloudLoading] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const displayName = user?.displayName || user?.email?.split('@')[0] || '证道用户'
+  const tierLabel = user?.role === 'admin' ? 'Admin' : user?.pro ? 'Pro' : user?.tier === 'team' ? 'Team' : 'Free'
 
   async function loadCloudFiles() {
     setCloudLoading(true)
@@ -44,20 +45,28 @@ export function AccountSyncSettings() {
   useEffect(() => {
     void (async () => {
       await loadUser()
-      void window.api.getAppState('google_client_id').then((v) => {
-        if (v) setClientId(v)
-      })
       const tok = await window.api.authGetAccessToken()
       if (!tok) return
       await loadCloudFiles()
     })()
   }, [loadUser])
 
+  useEffect(() => {
+    return window.api.onAuthUpdated((incoming) => {
+      applyAuthUpdate(incoming as Parameters<typeof applyAuthUpdate>[0])
+      setSyncMsg('证道账号已关联，云端能力已可用。')
+      void loadCloudFiles()
+    })
+  }, [applyAuthUpdate])
+
   const handleLogin = async () => {
     setSyncMsg(null)
-    const ok = await login(clientId.trim(), clientSecret.trim())
-    if (!ok) setSyncMsg('登录失败，请检查凭据与网络')
-    else await loadCloudFiles()
+    const result = await login()
+    if (!result.ok) {
+      setSyncMsg(result.error || '无法打开证道网页登录，请检查网络后重试')
+      return
+    }
+    setSyncMsg('已打开证道网页登录。完成登录后会自动回到桌面端。')
   }
 
   const handleSyncNow = async () => {
@@ -68,7 +77,7 @@ export function AccountSyncSettings() {
     setSyncMsg(null)
     try {
       await syncUploadBook(currentBookId)
-      setSyncMsg('已上传到 Google Drive（应用数据）')
+      setSyncMsg('已上传到官网云备份')
     } catch (e) {
       setSyncMsg(e instanceof Error ? e.message : '同步失败')
     }
@@ -79,60 +88,64 @@ export function AccountSyncSettings() {
     void loadCloudFiles()
   }
 
+  const refreshEntitlement = async () => {
+    await loadUser()
+    setSyncMsg('账号权益已刷新。')
+  }
+
+  const openUpgradePage = async () => {
+    await window.api.authOpenUpgradePage()
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-        在{' '}
-        <a
-          href="https://console.cloud.google.com/apis/credentials"
-          target="_blank"
-          rel="noreferrer"
-          className="text-[var(--accent-secondary)] hover:underline inline-flex items-center gap-0.5"
-        >
-          Google Cloud Console <ExternalLink size={12} />
-        </a>{' '}
-        创建 OAuth 客户端（桌面应用），将客户端 ID 与密钥填入下方。凭据仅存于本机数据库。
+        使用证道官网账号关联桌面端。登录后可识别 Pro 权益、AI 点数，并使用官网云备份。
       </p>
-
-      {!user && (
-        <>
-          <label className="block space-y-1">
-            <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] font-semibold">Client ID</span>
-            <input
-              type="text"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              autoComplete="off"
-              className="w-full px-3 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-sm text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
-              placeholder="xxxx.apps.googleusercontent.com"
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] font-semibold">Client Secret</span>
-            <input
-              type="password"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              autoComplete="off"
-              className="w-full px-3 py-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-sm text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
-              placeholder="GOCSPX-..."
-            />
-          </label>
-        </>
-      )}
 
       {user && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)]">
-          {user.picture ? (
-            <img src={user.picture} alt="" className="w-11 h-11 rounded-full shrink-0" referrerPolicy="no-referrer" />
-          ) : (
-            <div className="w-11 h-11 rounded-full bg-[var(--accent-surface)] flex items-center justify-center text-sm font-bold text-[var(--accent-secondary)] shrink-0">
-              {user.name?.charAt(0) || '?'}
-            </div>
-          )}
+          <div className="w-11 h-11 rounded-full bg-[var(--accent-surface)] flex items-center justify-center text-[var(--accent-secondary)] shrink-0">
+            <UserRound size={22} />
+          </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-[var(--text-primary)] truncate">{user.name}</div>
+            <div className="text-sm font-semibold text-[var(--text-primary)] truncate">{displayName}</div>
             <div className="text-xs text-[var(--text-muted)] truncate">{user.email}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+              <span className="inline-flex items-center gap-1 rounded border border-[var(--success-border)] px-1.5 py-0.5 text-[var(--success-primary)]">
+                <BadgeCheck size={12} />
+                {tierLabel}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Coins size={12} />
+                {user.pointsBalance.toLocaleString()} 点
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {user && !user.pro && user.role !== 'admin' && (
+        <div className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-surface)] p-3 text-xs text-[var(--warning-primary)]">
+          <div className="font-semibold">当前是 Free 账号</div>
+          <div className="mt-1 text-[var(--text-secondary)]">兑换 CDK 后可开通 Pro、官网云备份和 AI 点数。</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void openUpgradePage()}
+              className="inline-flex items-center gap-1.5 rounded bg-[var(--accent-primary)] px-3 py-1.5 text-[var(--accent-contrast)]"
+            >
+              <ArrowUpRight size={13} />
+              升级 Pro
+            </button>
+            <button
+              type="button"
+              onClick={() => void refreshEntitlement()}
+              className="inline-flex items-center gap-1.5 rounded border border-[var(--border-secondary)] bg-[var(--bg-primary)] px-3 py-1.5 text-[var(--text-primary)]"
+            >
+              <RefreshCw size={13} />
+              刷新权益
+            </button>
           </div>
         </div>
       )}
@@ -155,7 +168,7 @@ export function AccountSyncSettings() {
 
           <div className="rounded-lg border border-[var(--border-primary)] overflow-hidden">
             <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] bg-[var(--bg-primary)]">
-              当前作品 · 手动备份到 Drive
+              当前作品 · 手动上传官网云备份
             </div>
             <div className="p-3 space-y-2">
               <p className="text-xs text-[var(--text-muted)]">
@@ -178,7 +191,7 @@ export function AccountSyncSettings() {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">应用数据中的备份</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">官网云备份</span>
               <button
                 type="button"
                 onClick={() => void refreshCloudList()}
@@ -191,7 +204,7 @@ export function AccountSyncSettings() {
             {cloudLoading ? (
               <div className="text-xs text-[var(--text-muted)] py-2">加载中…</div>
             ) : cloudList.length === 0 ? (
-              <div className="text-xs text-[var(--text-muted)] py-2">暂无 book_*.json 文件</div>
+              <div className="text-xs text-[var(--text-muted)] py-2">暂无云端备份</div>
             ) : (
               <ul className="max-h-36 overflow-y-auto text-xs border border-[var(--border-primary)] rounded-lg divide-y divide-[var(--border-primary)]">
                 {cloudList.map((f) => (
@@ -208,22 +221,31 @@ export function AccountSyncSettings() {
 
       <div className="flex items-center justify-end gap-3">
         {user ? (
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="px-4 py-1.5 text-xs border border-[var(--border-secondary)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)] transition"
-          >
-            退出登录
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => void refreshEntitlement()}
+              className="px-4 py-1.5 text-xs border border-[var(--border-secondary)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)] transition"
+            >
+              刷新权益
+            </button>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="px-4 py-1.5 text-xs border border-[var(--border-secondary)] text-[var(--text-primary)] rounded hover:bg-[var(--bg-tertiary)] transition"
+            >
+              退出登录
+            </button>
+          </>
         ) : (
           <button
             type="button"
             onClick={() => void handleLogin()}
-            disabled={loading || !clientId.trim() || !clientSecret.trim()}
+            disabled={loading}
             className="px-4 py-1.5 text-xs bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 text-[var(--accent-contrast)] rounded flex items-center gap-1 transition"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />}
-            使用 Google 登录
+            关联证道账号
           </button>
         )}
       </div>
@@ -240,7 +262,7 @@ export default function LoginModal() {
         <div className="h-12 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-between px-5 shrink-0">
           <div className="flex items-center space-x-2 text-[var(--accent-secondary)] font-bold">
             <Cloud size={18} />
-            <span>Google 账号与云同步</span>
+            <span>证道账号与云同步</span>
           </div>
           <button type="button" onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition">
             <X size={20} />

@@ -11,7 +11,6 @@ import ProjectSettingsModal from './ProjectSettingsModal'
 import SnapshotModal from './SnapshotModal'
 import ExportModal from './ExportModal'
 import ConfirmModal from './ConfirmModal'
-import HelpModal from './HelpModal'
 import NewBookWizard from '@/components/bookshelf/NewBookWizard'
 import CommandPalette from '@/components/shared/CommandPalette'
 import StyleAnalysisModal from './StyleAnalysisModal'
@@ -41,7 +40,6 @@ function renderModal(type: ModalType) {
     case 'snapshot': return <SnapshotModal />
     case 'export': return <ExportModal />
     case 'confirm': return <ConfirmModal />
-    case 'help': return <HelpModal />
     case 'login': return <LoginModal />
     case 'newBook': return <NewBookWizard />
     case 'commandPalette': return <CommandPalette />

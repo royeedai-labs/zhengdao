@@ -164,7 +164,7 @@ export default function AiGlobalAccountsSettings() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-[var(--text-muted)]">
-        AI 账号是系统级资源，供所有作品选择使用；作品配置只引用账号和写作规则，不重复保存 key。
+        AI 账号是系统级资源，所有作品共用默认账号；作品配置只保存写作规则，不重复保存 key。
       </p>
       <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)] p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">

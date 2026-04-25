@@ -25,8 +25,8 @@ import { SearchRepo } from './database/search-repo'
 import * as trashRepo from './database/trash-repo'
 import * as templateRepo from './database/template-repo'
 import * as shortcutRepo from './database/shortcut-repo'
-import { GoogleAuth } from './auth/google-auth'
-import { DriveSync } from './sync/drive-sync'
+import { ZhengdaoAuth } from './auth/zhengdao-auth'
+import { CloudSync } from './sync/cloud-sync'
 import { backupDatabaseFile, replaceDatabaseFromFile } from './database/connection'
 import { autoBackup } from './backup/auto-backup'
 import { readDocxPlainText } from './utils/read-docx-text'
@@ -41,8 +41,8 @@ import {
 } from './ai/gemini-cli-service'
 import { getProviderStatus as probeProviderStatus } from './ai/provider-status'
 
-const googleAuth = new GoogleAuth()
-const driveSync = new DriveSync(googleAuth)
+const zhengdaoAuth = new ZhengdaoAuth()
+const cloudSync = new CloudSync(zhengdaoAuth)
 const searchRepo = new SearchRepo()
 let geminiCliService: ReturnType<typeof createGeminiCliService> | null = null
 const activeGeminiStreamSessions = new Map<string, { cancel: () => void }>()
@@ -96,6 +96,13 @@ function getGeminiCliService(): ReturnType<typeof createGeminiCliService> {
     })
   }
   return geminiCliService
+}
+
+export async function handleZhengdaoAuthCallbackUrl(url: string): Promise<void> {
+  const user = await zhengdaoAuth.handleCallback(url)
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('auth:updated', user)
+  }
 }
 
 function launchGeminiCliSetup(): { ok: boolean; error?: string } {
@@ -411,14 +418,13 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('db:deleteAnnotation', (_, id: number) => annotationRepo.deleteAnnotation(id))
 
-  ipcMain.handle('auth:login', async (_, clientId: string, clientSecret: string) => {
-    return googleAuth.login(clientId, clientSecret)
-  })
-  ipcMain.handle('auth:getUser', async () => googleAuth.getUser())
+  ipcMain.handle('auth:login', async () => zhengdaoAuth.login())
+  ipcMain.handle('auth:getUser', async () => zhengdaoAuth.getUser())
   ipcMain.handle('auth:logout', async () => {
-    await googleAuth.logout()
+    await zhengdaoAuth.logout()
   })
-  ipcMain.handle('auth:getAccessToken', async () => googleAuth.getAccessToken())
+  ipcMain.handle('auth:getAccessToken', async () => zhengdaoAuth.getAccessToken())
+  ipcMain.handle('auth:openUpgradePage', async () => zhengdaoAuth.openUpgradePage())
 
   ipcMain.handle('ai:complete', async (_, request: AiBridgeCompleteRequest) => {
     if (request.provider !== 'gemini_cli') {
@@ -460,10 +466,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ai:setupGeminiCli', async () => launchGeminiCliSetup())
 
   ipcMain.handle('sync:uploadBook', async (_, bookId: number) => {
-    await driveSync.syncBook(bookId)
+    await cloudSync.syncBook(bookId)
   })
-  ipcMain.handle('sync:listCloudBooks', async () => driveSync.listCloudBooks())
-  ipcMain.handle('sync:downloadBook', async (_, fileId: string) => driveSync.downloadBook(fileId))
+  ipcMain.handle('sync:listCloudBooks', async () => cloudSync.listCloudBooks())
+  ipcMain.handle('sync:downloadBook', async (_, fileId: string) => cloudSync.downloadBook(fileId))
 
   // Window controls
   ipcMain.handle('window:notify', (_, title: string, body: string) => {

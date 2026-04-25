@@ -6,7 +6,6 @@ import {
   Download,
   FileUp,
   FilePlus,
-  HelpCircle,
   Layers,
   Leaf,
   Maximize2,
@@ -112,14 +111,6 @@ function useCommands(): Command[] {
         icon: FileUp,
         requiresBook: true,
         action: () => openModal('import')
-      },
-      {
-        id: 'nav-help',
-        label: '打开使用帮助',
-        category: '导航',
-        shortcut: 'F1',
-        icon: HelpCircle,
-        action: () => openModal('help')
       },
       {
         id: 'edit-volume',

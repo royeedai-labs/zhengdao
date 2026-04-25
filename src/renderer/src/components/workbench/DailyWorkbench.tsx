@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertTriangle, Bot, CheckCircle2, Cloud, FileCheck2, HardDrive, History, Loader2, RefreshCw, ShieldCheck, Target } from 'lucide-react'
-import { useAuthStore } from '@/stores/auth-store'
+import { AlertTriangle, Bot, CheckCircle2, FileCheck2, HardDrive, History, Loader2, RefreshCw, ShieldCheck, Target } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useConfigStore } from '@/stores/config-store'
@@ -86,13 +85,6 @@ export default function DailyWorkbench() {
   const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
   const toggleRightPanel = useUIStore((s) => s.toggleRightPanel)
   const chapterSaveStatus = useUIStore((s) => s.chapterSaveStatus)
-  const user = useAuthStore((s) => s.user)
-  const syncing = useAuthStore((s) => s.syncing)
-  const syncEnabled = useAuthStore((s) => s.syncEnabled)
-  const lastBookSyncAt = useAuthStore((s) => s.lastBookSyncAt)
-  const loadUser = useAuthStore((s) => s.loadUser)
-  const loadBookSyncMeta = useAuthStore((s) => s.loadBookSyncMeta)
-  const syncUploadBook = useAuthStore((s) => s.syncUploadBook)
   const [todayWords, setTodayWords] = useState(0)
   const [streak, setStreak] = useState(0)
   const [snapshotCount, setSnapshotCount] = useState(0)
@@ -100,14 +92,6 @@ export default function DailyWorkbench() {
   const [backups, setBackups] = useState<BackupFileSummary[]>([])
   const [backupError, setBackupError] = useState<string | null>(null)
   const [backupBusy, setBackupBusy] = useState(false)
-
-  useEffect(() => {
-    void loadUser()
-  }, [loadUser])
-
-  useEffect(() => {
-    void loadBookSyncMeta(bookId ?? null)
-  }, [bookId, loadBookSyncMeta])
 
   useEffect(() => {
     if (!bookId) return
@@ -180,11 +164,7 @@ export default function DailyWorkbench() {
     snapshotCount,
     latestSnapshotAt,
     backups,
-    backupError,
-    syncEnabled,
-    syncUserPresent: Boolean(user),
-    syncing,
-    lastBookSyncAt
+    backupError
   })
 
   const runLocalBackup = async () => {
@@ -200,20 +180,6 @@ export default function DailyWorkbench() {
       useToastStore.getState().addToast('error', message)
     } finally {
       setBackupBusy(false)
-    }
-  }
-
-  const runCloudBackup = async () => {
-    if (!bookId) return
-    if (!user) {
-      openModal('appSettings', { tab: 'account' })
-      return
-    }
-    try {
-      await syncUploadBook(bookId)
-      useToastStore.getState().addToast('success', '云备份已上传')
-    } catch (error) {
-      useToastStore.getState().addToast('error', error instanceof Error ? error.message : '云备份失败')
     }
   }
 
@@ -260,14 +226,6 @@ export default function DailyWorkbench() {
         title="立即创建本地数据库备份"
       />
       <StatusChip
-        icon={syncing ? <Loader2 size={13} className="animate-spin" /> : <Cloud size={13} />}
-        label={model.cloudBackup.label}
-        detail={model.cloudBackup.detail}
-        tone={model.cloudBackup.tone}
-        onClick={() => void runCloudBackup()}
-        title={user ? '手动上传当前作品到 Google Drive' : '打开账号与云同步设置'}
-      />
-      <StatusChip
         icon={<AlertTriangle size={13} />}
         label={warningCount > 0 ? `${warningCount} 个风险` : '暂无伏笔风险'}
         detail={warningCount > 0 ? '打开右侧伏笔' : '继续写作'}
@@ -283,23 +241,24 @@ export default function DailyWorkbench() {
           onClick={() => openModal('chapterReview')}
           disabled={!currentChapter}
           className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-surface)] px-2 text-[11px] font-semibold text-[var(--accent-secondary)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
-          title="打开本章审稿台"
+          title="步骤 1：打开本章审稿台"
         >
-          <Bot size={13} /> 本章审稿
+          <span className="font-mono text-[10px] opacity-70">1</span>
+          <Bot size={13} /> 审稿
         </button>
         <button
           type="button"
           onClick={() => openModal('publishCheck')}
           className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border-primary)] bg-[var(--surface-primary)] px-2 text-[11px] font-semibold text-[var(--text-primary)] transition hover:bg-[var(--bg-tertiary)]"
-          title="打开发布前检查包"
+          title="步骤 2：打开发布前检查包"
         >
-          <FileCheck2 size={13} /> 发布准备
+          <span className="font-mono text-[10px] opacity-70">2</span>
+          <FileCheck2 size={13} /> 发布
         </button>
         <button
           type="button"
           onClick={() => {
             void refreshBackups()
-            if (bookId) void loadBookSyncMeta(bookId)
           }}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border-primary)] text-[var(--text-muted)] transition hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
           title="刷新工作台状态"

@@ -22,7 +22,10 @@ import {
   deleteAiConversation,
   getAiConversations,
   getAiDrafts,
-  getAiMessages
+  getAiMessages,
+  getAiWorkProfile,
+  getResolvedAiConfigForBook,
+  saveAiWorkProfile
 } from '../ai-assistant-repo'
 
 describe('ai assistant conversation repository', () => {
@@ -107,5 +110,39 @@ describe('ai assistant conversation repository', () => {
     expect((getAiDrafts(1, 'all') as Array<{ id: number }>).map((draft) => draft.id)).toEqual([
       retainedDraft.id
     ])
+  })
+
+  it('resolves runtime config from the global default account instead of a work profile account', () => {
+    state.db!
+      .prepare(
+        `INSERT INTO ai_accounts (id, name, provider, api_endpoint, model, credential_ref, is_default, status)
+         VALUES
+         (1, '作品旧账号', 'openai', 'https://work.example/v1', 'work-model', '', 0, 'unknown'),
+         (2, '应用默认账号', 'gemini_cli', '', 'global-model', '', 1, 'unknown')`
+      )
+      .run()
+    state.db!
+      .prepare(
+        `INSERT INTO ai_work_profiles (
+          book_id, default_account_id, style_guide, genre_rules, content_boundaries, asset_rules, rhythm_rules, context_policy
+        ) VALUES (1, 1, '', '', '', '', '', 'smart_minimal')`
+      )
+      .run()
+
+    expect(getResolvedAiConfigForBook(1)).toMatchObject({
+      ai_provider: 'gemini_cli',
+      ai_model: 'global-model'
+    })
+  })
+
+  it('clears incoming work-level account references when saving a work profile', () => {
+    saveAiWorkProfile(1, {
+      default_account_id: 9,
+      style_guide: '短句，强节奏。'
+    })
+
+    const profile = getAiWorkProfile(1) as { default_account_id: number | null; style_guide: string }
+    expect(profile.default_account_id).toBeNull()
+    expect(profile.style_guide).toBe('短句，强节奏。')
   })
 })

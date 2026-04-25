@@ -1,16 +1,27 @@
 import { create } from 'zustand'
 
-interface GoogleUser {
+export interface ZhengdaoUser {
   id: string
   email: string
-  name: string
-  picture: string
+  role: 'user' | 'admin'
+  tier: 'free' | 'pro' | 'team'
+  pro: boolean
+  pointsBalance: number
+  emailVerified: boolean
+  displayName?: string | null
 }
 
-const SYNC_TOGGLE_KEY = 'google_sync_enabled'
+interface AuthLoginResult {
+  ok: boolean
+  loginUrl?: string
+  error?: string
+}
+
+const SYNC_TOGGLE_KEY = 'zhengdao_sync_enabled'
+const LEGACY_SYNC_TOGGLE_KEY = 'google_sync_enabled'
 
 interface AuthStore {
-  user: GoogleUser | null
+  user: ZhengdaoUser | null
   loading: boolean
   syncing: boolean
   syncEnabled: boolean
@@ -18,10 +29,11 @@ interface AuthStore {
 
   loadUser: () => Promise<void>
   loadBookSyncMeta: (bookId: number | null) => Promise<void>
-  login: (clientId: string, clientSecret: string) => Promise<boolean>
+  login: () => Promise<AuthLoginResult>
   logout: () => Promise<void>
   syncUploadBook: (bookId: number) => Promise<void>
   setSyncEnabled: (enabled: boolean) => Promise<void>
+  applyAuthUpdate: (user: ZhengdaoUser | null) => void
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -34,8 +46,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   loadUser: async () => {
     set({ loading: true })
     try {
-      const user = (await window.api.authGetUser()) as GoogleUser | null
-      const raw = await window.api.getAppState(SYNC_TOGGLE_KEY)
+      const user = (await window.api.authGetUser()) as ZhengdaoUser | null
+      const raw = (await window.api.getAppState(SYNC_TOGGLE_KEY)) || (await window.api.getAppState(LEGACY_SYNC_TOGGLE_KEY))
       const syncEnabled = raw === '1'
       set({ user, syncEnabled })
     } finally {
@@ -61,12 +73,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  login: async (clientId, clientSecret) => {
+  login: async () => {
     set({ loading: true })
     try {
-      const user = (await window.api.authLogin(clientId, clientSecret)) as GoogleUser | null
-      set({ user })
-      return user != null
+      const result = (await window.api.authLogin()) as AuthLoginResult
+      if (!result.ok) return result
+      return result
     } finally {
       set({ loading: false })
     }
@@ -90,5 +102,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   setSyncEnabled: async (enabled: boolean) => {
     await window.api.setAppState(SYNC_TOGGLE_KEY, enabled ? '1' : '0')
     set({ syncEnabled: enabled })
+  },
+
+  applyAuthUpdate: (user) => {
+    set({ user })
   }
 }))

@@ -391,7 +391,7 @@ export default function AiAssistantDock() {
     try {
       const config = await getResolvedAiConfigForBook(bookId)
       if (!isAiConfigReady(config as AiCallerConfig)) {
-        setError('请先在 AI 配置中设置全局账号或完成 Gemini CLI / Ollama 配置')
+        setError('请先在应用设置中配置 AI 全局账号，或完成 Gemini CLI / Ollama 设置')
         setLoading(false)
         return
       }

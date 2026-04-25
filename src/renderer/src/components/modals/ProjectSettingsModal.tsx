@@ -263,21 +263,14 @@ export default function ProjectSettingsModal() {
               <div className="rounded-lg border border-[var(--info-border)] bg-[var(--info-surface)] p-4 text-sm text-[var(--text-primary)]">
                 <div className="flex items-center gap-2 font-semibold text-[var(--info-primary)]">
                   <Bot size={16} />
-                  AI 作品能力与系统账号已拆层
+                  AI 作品能力
                 </div>
                 <p className="mt-2 text-[var(--text-secondary)]">
-                  全局账号、API Key、Gemini CLI 和 Ollama 属于系统设置；作品级提示词、上下文和能力卡仍在 AI 作品能力里管理。
+                  这里仅进入当前作品的 AI 档案、上下文策略和能力卡。AI 账号、API Key、Gemini CLI 和 Ollama 统一在应用设置中管理。
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => openModal('appSettings', { tab: 'aiAccounts' })}
-                  className="rounded border border-[var(--info-border)] px-3 py-1.5 text-xs font-semibold text-[var(--info-primary)] hover:bg-[var(--info-surface)]"
-                >
-                  打开 AI 全局账号
-                </button>
                 <button
                   type="button"
                   onClick={() => openModal('aiSettings')}

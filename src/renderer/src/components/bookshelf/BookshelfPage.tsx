@@ -1,9 +1,10 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { PenTool, Plus, HelpCircle, Search, LayoutGrid, List, Trash2, Info } from 'lucide-react'
+import { PenTool, Plus, Search, LayoutGrid, List, Trash2 } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useUIStore } from '@/stores/ui-store'
 import BookCard from './BookCard'
 import AppBrand from '@/components/shared/AppBrand'
+import AccountSettingsMenu from '@/components/shared/AccountSettingsMenu'
 import { getCurrentTitlebarSafeArea } from '@/utils/window-shell'
 
 type SortBy = 'updated' | 'created' | 'words' | 'title'
@@ -44,10 +45,7 @@ export default function BookshelfPage() {
   })
 
   const filteredBooks = sortedBooks.filter(
-    (b) =>
-      !searchQuery ||
-      b.title.includes(searchQuery) ||
-      (b.author || '').includes(searchQuery)
+    (b) => !searchQuery || b.title.includes(searchQuery) || (b.author || '').includes(searchQuery)
   )
 
   return (
@@ -65,31 +63,13 @@ export default function BookshelfPage() {
         </div>
         <div className="no-drag flex items-center gap-2">
           <button
-            type="button"
-            onClick={() => openModal('appSettings')}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-secondary)] bg-[var(--surface-secondary)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition hover:border-[var(--accent-border)] hover:bg-[var(--accent-surface)] hover:text-[var(--accent-secondary)]"
-            aria-label="应用设置"
-            title="应用设置"
-          >
-            <Info size={15} />
-            应用设置
-          </button>
-          <button
-            onClick={() => openModal('help')}
-            className="p-2 text-[var(--text-muted)] hover:text-[var(--accent-primary)] rounded transition"
-            aria-label="使用帮助"
-            title="使用帮助 (F1)"
-            data-no-titlebar-toggle
-          >
-            <HelpCircle size={18} />
-          </button>
-          <button
             onClick={() => openModal('newBook')}
             className="flex items-center px-4 py-2 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-[var(--accent-contrast)] rounded-lg text-sm font-bold transition shadow-lg shadow-[0_10px_24px_rgba(63,111,159,0.16)]"
             data-no-titlebar-toggle
           >
             <Plus size={16} className="mr-1.5" /> 新建作品
           </button>
+          <AccountSettingsMenu />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-8 lg:p-12">

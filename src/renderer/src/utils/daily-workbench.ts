@@ -26,10 +26,6 @@ export interface DailyWorkbenchInput {
   latestSnapshotAt: string | null
   backups: BackupFileSummary[]
   backupError?: string | null
-  syncEnabled: boolean
-  syncUserPresent: boolean
-  syncing: boolean
-  lastBookSyncAt: string | null
 }
 
 export interface DailyWorkbenchModel {
@@ -50,11 +46,6 @@ export interface DailyWorkbenchModel {
     detail: string
   }
   localBackup: {
-    tone: WorkbenchTone
-    label: string
-    detail: string
-  }
-  cloudBackup: {
     tone: WorkbenchTone
     label: string
     detail: string
@@ -147,19 +138,6 @@ export function buildDailyWorkbenchModel(input: DailyWorkbenchInput): DailyWorkb
           detail: '建议立即备份一次'
         }
 
-  let cloudBackup: DailyWorkbenchModel['cloudBackup']
-  if (input.syncing) {
-    cloudBackup = { tone: 'warn', label: '云备份中', detail: '正在上传到 Drive' }
-  } else if (!input.syncUserPresent) {
-    cloudBackup = { tone: 'muted', label: '未登录云同步', detail: '可在应用设置中登录' }
-  } else if (!input.syncEnabled) {
-    cloudBackup = { tone: 'muted', label: '云同步未开启', detail: '可在应用设置中开启' }
-  } else if (input.lastBookSyncAt) {
-    cloudBackup = { tone: 'ok', label: '云备份可用', detail: formatCompactDateTime(input.lastBookSyncAt) }
-  } else {
-    cloudBackup = { tone: 'warn', label: '未上传云备份', detail: '建议手动备份到云端' }
-  }
-
   return {
     dailyGoal,
     todayWords,
@@ -169,7 +147,6 @@ export function buildDailyWorkbenchModel(input: DailyWorkbenchInput): DailyWorkb
     currentChapterWords: Math.max(0, Math.round(input.currentChapterWords || 0)),
     save,
     snapshot,
-    localBackup,
-    cloudBackup
+    localBackup
   }
 }

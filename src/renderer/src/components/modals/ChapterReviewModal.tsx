@@ -60,7 +60,7 @@ export default function ChapterReviewModal() {
 
     const config = await getResolvedAiConfigForBook(bookId)
     if (!isAiConfigReady(config)) {
-      useToastStore.getState().addToast('warning', '请先配置 AI 全局账号或作品 AI 档案')
+      useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI 全局账号，或补充作品 AI 档案')
       return
     }
 

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { UpdateSnapshot } from '../shared/update'
 import type { AiBridgeCompleteRequest, AiResponse, AiStreamCallbacks } from '../renderer/src/utils/ai/types'
 
@@ -156,11 +156,18 @@ const api = {
   updateAnnotation: (id: number, content: string) => ipcRenderer.invoke('db:updateAnnotation', id, content),
   deleteAnnotation: (id: number) => ipcRenderer.invoke('db:deleteAnnotation', id),
 
-  authLogin: (clientId: string, clientSecret: string) =>
-    ipcRenderer.invoke('auth:login', clientId, clientSecret),
+  authLogin: () => ipcRenderer.invoke('auth:login'),
   authGetUser: () => ipcRenderer.invoke('auth:getUser'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   authGetAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
+  authOpenUpgradePage: () => ipcRenderer.invoke('auth:openUpgradePage'),
+  onAuthUpdated: (handler: (user: unknown) => void) => {
+    const listener = (_event: IpcRendererEvent, user: unknown) => handler(user)
+    ipcRenderer.on('auth:updated', listener)
+    return () => {
+      ipcRenderer.removeListener('auth:updated', listener)
+    }
+  },
 
   aiComplete: (request: AiBridgeCompleteRequest) =>
     ipcRenderer.invoke('ai:complete', request) as Promise<AiResponse>,

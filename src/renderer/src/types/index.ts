@@ -198,7 +198,6 @@ export type ModalType =
   | 'export'
   | 'confirm'
   | 'newBook'
-  | 'help'
   | 'login'
   | 'commandPalette'
   | 'styleAnalysis'

@@ -14,17 +14,6 @@ import type { AiSkillOverride, AiSkillTemplate, AiWorkProfile } from '@/utils/ai
 
 type Tab = 'profile' | 'skills'
 
-type AiAccount = {
-  id: number
-  name: string
-  provider: string
-  api_endpoint: string
-  model: string
-  has_secret: number
-  is_default: number
-  status: string
-}
-
 type SkillDraft = Partial<AiSkillTemplate & AiSkillOverride>
 
 const EMPTY_PROFILE: AiWorkProfile = {
@@ -39,6 +28,13 @@ const EMPTY_PROFILE: AiWorkProfile = {
   context_policy: 'smart_minimal',
   created_at: '',
   updated_at: ''
+}
+
+function normalizeWorkProfile(profile: AiWorkProfile): AiWorkProfile {
+  return {
+    ...profile,
+    default_account_id: null
+  }
 }
 
 function createSkillDraft(
@@ -60,10 +56,8 @@ function createSkillDraft(
 
 export default function AiSettingsModal() {
   const closeModal = useUIStore((s) => s.closeModal)
-  const openModal = useUIStore((s) => s.openModal)
   const bookId = useBookStore((s) => s.currentBookId)!
   const [tab, setTab] = useState<Tab>('profile')
-  const [accounts, setAccounts] = useState<AiAccount[]>([])
   const [skills, setSkills] = useState<AiSkillTemplate[]>([])
   const [overrides, setOverrides] = useState<AiSkillOverride[]>([])
   const [profile, setProfile] = useState<AiWorkProfile>(EMPTY_PROFILE)
@@ -79,23 +73,20 @@ export default function AiSettingsModal() {
     [overrides, selectedSkillKey]
   )
   const loadModalState = useCallback(async () => {
-    const [accountRows, skillRows, profileRow, overrideRows] = await Promise.all([
-      window.api.aiGetAccounts(),
+    const [skillRows, profileRow, overrideRows] = await Promise.all([
       window.api.aiGetSkillTemplates(),
       window.api.aiGetWorkProfile(bookId),
       window.api.aiGetSkillOverrides(bookId)
     ])
     return {
-      accounts: accountRows as AiAccount[],
       skills: skillRows as AiSkillTemplate[],
-      profile: (profileRow as AiWorkProfile) || EMPTY_PROFILE,
+      profile: normalizeWorkProfile((profileRow as AiWorkProfile) || EMPTY_PROFILE),
       overrides: overrideRows as AiSkillOverride[]
     }
   }, [bookId])
 
   const refresh = async () => {
     const next = await loadModalState()
-    setAccounts(next.accounts)
     setSkills(next.skills)
     setProfile(next.profile)
     setOverrides(next.overrides)
@@ -108,7 +99,6 @@ export default function AiSettingsModal() {
     const loadInitialState = async () => {
       const next = await loadModalState()
       if (cancelled) return
-      setAccounts(next.accounts)
       setSkills(next.skills)
       setProfile(next.profile)
       setOverrides(next.overrides)
@@ -122,7 +112,10 @@ export default function AiSettingsModal() {
   }, [loadModalState, selectedSkillKey])
 
   const saveProfile = async () => {
-    await window.api.aiSaveWorkProfile(bookId, profile)
+    await window.api.aiSaveWorkProfile(bookId, {
+      ...profile,
+      default_account_id: null
+    })
     useToastStore.getState().addToast('success', '作品 AI 档案已保存')
     await refresh()
   }
@@ -197,40 +190,9 @@ export default function AiSettingsModal() {
           {tab === 'profile' && (
             <div className="space-y-4">
               <p className="text-xs text-[var(--text-muted)]">
-                这里配置 AI 如何理解当前作品，不保存账号密钥。账号、API Key、Gemini CLI 和 Ollama 状态在“应用设置 / AI 全局账号”里统一管理。
+                这里配置 AI 如何理解当前作品，只保存作品提示词、上下文策略和能力卡。账号、API Key、Gemini CLI 和 Ollama 在“应用设置 / AI 全局账号”里统一管理。
               </p>
-              <div className="rounded-lg border border-[var(--info-border)] bg-[var(--info-surface)] p-3 text-xs text-[var(--text-primary)]">
-                <div className="font-bold text-[var(--info-primary)]">AI 账号已归入应用设置</div>
-                <p className="mt-1 text-[var(--text-secondary)]">
-                  OpenAI 兼容、Gemini API Key、Gemini CLI、Ollama 和自定义兼容账号属于系统级资源，所有作品共用。
-                </p>
-                <button
-                  type="button"
-                  onClick={() => openModal('appSettings', { tab: 'aiAccounts' })}
-                  className="mt-2 rounded border border-[var(--info-border)] px-3 py-1.5 text-xs font-semibold text-[var(--info-primary)] hover:bg-[var(--info-surface)]"
-                >
-                  打开 AI 全局账号
-                </button>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="默认全局账号">
-                  <select
-                    value={profile.default_account_id ?? ''}
-                    onChange={(event) =>
-                      setProfile((current) => ({
-                        ...current,
-                        default_account_id: event.target.value ? Number(event.target.value) : null
-                      }))}
-                    className="field"
-                  >
-                    <option value="">自动选择默认账号</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} / {account.provider}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+              <div className="max-w-xl">
                 <Field label="上下文策略">
                   <select
                     value={profile.context_policy}
