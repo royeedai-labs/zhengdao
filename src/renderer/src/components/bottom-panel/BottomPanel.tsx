@@ -58,7 +58,7 @@ export default function BottomPanel() {
     dragStateRef.current = dragState
   }, [dragState])
 
-  const poisonStatus = useMemo(() => checkPoisonWarning(), [checkPoisonWarning, plotNodes])
+  const poisonStatus = checkPoisonWarning()
   const poisonWarningKey = poisonStatus.triggered ? `${poisonStatus.startCh}:${poisonStatus.endCh}` : null
   const poisonWarningVisible = poisonStatus.triggered && poisonWarningKey !== dismissedPoisonKey
 

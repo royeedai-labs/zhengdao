@@ -70,6 +70,7 @@ export class OllamaAdapter implements AiProviderAdapter {
   ): Promise<void> {
     const url = resolveChatUrl(config.ai_api_endpoint)
 
+    let full = ''
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -101,7 +102,6 @@ export class OllamaAdapter implements AiProviderAdapter {
       const reader = body.getReader()
       const decoder = new TextDecoder()
       let buf = ''
-      let full = ''
 
       for (;;) {
         const { done, value } = await reader.read()

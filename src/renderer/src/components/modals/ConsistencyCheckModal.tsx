@@ -3,9 +3,8 @@ import { ShieldAlert, X } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useCharacterStore } from '@/stores/character-store'
 import { useBookStore } from '@/stores/book-store'
-import { useConfigStore } from '@/stores/config-store'
 import { useToastStore } from '@/stores/toast-store'
-import { aiComplete, isAiConfigReady } from '@/utils/ai'
+import { aiComplete, getResolvedAiConfigForBook, isAiConfigReady } from '@/utils/ai'
 import type { Character } from '@/types'
 
 function stripHtml(html: string): string {
@@ -34,9 +33,9 @@ export default function ConsistencyCheckModal() {
     const character = characters.find((c) => c.id === characterId) as Character | undefined
     if (!character) return
 
-    const config = useConfigStore.getState().config
+    const config = await getResolvedAiConfigForBook(bookId)
     if (!isAiConfigReady(config)) {
-      useToastStore.getState().addToast('warning', '请先配置 AI')
+      useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI')
       return
     }
 
@@ -78,7 +77,8 @@ export default function ConsistencyCheckModal() {
         ai_provider: config.ai_provider,
         ai_api_key: config.ai_api_key,
         ai_api_endpoint: config.ai_api_endpoint,
-        ai_model: config.ai_model || ''
+        ai_model: config.ai_model || '',
+        ai_official_profile_id: config.ai_official_profile_id || ''
       }
 
       const prompt = `分析以下角色在各章节中的描述是否一致。检查：称呼、性格、能力、外貌等是否前后矛盾。\n角色信息：${character.name}，${character.faction}，${character.description}\n\n列出发现的不一致之处，格式：[章节名] 具体问题描述`

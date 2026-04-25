@@ -92,6 +92,10 @@ failure_modes:
     scenario: "Uninstall recovery deletes user writing data while repairing a broken NSIS uninstaller"
     expected: "Uninstall configuration and recovery docs explicitly preserve userData and zhengdao.db"
     guard: "scripts/release/electron-builder-config.test.ts plus RELEASING.md recovery checklist"
+  - id: FM-DEF-015
+    scenario: "Application Settings overview references an icon component that was not imported and crashes during unauthenticated account loading"
+    expected: "Application Settings can render its overview while the account state is loading"
+    guard: "src/renderer/src/components/modals/__tests__/AppSettingsModal.test.tsx plus npm run build"
 
 guards:
   - ".ai-os/lanes/default/evals/ai-os-v9-lane-normalization.md"

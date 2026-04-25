@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BookOpen,
   Bot,
@@ -22,6 +22,7 @@ import {
   UserPlus,
   Waves
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useUIStore } from '@/stores/ui-store'
 
@@ -42,7 +43,7 @@ export interface Command {
   label: string
   category: string
   shortcut?: string
-  icon: ComponentType<{ size?: number }>
+  icon: LucideIcon
   requiresBook?: boolean
   action: () => void
 }
@@ -110,7 +111,7 @@ function useCommands(): Command[] {
         category: '导航',
         icon: FileUp,
         requiresBook: true,
-        action: () => openModal('import')
+        action: () => openModal('export')
       },
       {
         id: 'edit-volume',

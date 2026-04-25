@@ -112,7 +112,7 @@ describe('ai assistant conversation repository', () => {
     ])
   })
 
-  it('resolves runtime config from the global default account instead of a work profile account', () => {
+  it('uses official AI by default and only resolves third-party accounts when enabled', () => {
     state.db!
       .prepare(
         `INSERT INTO ai_accounts (id, name, provider, api_endpoint, model, credential_ref, is_default, status)
@@ -127,6 +127,15 @@ describe('ai assistant conversation repository', () => {
           book_id, default_account_id, style_guide, genre_rules, content_boundaries, asset_rules, rhythm_rules, context_policy
         ) VALUES (1, 1, '', '', '', '', '', 'smart_minimal')`
       )
+      .run()
+
+    expect(getResolvedAiConfigForBook(1)).toMatchObject({
+      ai_provider: 'zhengdao_official',
+      ai_model: ''
+    })
+
+    state.db!
+      .prepare("INSERT INTO app_state (key, value) VALUES ('ai_third_party_enabled', '1')")
       .run()
 
     expect(getResolvedAiConfigForBook(1)).toMatchObject({

@@ -92,6 +92,7 @@ export default function DailyWorkbench() {
   const [backups, setBackups] = useState<BackupFileSummary[]>([])
   const [backupError, setBackupError] = useState<string | null>(null)
   const [backupBusy, setBackupBusy] = useState(false)
+  const currentChapterId = currentChapter?.id ?? null
 
   useEffect(() => {
     if (!bookId) return
@@ -112,14 +113,14 @@ export default function DailyWorkbench() {
   }, [bookId, currentChapter?.word_count, chapterSaveStatus.savedAt])
 
   useEffect(() => {
-    if (!currentChapter) {
+    if (currentChapterId == null) {
       setSnapshotCount(0)
       setLatestSnapshotAt(null)
       return
     }
     let cancelled = false
     void (async () => {
-      const rows = (await window.api.getSnapshots(currentChapter.id)) as Array<{ created_at?: string }>
+      const rows = (await window.api.getSnapshots(currentChapterId)) as Array<{ created_at?: string }>
       if (cancelled) return
       setSnapshotCount(rows.length)
       setLatestSnapshotAt(rows[0]?.created_at ?? null)
@@ -127,7 +128,7 @@ export default function DailyWorkbench() {
     return () => {
       cancelled = true
     }
-  }, [currentChapter?.id, chapterSaveStatus.savedAt])
+  }, [currentChapterId, chapterSaveStatus.savedAt])
 
   const refreshBackups = async () => {
     try {

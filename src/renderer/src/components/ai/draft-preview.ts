@@ -1,6 +1,8 @@
 type DraftLike = {
+  id?: number
   kind: string
   title: string
+  status?: string
   payload: Record<string, unknown>
 }
 

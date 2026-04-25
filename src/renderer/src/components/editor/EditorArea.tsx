@@ -17,7 +17,7 @@ import { useForeshadowStore } from '@/stores/foreshadow-store'
 import { useConfigStore } from '@/stores/config-store'
 import { useToastStore } from '@/stores/toast-store'
 import { useUpdateStore } from '@/stores/update-store'
-import { aiSummarize, isAiConfigReady } from '@/utils/ai'
+import { aiSummarize, getResolvedAiConfigForBook, isAiConfigReady } from '@/utils/ai'
 import { createInlineCompleteExtension } from '@/components/editor/InlineComplete'
 import { useDailyStats } from '@/hooks/useDailyStats'
 import { useAchievementCheck } from '@/hooks/useAchievements'
@@ -334,8 +334,8 @@ export default function EditorArea() {
         }
       }),
       createInlineCompleteExtension(
-        () => useConfigStore.getState().config,
-        () => isAiConfigReady(useConfigStore.getState().config)
+        () => getResolvedAiConfigForBook(bookId),
+        () => true
       )
     ],
     editorProps: {
@@ -614,9 +614,9 @@ export default function EditorArea() {
 
   const handleGenerateSummary = useCallback(async () => {
     if (!editor || !currentChapter) return
-    const cfg = useConfigStore.getState().config
+    const cfg = await getResolvedAiConfigForBook(bookId)
     if (!isAiConfigReady(cfg)) {
-      useToastStore.getState().addToast('warning', '请先在项目设置中配置 AI')
+      useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI')
       return
     }
     const text = editor.getText()
@@ -629,7 +629,8 @@ export default function EditorArea() {
         ai_provider: cfg.ai_provider,
         ai_api_key: cfg.ai_api_key,
         ai_api_endpoint: cfg.ai_api_endpoint,
-        ai_model: cfg.ai_model || ''
+        ai_model: cfg.ai_model || '',
+        ai_official_profile_id: cfg.ai_official_profile_id || ''
       },
       text
     )
@@ -639,7 +640,7 @@ export default function EditorArea() {
     }
     await updateChapterSummary(currentChapter.id, res.content.trim())
     useToastStore.getState().addToast('success', '章节摘要已生成')
-  }, [editor, currentChapter, updateChapterSummary])
+  }, [editor, currentChapter, updateChapterSummary, bookId])
 
   const handleFindReplace = () => {
     if (!editor || !searchQuery) return

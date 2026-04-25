@@ -43,7 +43,7 @@ export type AiWorkProfile = {
   updated_at: string
 }
 
-export type AiContextChipKind = 'selection' | 'chapter' | 'characters' | 'foreshadowings' | 'plot_nodes'
+export type AiContextChipKind = 'selection' | 'chapter' | 'characters' | 'foreshadowings' | 'plot_nodes' | 'local_rag'
 
 export type AiContextChip = {
   id: string

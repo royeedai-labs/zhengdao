@@ -81,6 +81,7 @@ export class OpenAIAdapter implements AiProviderAdapter {
       return
     }
 
+    let full = ''
     try {
       const response = await fetch(c.ai_api_endpoint, {
         method: 'POST',
@@ -116,7 +117,6 @@ export class OpenAIAdapter implements AiProviderAdapter {
       const reader = body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      let full = ''
 
       const handlePayload = (payload: string): boolean => {
         if (payload === '[DONE]') {

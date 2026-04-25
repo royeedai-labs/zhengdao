@@ -149,9 +149,10 @@ function CharacterEditModalInner({
 
   useEffect(() => {
     if (!data?.id) return
+    const characterId = data.id
     let cancelled = false
     const loadAppearances = async () => {
-      const rows = await getAppearances(data.id)
+      const rows = await getAppearances(characterId)
       if (!cancelled) setAppearances(rows)
     }
     void loadAppearances()
@@ -162,9 +163,10 @@ function CharacterEditModalInner({
 
   useEffect(() => {
     if (!data?.id) return
+    const characterId = data.id
     let cancelled = false
     const loadMilestones = async () => {
-      const rows = (await window.api.getMilestones(data.id)) as CharacterMilestone[]
+      const rows = (await window.api.getMilestones(characterId)) as CharacterMilestone[]
       if (!cancelled) setMilestones(rows)
     }
     void loadMilestones()

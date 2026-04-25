@@ -79,7 +79,7 @@ export function formatChapterForPublishing(chapter: PublishCheckChapter): string
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => `　　${line}`)
+    .map((line) => `\u3000\u3000${line}`)
   return [title, '', ...paragraphs].join('\n').trim()
 }
 

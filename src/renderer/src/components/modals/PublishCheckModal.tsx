@@ -52,6 +52,10 @@ export default function PublishCheckModal() {
     if (!currentChapter) return []
     return chapters.filter((chapter) => chapter.id === currentChapter.id)
   }, [chapters, currentChapter, scope])
+  const exportChapters = useMemo(
+    () => selectedChapters.map((chapter) => ({ ...chapter, volume_title: chapter.volume_title || '' })),
+    [selectedChapters]
+  )
 
   const publishPackage = useMemo(() => {
     return buildPublishPackage(
@@ -82,11 +86,11 @@ export default function PublishCheckModal() {
       let filterName: string
       const title = scope === 'chapter' && currentChapter ? currentChapter.title : book.title
       if (exportFormat === 'docx') {
-        data = await generateDocx(book.title, book.author || '', selectedChapters)
+        data = await generateDocx(book.title, book.author || '', exportChapters)
         ext = 'docx'
         filterName = 'Word 文档'
       } else if (exportFormat === 'md') {
-        data = exportToMarkdown(book.title, book.author || '', selectedChapters)
+        data = exportToMarkdown(book.title, book.author || '', exportChapters)
         ext = 'md'
         filterName = 'Markdown'
       } else {

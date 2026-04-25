@@ -36,10 +36,11 @@ import {
   createGeminiCliService,
   ensureGeminiCliWorkspace,
   getBundledGeminiCliEntry,
-  resolveGeminiCliRuntime,
-  type AiBridgeCompleteRequest
+  resolveGeminiCliRuntime
 } from './ai/gemini-cli-service'
 import { getProviderStatus as probeProviderStatus } from './ai/provider-status'
+import { completeOfficialAi, getOfficialAiProfiles, streamOfficialAi } from './ai/official-ai-service'
+import type { AiBridgeCompleteRequest } from '../shared/ai'
 
 const zhengdaoAuth = new ZhengdaoAuth()
 const cloudSync = new CloudSync(zhengdaoAuth)
@@ -222,6 +223,26 @@ export function registerIpcHandlers(): void {
     aiAssistantRepo.getResolvedAiConfigForBook(bookId)
   )
   ipcMain.on('ai:streamComplete', (event, requestId: string, request: AiBridgeCompleteRequest) => {
+    if (request.provider === 'zhengdao_official') {
+      void (async () => {
+        const session = streamOfficialAi(request, await zhengdaoAuth.getAccessToken(), {
+          onToken: (token) => event.sender.send('ai:streamToken', requestId, token),
+          onComplete: (content) => {
+            activeGeminiStreamSessions.delete(requestId)
+            event.sender.send('ai:streamComplete', requestId, content)
+          },
+          onError: (error) => {
+            activeGeminiStreamSessions.delete(requestId)
+            event.sender.send('ai:streamError', requestId, error)
+          }
+        })
+        activeGeminiStreamSessions.set(requestId, { cancel: session.cancel })
+        void session.done.finally(() => {
+          activeGeminiStreamSessions.delete(requestId)
+        })
+      })()
+      return
+    }
     if (request.provider !== 'gemini_cli') {
       event.sender.send('ai:streamError', requestId, '主进程暂只处理 Gemini CLI Provider')
       return
@@ -427,11 +448,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('auth:openUpgradePage', async () => zhengdaoAuth.openUpgradePage())
 
   ipcMain.handle('ai:complete', async (_, request: AiBridgeCompleteRequest) => {
+    if (request.provider === 'zhengdao_official') {
+      return completeOfficialAi(request, await zhengdaoAuth.getAccessToken())
+    }
     if (request.provider !== 'gemini_cli') {
       return { content: '', error: '主进程暂只处理 Gemini CLI Provider' }
     }
     return getGeminiCliService().complete(request)
   })
+  ipcMain.handle('ai:getOfficialProfiles', async () =>
+    getOfficialAiProfiles(await zhengdaoAuth.getAccessToken())
+  )
   ipcMain.handle(
     'ai:getProviderStatus',
     async (

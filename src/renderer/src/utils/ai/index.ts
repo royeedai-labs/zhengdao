@@ -22,7 +22,7 @@ export type {
   AiStreamCallbacks
 } from './types'
 
-const PROVIDERS = new Set<AiProvider>(['openai', 'gemini', 'gemini_cli', 'ollama', 'custom'])
+const PROVIDERS = new Set<AiProvider>(['zhengdao_official', 'openai', 'gemini', 'gemini_cli', 'ollama', 'custom'])
 const openaiAdapter = new OpenAIAdapter()
 const geminiAdapter = new GeminiAdapter()
 const ollamaAdapter = new OllamaAdapter()
@@ -41,17 +41,22 @@ type AiStreamBridgeHandle =
     }
   | (() => void)
 
+type NormalizedAiConfig = AiConfig & Pick<AiCallerConfig, 'bookId' | 'ragMode'>
+
 function normalizeProvider(provider?: string): AiProvider {
   if (provider && PROVIDERS.has(provider as AiProvider)) return provider as AiProvider
   return 'openai'
 }
 
-function normalizeConfig(config: AiCallerConfig): AiConfig {
+function normalizeConfig(config: AiCallerConfig): NormalizedAiConfig {
   return {
     ai_provider: normalizeProvider(config.ai_provider),
     ai_api_key: config.ai_api_key || '',
     ai_api_endpoint: config.ai_api_endpoint || '',
-    ai_model: config.ai_model || ''
+    ai_model: config.ai_model || '',
+    ai_official_profile_id: config.ai_official_profile_id || '',
+    ...(config.bookId != null ? { bookId: config.bookId } : {}),
+    ragMode: config.ragMode === 'off' ? 'off' : 'auto'
   }
 }
 
@@ -62,10 +67,10 @@ function adapterFor(provider: AiProvider): AiProviderAdapter | null {
   return null
 }
 
-export function isAiConfigReady(config?: Partial<AiCallerConfig> | null): boolean {
+export function isAiConfigReady(config?: Partial<AiCallerConfig> | null): config is AiCallerConfig {
   if (!config) return false
   const provider = normalizeProvider(config.ai_provider)
-  if (provider === 'gemini_cli' || provider === 'ollama') return true
+  if (provider === 'zhengdao_official' || provider === 'gemini_cli' || provider === 'ollama') return true
   return Boolean(config.ai_api_key?.trim())
 }
 
@@ -158,10 +163,13 @@ async function completeWithProvider(
     return { content: '', error: '请先在项目设置中配置 AI 助手 API' }
   }
 
-  if (normalized.ai_provider === 'gemini_cli') {
+  if (normalized.ai_provider === 'zhengdao_official' || normalized.ai_provider === 'gemini_cli') {
     return bridgeComplete({
-      provider: 'gemini_cli',
+      provider: normalized.ai_provider,
       model: normalized.ai_model,
+      ...(normalized.ai_official_profile_id ? { profileId: normalized.ai_official_profile_id } : {}),
+      ...(normalized.bookId != null ? { bookId: normalized.bookId } : {}),
+      ragMode: normalized.ragMode,
       systemPrompt: request.systemPrompt,
       userPrompt: request.userPrompt,
       maxTokens: request.maxTokens,
@@ -195,10 +203,13 @@ async function streamWithProvider(
     return
   }
 
-  if (normalized.ai_provider === 'gemini_cli') {
+  if (normalized.ai_provider === 'zhengdao_official' || normalized.ai_provider === 'gemini_cli') {
     const bridgeRequest = {
-      provider: 'gemini_cli',
+      provider: normalized.ai_provider,
       model: normalized.ai_model,
+      ...(normalized.ai_official_profile_id ? { profileId: normalized.ai_official_profile_id } : {}),
+      ...(normalized.bookId != null ? { bookId: normalized.bookId } : {}),
+      ragMode: normalized.ragMode,
       systemPrompt: request.systemPrompt,
       userPrompt: request.userPrompt,
       maxTokens: request.maxTokens,

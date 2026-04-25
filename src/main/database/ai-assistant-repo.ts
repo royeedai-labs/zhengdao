@@ -2,6 +2,8 @@ import { getDb } from './connection'
 
 export type AiDraftStatus = 'pending' | 'applied' | 'dismissed'
 export const DEFAULT_AI_CONVERSATION_TITLE = 'AI 对话'
+const AI_OFFICIAL_PROFILE_ID_KEY = 'ai_official_profile_id'
+const AI_THIRD_PARTY_ENABLED_KEY = 'ai_third_party_enabled'
 
 const DEFAULT_PROFILE = {
   style_guide: '',
@@ -510,24 +512,25 @@ export function setAiDraftStatus(id: number, status: AiDraftStatus) {
     .run(status, id)
 }
 
-export function getResolvedAiConfigForBook(bookId: number) {
-  const db = getDb()
-  const account = getDefaultAiAccountRuntimeConfig()
+export function getResolvedAiConfigForBook(_bookId: number) {
+  const thirdPartyEnabled = getAppState(AI_THIRD_PARTY_ENABLED_KEY) === '1'
+  const account = thirdPartyEnabled ? getDefaultAiAccountRuntimeConfig() : null
 
   if (account) {
     return {
       ai_provider: account.ai_provider,
       ai_api_key: account.ai_api_key,
       ai_api_endpoint: account.ai_api_endpoint,
-      ai_model: account.ai_model
+      ai_model: account.ai_model,
+      ai_official_profile_id: ''
     }
   }
 
-  const legacy = db.prepare('SELECT * FROM project_config WHERE book_id = ?').get(bookId) as any
   return {
-    ai_provider: legacy?.ai_provider || 'openai',
-    ai_api_key: legacy?.ai_api_key || '',
-    ai_api_endpoint: legacy?.ai_api_endpoint || '',
-    ai_model: legacy?.ai_model || ''
+    ai_provider: 'zhengdao_official',
+    ai_api_key: '',
+    ai_api_endpoint: '',
+    ai_model: '',
+    ai_official_profile_id: getAppState(AI_OFFICIAL_PROFILE_ID_KEY)
   }
 }

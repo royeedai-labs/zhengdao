@@ -56,7 +56,7 @@ describe('Gemini CLI service', () => {
   it('runs Gemini CLI in an app-owned workspace without yolo mode', async () => {
     const previousNodeOptions = process.env.NODE_OPTIONS
     process.env.NODE_OPTIONS = '--max-external-pointer-table-size=268435456'
-    const spawn = vi.fn(() => ({
+    const spawn = vi.fn((_command: string, _args: string[], _options: { cwd: string; env: NodeJS.ProcessEnv }) => ({
       stdin: { write: vi.fn(), end: vi.fn() },
       stdout: { on: vi.fn((_event, cb) => cb(Buffer.from('{"response":"ok"}'))) },
       stderr: { on: vi.fn() },
@@ -95,7 +95,7 @@ describe('Gemini CLI service', () => {
   })
 
   it('defaults blank Gemini CLI model requests to Gemini 3 Pro', async () => {
-    const spawn = vi.fn(() => ({
+    const spawn = vi.fn((_command: string, _args: string[], _options: unknown) => ({
       stdin: { write: vi.fn(), end: vi.fn() },
       stdout: { on: vi.fn((_event, cb) => cb(Buffer.from('{"response":"ok"}'))) },
       stderr: { on: vi.fn() },
@@ -217,7 +217,7 @@ describe('Gemini CLI service', () => {
   it('uses the resolved Node runtime for Gemini CLI completion when available', async () => {
     const previousNode = process.env.NODE
     process.env.NODE = '/Users/dai/.nvm/versions/node/v20.19.5/bin/node'
-    const spawn = vi.fn(() => ({
+    const spawn = vi.fn((_command: string, _args: string[], _options: unknown) => ({
       stdin: { write: vi.fn(), end: vi.fn() },
       stdout: { on: vi.fn((_event, cb) => cb(Buffer.from('{"response":"ok"}'))) },
       stderr: { on: vi.fn() },
@@ -273,7 +273,7 @@ describe('Gemini CLI service', () => {
   })
 
   it('streams Gemini CLI tokens through callbacks', async () => {
-    const spawn = vi.fn(() => ({
+    const spawn = vi.fn((_command: string, _args: string[], _options: unknown) => ({
       stdin: { write: vi.fn(), end: vi.fn() },
       stdout: {
         on: vi.fn((event, cb) => {
@@ -323,7 +323,7 @@ describe('Gemini CLI service', () => {
   })
 
   it('reports an explicit error when stream-json exits successfully without usable text', async () => {
-    const spawn = vi.fn(() => ({
+    const spawn = vi.fn((_command: string, _args: string[], _options: unknown) => ({
       stdin: { write: vi.fn(), end: vi.fn() },
       stdout: {
         on: vi.fn((event, cb) => {

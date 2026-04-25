@@ -1,7 +1,7 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import type { CharacterField, EmotionLabel, FactionLabel, GenreTemplate, StatusLabel } from '@/types'
 
-export interface GenreTemplateDraft {
+export interface GenreTemplateDraft extends Record<string, unknown> {
   name: string
   character_fields: CharacterField[]
   faction_labels: FactionLabel[]

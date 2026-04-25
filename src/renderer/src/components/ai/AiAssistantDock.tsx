@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, Check, ChevronDown, ClipboardCheck, GripVertical, Loader2, MessageSquare, MessageSquarePlus, Pencil, Send, Settings2, Sparkles, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Bot, Check, ChevronDown, ClipboardCheck, GripVertical, Loader2, MessageSquare, MessageSquarePlus, Send, Settings2, Sparkles, Trash2, X } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useCharacterStore } from '@/stores/character-store'
@@ -52,6 +52,7 @@ type AiMessage = {
   role: 'user' | 'assistant' | 'system'
   content: string
   streaming?: boolean
+  streamingLabel?: string
   metadata?: Record<string, unknown>
 }
 
@@ -118,6 +119,22 @@ function normalizeAssistantDrafts(skill: AiSkillTemplate, content: string): { dr
     return { drafts: [], errors: [] }
   }
   return parseAssistantDrafts(content)
+}
+
+function withLocalRagChip(context: AiAssistantContext): AiAssistantContext {
+  if (context.chips.some((chip) => chip.id === 'local_rag')) return context
+  return {
+    ...context,
+    chips: [
+      ...context.chips,
+      {
+        id: 'local_rag',
+        kind: 'local_rag',
+        label: '本地片段',
+        enabled: true
+      }
+    ]
+  }
 }
 
 export default function AiAssistantDock() {
@@ -243,7 +260,7 @@ export default function AiAssistantDock() {
     [baseContext, enabledContextChipIds]
   )
 
-  const refreshConversation = async (targetConversationId?: number | null) => {
+  const refreshConversation = useCallback(async (targetConversationId?: number | null) => {
     if (!bookId) return
     const conversation = targetConversationId
       ? ({ id: targetConversationId } as { id: number })
@@ -257,9 +274,9 @@ export default function AiAssistantDock() {
     setConversations(conversationRows as AiConversationRow[])
     setDrafts(draftRows as AiDraftRow[])
     setConversationId(conversation.id)
-  }
+  }, [bookId])
 
-  const refreshConfig = async () => {
+  const refreshConfig = useCallback(async () => {
     if (!bookId) return
     const [skillRows, overrideRows, profileRow] = await Promise.all([
       window.api.aiGetSkillTemplates(),
@@ -269,7 +286,7 @@ export default function AiAssistantDock() {
     setSkills(skillRows as AiSkillTemplate[])
     setOverrides(overrideRows as AiSkillOverride[])
     setProfile(profileRow as AiWorkProfile)
-  }
+  }, [bookId])
 
   useEffect(() => {
     if (!bookId) return
@@ -315,7 +332,7 @@ export default function AiAssistantDock() {
     if (!aiAssistantOpen || !bookId) return
     void refreshConfig()
     void refreshConversation(conversationId)
-  }, [aiAssistantOpen, bookId])
+  }, [aiAssistantOpen, bookId, conversationId, refreshConfig, refreshConversation])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -347,15 +364,6 @@ export default function AiAssistantDock() {
   const handleSkillSelectionChange = (skillKey: string | null) => {
     setAiAssistantSkillKey(skillKey)
     setInput('')
-  }
-
-  const toggleContextChip = (chipId: string) => {
-    if (contextPolicy !== 'manual') return
-    setEnabledContextChipIds((current) =>
-      current.includes(chipId)
-        ? current.filter((value) => value !== chipId)
-        : [...current, chipId]
-    )
   }
 
   const validateSkillBeforeSend = (skill: AiSkillTemplate | null): string | null => {
@@ -390,7 +398,8 @@ export default function AiAssistantDock() {
 
     try {
       const config = await getResolvedAiConfigForBook(bookId)
-      if (!isAiConfigReady(config as AiCallerConfig)) {
+      const aiConfig = config ? ({ ...(config as AiCallerConfig), bookId, ragMode: 'auto' as const }) : null
+      if (!isAiConfigReady(aiConfig)) {
         setError('请先在应用设置中配置 AI 全局账号，或完成 Gemini CLI / Ollama 设置')
         setLoading(false)
         return
@@ -398,19 +407,22 @@ export default function AiAssistantDock() {
 
       const requestAbortController = new AbortController()
       activeRequestAbortRef.current = requestAbortController
+      const requestContext = aiConfig.ai_provider === 'zhengdao_official' ? withLocalRagChip(context) : context
 
       const prompt = skill
-        ? composeSkillPrompt({ skill, profile, context, userInput: text })
-        : composeAssistantChatPrompt({ profile, context, skills, userInput: text })
+        ? composeSkillPrompt({ skill, profile, context: requestContext, userInput: text })
+        : composeAssistantChatPrompt({ profile, context: requestContext, skills, userInput: text })
       const userMessage = (await window.api.aiAddMessage(conversationId, 'user', text, {
         skill_key: skill?.key ?? null,
         mode: skill ? 'skill' : 'chat',
-        context_chips: context.chips
+        context_chips: requestContext.chips
       })) as AiMessage
       const pendingMessageId = -Date.now()
       const streamingLabel =
-        (config as AiCallerConfig).ai_provider === 'gemini_cli'
+        aiConfig.ai_provider === 'gemini_cli'
           ? 'Gemini 3 Pro 正在生成...'
+          : aiConfig.ai_provider === 'zhengdao_official'
+            ? '证道官方 AI 正在结合本地片段生成...'
           : 'AI 正在生成...'
       const pendingMessage = createPendingAssistantStreamMessage(pendingMessageId, streamingLabel)
       setMessages((current) => [...current, userMessage, pendingMessage])
@@ -421,7 +433,7 @@ export default function AiAssistantDock() {
         setMessages((current) => appendAssistantStreamToken(current, pendingMessageId, token))
       })
       await aiPromptStream(
-        config as AiCallerConfig,
+        aiConfig,
         prompt.systemPrompt,
         prompt.userPrompt,
         {
@@ -551,13 +563,6 @@ export default function AiAssistantDock() {
     await refreshConversation(conversationId)
   }
 
-  const renameConversation = async (targetConversation: AiConversationRow) => {
-    const nextTitle = window.prompt('输入会话标题', targetConversation.title || '')
-    if (nextTitle == null) return
-    await window.api.aiUpdateConversationTitle(targetConversation.id, nextTitle)
-    await refreshConversation(conversationId ?? targetConversation.id)
-  }
-
   const createConversation = async () => {
     if (!bookId || loading) return
     const conversation = (await window.api.aiCreateConversation(bookId)) as { id: number }
@@ -584,11 +589,6 @@ export default function AiAssistantDock() {
     }
     const conversation = (await window.api.aiCreateConversation(bookId)) as { id: number }
     await refreshConversation(conversation.id)
-  }
-
-  const stopCurrentRequest = () => {
-    if (!loading) return
-    activeRequestAbortRef.current?.abort()
   }
 
   const applyDraft = async (draft: AiDraftRow) => {

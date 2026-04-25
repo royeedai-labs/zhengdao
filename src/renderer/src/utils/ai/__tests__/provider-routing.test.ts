@@ -27,6 +27,38 @@ afterEach(() => {
 })
 
 describe('AI provider routing', () => {
+  it('routes official cloud mode through the preload bridge with the selected profile', async () => {
+    const aiCompleteBridge = vi.fn(async () => ({ content: '官方回复' }))
+    Object.defineProperty(globalThis, 'window', {
+      value: { api: { aiComplete: aiCompleteBridge } },
+      configurable: true,
+      writable: true
+    })
+
+    const result = await aiSummarize(
+      {
+        ai_provider: 'zhengdao_official',
+        ai_api_key: '',
+        ai_api_endpoint: '',
+        ai_model: '',
+        ai_official_profile_id: 'profile-1',
+        bookId: 42,
+        ragMode: 'auto'
+      },
+      '正文'
+    )
+
+    expect(result).toEqual({ content: '官方回复' })
+    expect(aiCompleteBridge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'zhengdao_official',
+        profileId: 'profile-1',
+        bookId: 42,
+        ragMode: 'auto'
+      })
+    )
+  })
+
   it('routes Gemini API Key mode to the Gemini REST format with default endpoint', async () => {
     const fetchMock = setFetch({
       candidates: [{ content: { parts: [{ text: '章节摘要' }] } }]
@@ -80,14 +112,17 @@ describe('AI provider routing', () => {
     )
 
     expect(result).toEqual({ content: '续写内容' })
-    expect(aiCompleteBridge).toHaveBeenCalledWith({
-      provider: 'gemini_cli',
-      model: 'gemini-2.5-flash',
-      systemPrompt: '你是一位优秀的网文作家助手。请根据已有内容自然地续写，保持风格一致。只输出续写内容，不要解释。',
-      userPrompt: '请续写\n\n已有内容：\n已有内容',
-      maxTokens: 500,
-      temperature: 0.8
-    })
+    expect(aiCompleteBridge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'gemini_cli',
+        model: 'gemini-2.5-flash',
+        systemPrompt: '你是一位优秀的网文作家助手。请根据已有内容自然地续写，保持风格一致。只输出续写内容，不要解释。',
+        userPrompt: '请续写\n\n已有内容：\n已有内容',
+        maxTokens: 500,
+        temperature: 0.8,
+        ragMode: 'auto'
+      })
+    )
   })
 
   it('routes Gemini CLI streaming through the preload stream bridge', async () => {
@@ -127,14 +162,15 @@ describe('AI provider routing', () => {
     expect(tokens).toEqual(['第一', '第二'])
     expect(completed).toBe('第一第二')
     expect(aiStreamCompleteBridge).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         provider: 'gemini_cli',
         model: 'gemini-2.5-flash',
         systemPrompt: 'system',
         userPrompt: 'user',
         maxTokens: 1200,
-        temperature: 0.7
-      },
+        temperature: 0.7,
+        ragMode: 'auto'
+      }),
       expect.any(Object)
     )
   })

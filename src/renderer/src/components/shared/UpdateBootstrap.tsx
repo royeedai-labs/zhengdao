@@ -13,7 +13,7 @@ export default function UpdateBootstrap() {
 
   useEffect(() => {
     let active = true
-    let unsubscribe = () => void 0
+    let unsubscribe: () => void = () => undefined
 
     const applySnapshot = async (snapshot: UpdateSnapshot) => {
       setSnapshot(snapshot)

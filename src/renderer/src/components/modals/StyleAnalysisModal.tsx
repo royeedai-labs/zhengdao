@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RefreshCw, X } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
-import { useConfigStore } from '@/stores/config-store'
 import { useChapterStore } from '@/stores/chapter-store'
+import { useBookStore } from '@/stores/book-store'
 import { useToastStore } from '@/stores/toast-store'
-import { aiAnalyzeStyle, isAiConfigReady } from '@/utils/ai'
+import { aiAnalyzeStyle, getResolvedAiConfigForBook, isAiConfigReady } from '@/utils/ai'
 
 const METRIC_LABELS = [
   '句长均衡度',
@@ -52,6 +52,7 @@ export default function StyleAnalysisModal() {
   const closeModal = useUIStore((s) => s.closeModal)
   const modalData = useUIStore((s) => s.modalData) as { text?: string } | null
   const { volumes, currentChapter } = useChapterStore()
+  const bookId = useBookStore((s) => s.currentBookId)
   const [tab, setTab] = useState<'chapter' | 'book'>('chapter')
   const [loading, setLoading] = useState(false)
   const [metrics, setMetrics] = useState<Record<string, number>>({})
@@ -77,9 +78,9 @@ export default function StyleAnalysisModal() {
   }, [volumes])
 
   const runAnalyze = useCallback(async () => {
-    const cfg = useConfigStore.getState().config
+    const cfg = await getResolvedAiConfigForBook(bookId)
     if (!isAiConfigReady(cfg)) {
-      useToastStore.getState().addToast('warning', '请先在项目设置中配置 AI')
+      useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI')
       return
     }
     const text = tab === 'chapter' ? chapterPlain : bookPlain
@@ -99,7 +100,8 @@ export default function StyleAnalysisModal() {
           ai_provider: cfg.ai_provider,
           ai_api_key: cfg.ai_api_key,
           ai_api_endpoint: cfg.ai_api_endpoint,
-          ai_model: cfg.ai_model || ''
+          ai_model: cfg.ai_model || '',
+          ai_official_profile_id: cfg.ai_official_profile_id || ''
         },
         text,
         { signal }
@@ -117,10 +119,9 @@ export default function StyleAnalysisModal() {
         setLoading(false)
       }
     }
-  }, [chapterPlain, bookPlain, tab])
+  }, [chapterPlain, bookPlain, tab, bookId])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- tab open / tab change
     void runAnalyze()
   }, [runAnalyze])
 

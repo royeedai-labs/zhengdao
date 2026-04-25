@@ -69,6 +69,6 @@ describe('genre-template-repo', () => {
 
     expect(deleteGenreTemplate(initial[0]!.id)).toBe(false)
     expect(deleteGenreTemplate(created!.id)).toBe(true)
-    expect(getGenreTemplates().some((item) => item.id === created!.id)).toBe(false)
+    expect(getGenreTemplates().some((item) => item?.id === created!.id)).toBe(false)
   })
 })

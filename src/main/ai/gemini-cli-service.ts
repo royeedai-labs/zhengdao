@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { spawn as spawnProcess, type ChildProcessWithoutNullStreams } from 'child_process'
+import { spawn as spawnProcess } from 'child_process'
 
 export interface AiBridgeCompleteRequest {
-  provider: 'gemini_cli'
+  provider: string
   model: string
   systemPrompt: string
   userPrompt: string
@@ -28,6 +28,14 @@ export interface AiStreamSession {
   done: Promise<void>
 }
 
+type SpawnChildLike = {
+  stdin: { write: (chunk: string) => unknown; end: () => unknown }
+  stdout: { on: (event: string, callback: (...args: any[]) => unknown) => unknown }
+  stderr: { on: (event: string, callback: (...args: any[]) => unknown) => unknown }
+  on: (event: string, callback: (...args: any[]) => unknown) => unknown
+  kill: () => unknown
+}
+
 type SpawnLike = (
   command: string,
   args: string[],
@@ -36,7 +44,7 @@ type SpawnLike = (
     env: NodeJS.ProcessEnv
     stdio: 'pipe'
   }
-) => Pick<ChildProcessWithoutNullStreams, 'stdin' | 'stdout' | 'stderr' | 'on' | 'kill'>
+) => SpawnChildLike
 
 export interface GeminiCliStatus {
   provider: 'gemini_cli'

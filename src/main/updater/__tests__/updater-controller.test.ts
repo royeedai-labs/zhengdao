@@ -118,7 +118,9 @@ describe('UpdaterController', () => {
     })
     expect(updater.quitCalls).toBe(1)
 
-    watchdog?.()
+    if (watchdog) {
+      ;(watchdog as () => void)()
+    }
 
     expect(controller.getSnapshot()).toMatchObject({
       status: 'ready',

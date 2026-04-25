@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import type { AiConfig } from '@/utils/ai'
+import type { AiCallerConfig } from '@/utils/ai'
 import { aiComplete, isAiConfigReady } from '@/utils/ai'
 
 export const inlineCompleteKey = new PluginKey<InlineCompletePluginState>('inlineComplete')
@@ -18,14 +18,7 @@ type InlineCompleteMeta =
 const PROMPT = '请续写后续内容，与前文衔接自然，篇幅控制在两三句话以内。'
 
 export function createInlineCompleteExtension(
-  getConfig: () =>
-    | (Partial<AiConfig> & {
-        ai_api_key?: string
-        ai_api_endpoint?: string
-        ai_model?: string
-      })
-    | null
-    | undefined,
+  getConfig: () => Promise<AiCallerConfig | null> | AiCallerConfig | null,
   getEnabled: () => boolean
 ) {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -160,14 +153,15 @@ export function createInlineCompleteExtension(
                 debounceTimer = setTimeout(() => {
                   debounceTimer = null
                   void (async () => {
-                    const cfg = getConfig()
+                    const cfg = await getConfig()
                     if (!isAiConfigReady(cfg)) return
 
-                    const aiCfg: AiConfig = {
+                    const aiCfg: AiCallerConfig = {
                       ai_provider: cfg.ai_provider,
                       ai_api_key: cfg.ai_api_key,
                       ai_api_endpoint: cfg.ai_api_endpoint,
-                      ai_model: cfg.ai_model || ''
+                      ai_model: cfg.ai_model || '',
+                      ai_official_profile_id: cfg.ai_official_profile_id || ''
                     }
 
                     const cursorPos = view.state.selection.from

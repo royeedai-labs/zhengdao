@@ -27,7 +27,7 @@ export function buildConversationListItems(
 }
 
 export function pickConversationAfterDelete(
-  conversations: Array<Pick<ConversationListRow, 'id'>>,
+  conversations: Array<{ id: number; [key: string]: unknown }>,
   deletedConversationId: number,
   currentConversationId: number | null
 ): number | null {

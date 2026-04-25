@@ -107,6 +107,7 @@ export class GeminiAdapter implements AiProviderAdapter {
       }
     }
 
+    let full = ''
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -130,7 +131,6 @@ export class GeminiAdapter implements AiProviderAdapter {
       const reader = streamBody.getReader()
       const decoder = new TextDecoder()
       let lineBuffer = ''
-      let full = ''
       let aborted = false
 
       const processLine = (line: string) => {

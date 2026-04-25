@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { UpdateSnapshot } from '../shared/update'
-import type { AiBridgeCompleteRequest, AiResponse, AiStreamCallbacks } from '../renderer/src/utils/ai/types'
+import type { AiBridgeCompleteRequest, AiOfficialProfile, AiResponse, AiStreamCallbacks } from '../shared/ai'
 
 let aiStreamRequestSeq = 0
 
@@ -202,6 +202,7 @@ const api = {
     }
   },
   aiCancelStream: (requestId: string) => ipcRenderer.send('ai:cancelStream', requestId),
+  aiGetOfficialProfiles: () => ipcRenderer.invoke('ai:getOfficialProfiles') as Promise<AiOfficialProfile[]>,
   aiGetProviderStatus: (
     provider: string,
     options?: {

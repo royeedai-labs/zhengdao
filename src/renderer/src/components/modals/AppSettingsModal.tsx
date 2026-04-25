@@ -11,6 +11,7 @@ import {
   Info,
   Keyboard,
   KeyRound,
+  Loader2,
   LogIn,
   LogOut,
   Monitor,
@@ -54,7 +55,7 @@ const SETTINGS_TABS: Array<{ id: AppSettingsTab; label: string; icon: typeof Pal
   { id: 'appearance', label: '外观', icon: Palette },
   { id: 'genreTemplates', label: '题材模板', icon: SlidersHorizontal },
   { id: 'dailyDefaults', label: '日更默认', icon: Target },
-  { id: 'aiAccounts', label: 'AI 全局账号', icon: KeyRound },
+  { id: 'aiAccounts', label: 'AI 与模型', icon: KeyRound },
   { id: 'account', label: '账号与云同步', icon: Cloud },
   { id: 'shortcuts', label: '快捷键', icon: Keyboard },
   { id: 'backup', label: '备份与迁移', icon: Database },
@@ -90,7 +91,7 @@ const OVERVIEW_SETTING_CARDS: Array<{
   icon: typeof Palette
 }> = [
   { id: 'appearance', label: '外观', description: '主题、浅深色和界面观感', icon: Palette },
-  { id: 'aiAccounts', label: 'AI 全局账号', description: 'API Key、Gemini CLI 和 Ollama', icon: KeyRound },
+  { id: 'aiAccounts', label: 'AI 与模型', description: '官方 AI 和高级第三方入口', icon: KeyRound },
   { id: 'shortcuts', label: '快捷键', description: '查看和调整常用快捷操作', icon: Keyboard },
   { id: 'backup', label: '备份与迁移', description: '本地备份、恢复和数据导入导出', icon: Database },
   { id: 'updates', label: '更新与关于', description: '版本信息、更新检查和安装', icon: Info },
