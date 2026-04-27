@@ -63,6 +63,40 @@ export type AiAssistantContext = {
   blocks?: AiContextBlock[]
 }
 
+export type AiCanonPack = {
+  version: 'canon-pack.v0.1'
+  bookId: number
+  style: {
+    styleGuide?: string
+    genreRules?: string
+    contentBoundaries?: string
+    assetRules?: string
+    rhythmRules?: string
+  }
+  scene: {
+    selectedText?: string
+    currentChapter?: {
+      id: string
+      title: string
+      excerpt: string
+    }
+  }
+  assets: {
+    characters: Array<{ id: string; name: string; description?: string }>
+    foreshadowings: Array<{ id: string; text: string; status: string }>
+    plotNodes: Array<{ id: string; title: string; description?: string; chapterNumber?: number }>
+  }
+  retrieval: {
+    mode: 'local_keyword' | 'off'
+    citations: Array<{ ref: string; sourceId: string; title?: string; excerpt: string; score?: number }>
+  }
+  provenance: {
+    source: 'desktop-local'
+    generatedAt: string
+    userConfirmedOnly: boolean
+  }
+}
+
 export type AiSelectionSnapshot = {
   chapterId: number | null
   text: string
@@ -117,6 +151,68 @@ function buildContextText(blocks: AiContextBlock[]): string {
     .filter((block) => block.chip.enabled && nonEmpty(block.body))
     .map((block) => block.body)
     .join('\n\n')
+}
+
+export function buildDesktopCanonPack(input: {
+  bookId: number
+  profile?: AiWorkProfile | null
+  currentChapter?: { id: number; title: string; plainText: string } | null
+  selectedText?: string
+  characters?: Array<{ id: number; name: string; description?: string }>
+  foreshadowings?: Array<{ id: number; text: string; status: string }>
+  plotNodes?: Array<{ id: number; title: string; description?: string; chapter_number?: number }>
+  localCitations?: Array<{ ref: string; sourceId: string; title?: string; excerpt: string; score?: number }>
+  generatedAt?: string
+}): AiCanonPack {
+  const profile = input.profile
+  return {
+    version: 'canon-pack.v0.1',
+    bookId: input.bookId,
+    style: {
+      styleGuide: profile?.style_guide || undefined,
+      genreRules: profile?.genre_rules || undefined,
+      contentBoundaries: profile?.content_boundaries || undefined,
+      assetRules: profile?.asset_rules || undefined,
+      rhythmRules: profile?.rhythm_rules || undefined
+    },
+    scene: {
+      selectedText: nonEmpty(input.selectedText) ? clip(input.selectedText || '', 1600) : undefined,
+      currentChapter: input.currentChapter
+        ? {
+            id: String(input.currentChapter.id),
+            title: input.currentChapter.title,
+            excerpt: clip(input.currentChapter.plainText || '', 2600)
+          }
+        : undefined
+    },
+    assets: {
+      characters: (input.characters || []).slice(0, 20).map((character) => ({
+        id: String(character.id),
+        name: character.name,
+        description: nonEmpty(character.description) ? character.description : undefined
+      })),
+      foreshadowings: (input.foreshadowings || []).slice(0, 20).map((item) => ({
+        id: String(item.id),
+        text: item.text,
+        status: item.status
+      })),
+      plotNodes: (input.plotNodes || []).slice(0, 20).map((node) => ({
+        id: String(node.id),
+        title: node.title,
+        description: nonEmpty(node.description) ? node.description : undefined,
+        chapterNumber: node.chapter_number
+      }))
+    },
+    retrieval: {
+      mode: (input.localCitations || []).length > 0 ? 'local_keyword' : 'off',
+      citations: input.localCitations || []
+    },
+    provenance: {
+      source: 'desktop-local',
+      generatedAt: input.generatedAt || new Date().toISOString(),
+      userConfirmedOnly: true
+    }
+  }
 }
 
 function normalizeMatchCandidate(value: string, maxLength = 24): string {

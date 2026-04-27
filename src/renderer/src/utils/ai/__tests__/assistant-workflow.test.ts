@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   attachSelectionMetaToDrafts,
   buildAssistantContext,
+  buildDesktopCanonPack,
   composeAssistantChatPrompt,
   composeSkillPrompt,
   parseAssistantDrafts,
@@ -103,6 +104,38 @@ describe('buildAssistantContext', () => {
     expect(context.contextText).toContain('赵天宇')
     expect(context.contextText).not.toContain('苏离')
     expect(context.contextText.length).toBeLessThan(5000)
+  })
+})
+
+describe('buildDesktopCanonPack', () => {
+  it('packages confirmed local story context without changing draft behavior', () => {
+    const pack = buildDesktopCanonPack({
+      bookId: 10,
+      profile,
+      generatedAt: '2026-04-27T00:00:00.000Z',
+      currentChapter: {
+        id: 7,
+        title: '第七章 宴会',
+        plainText: '林凡在宴会反杀，黑色戒指发烫。'
+      },
+      selectedText: '主角抬手压下赵天宇，全场哗然。',
+      characters: [{ id: 1, name: '林凡', description: '主角' }],
+      foreshadowings: [{ id: 1, text: '黑色戒指', status: 'pending' }],
+      plotNodes: [{ id: 1, title: '宴会反杀', description: '公开打脸', chapter_number: 7 }],
+      localCitations: [{ ref: 'L1', sourceId: '7', title: '第七章 宴会', excerpt: '黑色戒指发烫。' }]
+    })
+
+    expect(pack.version).toBe('canon-pack.v0.1')
+    expect(pack.provenance).toEqual({
+      source: 'desktop-local',
+      generatedAt: '2026-04-27T00:00:00.000Z',
+      userConfirmedOnly: true
+    })
+    expect(pack.style.styleGuide).toBe('短句，强节奏。')
+    expect(pack.scene.currentChapter?.title).toBe('第七章 宴会')
+    expect(pack.assets.characters[0]).toMatchObject({ id: '1', name: '林凡' })
+    expect(pack.retrieval.mode).toBe('local_keyword')
+    expect(pack.retrieval.citations[0]?.ref).toBe('L1')
   })
 })
 
