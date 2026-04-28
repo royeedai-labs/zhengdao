@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
 import { useConfigStore } from '@/stores/config-store'
 import { useSettingsStore } from '@/stores/settings-store'
+import { GENRES, GENRE_LABELS, GENRE_DESCRIPTIONS, DEFAULT_GENRE, type Genre } from '../../../../shared/genre'
 
 export default function NewBookWizard() {
   const closeModal = useUIStore((s) => s.closeModal)
@@ -19,6 +20,9 @@ export default function NewBookWizard() {
   const [step, setStep] = useState(1)
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
+  // GP-01 v2: 5 题材覆盖。webnovel 是默认值；非 webnovel 题材后续会在 ai_work_profiles
+  // 上锁定 product genre，影响后端 SYSTEM_PROMPT / Skill prompt / 草稿 kind 路由。
+  const [genre, setGenre] = useState<Genre>(DEFAULT_GENRE)
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -48,6 +52,14 @@ export default function NewBookWizard() {
     try {
       const book = await createBook(title.trim(), author.trim())
       await initConfigFromTemplate(book.id, selectedTemplate, systemDailyGoal)
+      // GP-01 v2: 把 product genre 写入 ai_work_profiles。saveWorkProfile 会
+      // 在缺 row 时先 insert 默认 row，再 update genre 列。
+      try {
+        await window.api.aiSaveWorkProfile(book.id, { genre })
+      } catch (err) {
+        // 写入失败不阻断作品创建（用户仍能进入工作台），但记录错误供后续诊断。
+        console.error('[NewBookWizard] 写入 product genre 失败', err)
+      }
       openBook(book.id)
       closeModal()
     } finally {
@@ -94,6 +106,34 @@ export default function NewBookWizard() {
                   className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition"
                   placeholder="你的笔名"
                 />
+              </div>
+              <div>
+                <label className="block text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-2">题材</label>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {GENRES.map((g) => {
+                    const active = genre === g
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setGenre(g)}
+                        className={`rounded-md border px-3 py-2 text-left transition ${
+                          active
+                            ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
+                            : 'border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-primary)] hover:border-[var(--border-secondary)]'
+                        }`}
+                      >
+                        <div className="text-sm font-bold">{GENRE_LABELS[g]}</div>
+                        <div className="mt-0.5 line-clamp-2 text-[11px] text-[var(--text-muted)]">
+                          {GENRE_DESCRIPTIONS[g]}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+                  题材决定 AI 行为：网文含在 Pro 内；剧本/小说/学术/公文需另行订阅对应题材包。可在作品 AI 设置中修改。
+                </p>
               </div>
             </>
           )}

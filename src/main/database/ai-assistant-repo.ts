@@ -285,13 +285,17 @@ export function getAiWorkProfile(bookId: number) {
 
 export function saveAiWorkProfile(bookId: number, updates: Record<string, unknown>) {
   getAiWorkProfile(bookId)
+  // GP-01 v2: 'genre' 加入白名单，新建作品向导调 saveAiWorkProfile(bookId, { genre })
+  // 把作品锁定到 5 题材（webnovel/script/fiction/academic/professional）之一。
+  // CHECK 约束（migration v18）保证写入 SQLite 时校验合法值。
   const allowed = [
     'style_guide',
     'genre_rules',
     'content_boundaries',
     'asset_rules',
     'rhythm_rules',
-    'context_policy'
+    'context_policy',
+    'genre'
   ]
   const fields: string[] = []
   const values: unknown[] = []
