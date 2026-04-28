@@ -32,6 +32,7 @@ import WorldConsistencyModal from './WorldConsistencyModal'
 import CitationsManagerModal from './CitationsManagerModal'
 import CitationPickerModal from './CitationPickerModal'
 import ReferencesBuildModal from './ReferencesBuildModal'
+import TeamManagementModal from './TeamManagementModal'
 
 function renderModal(type: ModalType) {
   switch (type) {
@@ -67,6 +68,7 @@ function renderModal(type: ModalType) {
     case 'citationsManager': return <CitationsManagerModal />
     case 'citationPicker': return <CitationPickerModal />
     case 'referencesBuild': return <ReferencesBuildModal />
+    case 'teamManagement': return <TeamManagementModal />
     default: return null
   }
 }

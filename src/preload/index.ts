@@ -115,6 +115,23 @@ const api = {
   updateWikiEntry: (id: number, data: Record<string, unknown>) => ipcRenderer.invoke('db:updateWikiEntry', id, data),
   deleteWikiEntry: (id: number) => ipcRenderer.invoke('db:deleteWikiEntry', id),
 
+  // DI-06 v2 — 团队协作 (走 official auth token 调 /v1/teams/*)
+  teamListMine: () => ipcRenderer.invoke('team:listMine'),
+  teamCreate: (body: { name: string; plan?: string; seatLimit?: number }) =>
+    ipcRenderer.invoke('team:create', body),
+  teamListMembers: (teamId: string) => ipcRenderer.invoke('team:listMembers', teamId),
+  teamRemoveMember: (teamId: string, userId: string) =>
+    ipcRenderer.invoke('team:removeMember', teamId, userId),
+  teamListInvitations: (teamId: string) => ipcRenderer.invoke('team:listInvitations', teamId),
+  teamCreateInvitation: (
+    teamId: string,
+    body: { email: string; role?: 'admin' | 'member'; expiresInHours?: number }
+  ) => ipcRenderer.invoke('team:createInvitation', teamId, body),
+  teamRevokeInvitation: (teamId: string, invitationId: string) =>
+    ipcRenderer.invoke('team:revokeInvitation', teamId, invitationId),
+  teamAcceptInvitation: (invitationToken: string) =>
+    ipcRenderer.invoke('team:acceptInvitation', invitationToken),
+
   // DI-02 v1 — 学术引文 (academic 题材专用)
   listCitations: (bookId: number) => ipcRenderer.invoke('db:listCitations', bookId),
   createCitation: (bookId: number, data: Record<string, unknown>) =>

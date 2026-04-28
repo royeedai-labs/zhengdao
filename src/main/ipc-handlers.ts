@@ -49,6 +49,7 @@ import {
 import { getProviderStatus as probeProviderStatus } from './ai/provider-status'
 import { completeOfficialAi, getOfficialAiProfiles, streamOfficialAi } from './ai/official-ai-service'
 import { executeOfficialSkill } from './ai/skill-execute-service'
+import * as teamApi from './team/team-api'
 import type { ZhengdaoUser } from './auth/zhengdao-auth'
 import type { AiBridgeCompleteRequest } from '../shared/ai'
 
@@ -400,6 +401,37 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('db:createWikiEntry', (_, data) => wikiRepo.createWikiEntry(data))
   ipcMain.handle('db:updateWikiEntry', (_, id, data) => wikiRepo.updateWikiEntry(id, data))
   ipcMain.handle('db:deleteWikiEntry', (_, id) => wikiRepo.deleteWikiEntry(id))
+
+  // DI-06 v2 — 团队协作 (后端通过证道账号 token 调 /v1/teams/*)
+  ipcMain.handle('team:listMine', async () =>
+    teamApi.listMyTeams(await zhengdaoAuth.getAccessToken())
+  )
+  ipcMain.handle('team:create', async (_, body: { name: string; plan?: string; seatLimit?: number }) =>
+    teamApi.createTeam(await zhengdaoAuth.getAccessToken(), body)
+  )
+  ipcMain.handle('team:listMembers', async (_, teamId: string) =>
+    teamApi.listTeamMembers(await zhengdaoAuth.getAccessToken(), teamId)
+  )
+  ipcMain.handle('team:removeMember', async (_, teamId: string, userId: string) =>
+    teamApi.removeTeamMember(await zhengdaoAuth.getAccessToken(), teamId, userId)
+  )
+  ipcMain.handle('team:listInvitations', async (_, teamId: string) =>
+    teamApi.listTeamInvitations(await zhengdaoAuth.getAccessToken(), teamId)
+  )
+  ipcMain.handle(
+    'team:createInvitation',
+    async (
+      _,
+      teamId: string,
+      body: { email: string; role?: 'admin' | 'member'; expiresInHours?: number }
+    ) => teamApi.createTeamInvitation(await zhengdaoAuth.getAccessToken(), teamId, body)
+  )
+  ipcMain.handle('team:revokeInvitation', async (_, teamId: string, invitationId: string) =>
+    teamApi.revokeTeamInvitation(await zhengdaoAuth.getAccessToken(), teamId, invitationId)
+  )
+  ipcMain.handle('team:acceptInvitation', async (_, invitationToken: string) =>
+    teamApi.acceptInvitationByToken(await zhengdaoAuth.getAccessToken(), invitationToken)
+  )
 
   // DI-02 v1 — 学术引文管理 (academic 题材专用)
   ipcMain.handle('db:listCitations', (_, bookId: number) => citationRepo.listCitations(bookId))
