@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, Plus, Trash2, Wand2, X } from 'lucide-react'
+import { DOMSerializer } from '@tiptap/pm/model'
 import { useUIStore } from '@/stores/ui-store'
 import { useToastStore } from '@/stores/toast-store'
 import { useBookStore } from '@/stores/book-store'
@@ -40,6 +41,75 @@ interface DialogueRewriteOutput {
 
 interface ModalData {
   selectedText?: string
+}
+
+/**
+ * DI-04 v3 — 优先用 DI-03 写好的 data-script-kind 段落结构。
+ *
+ * tiptap selection HTML 形如:
+ *   <p data-script-kind="character">ANGELA</p>
+ *   <p data-script-kind="parenthetical">(冷笑)</p>
+ *   <p data-script-kind="dialogue">你又迟到了。</p>
+ *   <p data-script-kind="character">MARK</p>
+ *   <p data-script-kind="dialogue">堵车。</p>
+ *
+ * 解析时把连续 character + (parenthetical?) + dialogue 合并成一行
+ * DialogueLineDraft。multi-line dialogue (同一 character 下多个 dialogue)
+ * 用空格连成一段。识别失败 (没有任何 data-script-kind 段落) 时返回 null,
+ * 让上层 fallback 到 plain-text naive parser。
+ */
+export function parseStructuredDialogue(html: string | null | undefined): DialogueLineDraft[] | null {
+  if (!html) return null
+  if (typeof DOMParser === 'undefined') return null
+  if (!html.includes('data-script-kind')) return null
+
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html')
+  const paragraphs = Array.from(doc.querySelectorAll('p'))
+  if (paragraphs.length === 0) return null
+
+  const lines: DialogueLineDraft[] = []
+  let current: DialogueLineDraft | null = null
+
+  for (const p of paragraphs) {
+    const kind = p.getAttribute('data-script-kind')
+    const text = (p.textContent || '').trim()
+    if (!text) continue
+    if (kind === 'character') {
+      if (current) lines.push(current)
+      current = { character: text, parenthetical: '', line: '' }
+    } else if (kind === 'parenthetical' && current) {
+      current.parenthetical = text.replace(/^\(/, '').replace(/\)$/, '')
+    } else if (kind === 'dialogue' && current) {
+      current.line = current.line ? `${current.line} ${text}` : text
+    }
+    // slugline / transition / 普通段落: 跳过 (剧本块改写只关心连续对白)
+  }
+  if (current) lines.push(current)
+
+  const filled = lines.filter((l) => l.character && l.line)
+  return filled.length > 0 ? filled : null
+}
+
+/**
+ * 从 active tiptap editor 当前 selection 取出 HTML, 用 prosemirror DOMSerializer
+ * 序列化 selection 切片, 再交给 parseStructuredDialogue。失败 / 没选区返回 null。
+ */
+function readStructuredFromActiveEditor(): DialogueLineDraft[] | null {
+  if (typeof document === 'undefined') return null
+  const editor = getActiveEditor()
+  if (!editor) return null
+  const { from, to } = editor.state.selection
+  if (from === to) return null
+  try {
+    const slice = editor.state.doc.cut(from, to)
+    const serializer = DOMSerializer.fromSchema(editor.state.schema)
+    const fragment = serializer.serializeFragment(slice.content)
+    const wrapper = document.createElement('div')
+    wrapper.appendChild(fragment)
+    return parseStructuredDialogue(wrapper.innerHTML)
+  } catch {
+    return null
+  }
 }
 
 function naiveParseDialogue(raw: string): DialogueLineDraft[] {
@@ -98,16 +168,23 @@ export default function DialogueRewriteModal() {
   const bookId = useBookStore((s) => s.currentBookId)
   const addToast = useToastStore((s) => s.addToast)
 
-  const [lines, setLines] = useState<DialogueLineDraft[]>(() =>
-    naiveParseDialogue(modalData?.selectedText || '')
-  )
+  // DI-04 v3: 初始化时先尝试从 active editor 抓 selection HTML, 命中
+  // DI-03 的 data-script-kind 段落则结构化解析 (作者已经标好了 character/
+  // parenthetical/dialogue, 拆得最准); 失败再退化到 plain-text naive parser。
+  const [lines, setLines] = useState<DialogueLineDraft[]>(() => {
+    const structured = readStructuredFromActiveEditor()
+    if (structured) return structured
+    return naiveParseDialogue(modalData?.selectedText || '')
+  })
   const [intent, setIntent] = useState('')
   const [voiceProfilesRaw, setVoiceProfilesRaw] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<DialogueRewriteOutput | null>(null)
 
   useEffect(() => {
-    setLines(naiveParseDialogue(modalData?.selectedText || ''))
+    if (modalData?.selectedText) {
+      setLines(naiveParseDialogue(modalData.selectedText))
+    }
   }, [modalData?.selectedText])
 
   const validLines = useMemo(
