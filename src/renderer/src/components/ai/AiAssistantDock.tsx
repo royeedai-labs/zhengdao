@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, Check, ClipboardCheck, Loader2, MessageSquare, MessageSquarePlus, MessagesSquare, Send, Settings2, Sparkles, Trash2, X } from 'lucide-react'
+import { Bot, Check, ClipboardCheck, Loader2, MessageSquare, MessageSquarePlus, MessagesSquare, Send, Settings2, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useCharacterStore } from '@/stores/character-store'
@@ -888,6 +888,14 @@ export function AiAssistantPanel() {
                   <MessagesSquare size={16} />
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => openModal('worldConsistency')}
+                title="世界观一致性检查 (Canon Pack)"
+                className="rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--accent-secondary)]"
+              >
+                <ShieldCheck size={16} />
+              </button>
               <button
                 type="button"
                 onClick={() => openModal('aiSettings')}

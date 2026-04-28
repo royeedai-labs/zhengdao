@@ -214,6 +214,7 @@ export type ModalType =
   | 'publishCheck'
   | 'formatTemplate'
   | 'dialogueRewrite'
+  | 'worldConsistency'
 
 export interface GenrePreset {
   id: string
