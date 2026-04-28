@@ -27,6 +27,8 @@ import { appendEditorAnnotation, getEditorAnnotations, setEditorAnnotations } fr
 import { useShortcutStore } from '@/stores/shortcut-store'
 import { matchesShortcutChord } from '@/utils/shortcuts'
 import { TextReplaceExtension } from '@/components/editor/TextReplace'
+import { ScriptKindAttr } from '@/components/editor/ScriptKindAttr'
+import ScriptToolbar from '@/components/editor/ScriptToolbar'
 import { collectCharacterIdsFromContent } from '@/utils/character-association'
 import { setActiveEditor } from '@/components/editor/active-editor'
 import { buildAiAssistantSelectionSnapshot } from '@/components/editor/ai-selection'
@@ -147,6 +149,29 @@ export default function EditorArea() {
   } = useUIStore()
   const syncAppearances = useCharacterStore((s) => s.syncAppearances)
   const bookId = useBookStore((s) => s.currentBookId)!
+
+  useEffect(() => {
+    let cancelled = false
+    if (!bookId) {
+      setAiWorkGenre(null)
+      return () => {
+        cancelled = true
+      }
+    }
+    void window.api
+      .aiGetWorkProfile(bookId)
+      .then((profile: unknown) => {
+        if (cancelled) return
+        const g = (profile as { genre?: string } | null)?.genre
+        setAiWorkGenre(typeof g === 'string' ? g : null)
+      })
+      .catch(() => {
+        if (!cancelled) setAiWorkGenre(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bookId])
   const checkAndUpgrade = useForeshadowStore((s) => s.checkAndUpgrade)
   const { refresh: refreshDailyStats } = useDailyStats()
   const checkAchievements = useAchievementCheck()
@@ -166,6 +191,8 @@ export default function EditorArea() {
   const lastSavedRef = useRef<string>('')
   const prevWordCountRef = useRef(0)
   const prevChapterIdRef = useRef<number | undefined>(undefined)
+  // DI-03: 当前作品题材包. 仅 'script' 时挂 ScriptToolbar。
+  const [aiWorkGenre, setAiWorkGenre] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [summaryModalOpen, setSummaryModalOpen] = useState(false)
@@ -328,6 +355,7 @@ export default function EditorArea() {
       createFocusModeExtension(() => useUIStore.getState().focusMode),
       createAnnotationExtension(() => getEditorAnnotations()),
       TextReplaceExtension,
+      ScriptKindAttr,
       Mention.configure({
         HTMLAttributes: {
           class: 'mention-node bg-[var(--danger-surface)] text-[var(--danger-primary)] rounded cursor-pointer'
@@ -783,6 +811,8 @@ export default function EditorArea() {
           {currentChapter.title}
         </div>
       </div>
+
+      {aiWorkGenre === 'script' && <ScriptToolbar editor={editor} />}
 
       <div
         className="flex-1 overflow-y-auto px-8 pt-16 pb-32 lg:px-32 scroll-smooth"

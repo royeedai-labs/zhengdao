@@ -359,6 +359,53 @@
   height: 0;
 }
 
+/* DI-03 — 剧本结构化段落 (Fountain 排版规则) */
+.tiptap p.script-slugline {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 0.6rem;
+  color: var(--text-primary);
+}
+
+.tiptap p.script-character {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+  margin-top: 1rem;
+  margin-bottom: 0.15rem;
+  font-weight: 600;
+  color: var(--accent-secondary);
+}
+
+.tiptap p.script-parenthetical {
+  font-style: italic;
+  font-size: 0.85em;
+  text-align: center;
+  margin: 0 auto 0.15rem;
+  max-width: 45%;
+  color: var(--text-muted);
+}
+
+.tiptap p.script-dialogue {
+  text-align: center;
+  margin: 0 auto 0.75rem;
+  max-width: 70%;
+}
+
+.tiptap p.script-transition {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: right;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--accent-secondary);
+}
+
 .mention-node {
   padding: 1px 6px;
   border-radius: 4px;
