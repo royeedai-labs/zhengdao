@@ -45,8 +45,25 @@ export type AiWorkProfile = {
   style_fingerprint?: string
   /** DI-01 v2 — 题材包定制元数据 (academic 的引文风格 / professional 的归档号格式), 字符串化 JSON */
   genre_meta?: string
+  /** DI-07 v1 — 用户手动锁定的关键设定数组, 字符串化 JSON (CanonLockEntry[]) */
+  canon_pack_locks?: string
   created_at: string
   updated_at: string
+}
+
+/**
+ * DI-07 v1 — Canon Pack 手动锁定条目
+ *
+ * 写作者在 AiSettingsModal "作品 AI 档案" tab 的 CanonLocksSection 里手动维护,
+ * world-consistency Skill 在检查时按 priority 决定: critical = 强校验/必抛冲突,
+ * high = 警告, medium = 建议, low = 仅记录。
+ */
+export interface CanonLockEntry {
+  id: string
+  label: string
+  value: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  createdAt: string
 }
 
 export type AiContextChipKind = 'selection' | 'chapter' | 'characters' | 'foreshadowings' | 'plot_nodes' | 'local_rag'

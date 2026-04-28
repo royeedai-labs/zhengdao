@@ -12,6 +12,7 @@ import { useToastStore } from '@/stores/toast-store'
 import { useUIStore } from '@/stores/ui-store'
 import type { AiSkillOverride, AiSkillTemplate, AiWorkProfile } from '@/utils/ai/assistant-workflow'
 import StyleLearningSection from '../ai/StyleLearningSection'
+import CanonLocksSection from '../ai/CanonLocksSection'
 
 type Tab = 'profile' | 'skills'
 
@@ -30,6 +31,7 @@ const EMPTY_PROFILE: AiWorkProfile = {
   genre: 'webnovel',
   style_fingerprint: '',
   genre_meta: '',
+  canon_pack_locks: '',
   created_at: '',
   updated_at: ''
 }
@@ -215,6 +217,7 @@ export default function AiSettingsModal() {
               <TextArea label="资产生成规则" value={profile.asset_rules} onChange={(value) => setProfile((current) => ({ ...current, asset_rules: value }))} />
               <TextArea label="章节节奏要求" value={profile.rhythm_rules} onChange={(value) => setProfile((current) => ({ ...current, rhythm_rules: value }))} />
               <StyleLearningSection bookId={bookId} profile={profile} onSaved={refresh} />
+              <CanonLocksSection bookId={bookId} profile={profile} onSaved={refresh} />
               <div className="flex justify-end">
                 <button type="button" onClick={() => void saveProfile()} className="primary-btn">
                   <Save size={14} /> 保存作品 AI 档案

@@ -291,6 +291,9 @@ export function saveAiWorkProfile(bookId: number, updates: Record<string, unknow
   // GP-01 v2: 'genre' 加入白名单，DI-01 v2: 'style_fingerprint' + 'genre_meta' 加入白名单
   // - style_fingerprint: layer2.style-learning skill 的输出 JSON (字符串化)
   // - genre_meta: 题材包定制元数据 (例如 academic 的引文风格、professional 的归档号格式), 字符串化 JSON
+  // DI-07 v1: 'canon_pack_locks' 加入白名单
+  // - canon_pack_locks: 用户手动锁定的关键设定数组 (JSON 字符串化), 用于 world-consistency
+  //   Skill 优先级覆盖, 见 CanonLocksSection。
   const allowed = [
     'style_guide',
     'genre_rules',
@@ -300,7 +303,8 @@ export function saveAiWorkProfile(bookId: number, updates: Record<string, unknow
     'context_policy',
     'genre',
     'style_fingerprint',
-    'genre_meta'
+    'genre_meta',
+    'canon_pack_locks'
   ]
   const fields: string[] = []
   const values: unknown[] = []

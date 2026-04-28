@@ -608,6 +608,15 @@ const migrations: Migration[] = [
     }
   },
   {
+    version: 21,
+    description: 'DI-07 v1: add canon_pack_locks JSON column to ai_work_profiles for manually-locked canon entries (overrides world-consistency Skill defaults)',
+    up: (db) => {
+      const cols = db.prepare('PRAGMA table_info(ai_work_profiles)').all() as { name: string }[]
+      if (cols.some((c) => c.name === 'canon_pack_locks')) return
+      db.exec(`ALTER TABLE ai_work_profiles ADD COLUMN canon_pack_locks TEXT NOT NULL DEFAULT ''`)
+    }
+  },
+  {
     version: 20,
     description: 'DI-01 v2: add style_fingerprint + genre_meta JSON columns to ai_work_profiles for AI style learning persistence',
     up: (db) => {
