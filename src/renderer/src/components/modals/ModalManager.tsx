@@ -26,6 +26,7 @@ import AiSettingsModal from './AiSettingsModal'
 import AppSettingsModal from './AppSettingsModal'
 import ChapterReviewModal from './ChapterReviewModal'
 import PublishCheckModal from './PublishCheckModal'
+import FormatTemplateModal from './FormatTemplateModal'
 
 function renderModal(type: ModalType) {
   switch (type) {
@@ -55,6 +56,7 @@ function renderModal(type: ModalType) {
     case 'appSettings': return <AppSettingsModal />
     case 'chapterReview': return <ChapterReviewModal />
     case 'publishCheck': return <PublishCheckModal />
+    case 'formatTemplate': return <FormatTemplateModal />
     default: return null
   }
 }

@@ -212,6 +212,7 @@ export type ModalType =
   | 'appSettings'
   | 'chapterReview'
   | 'publishCheck'
+  | 'formatTemplate'
 
 export interface GenrePreset {
   id: string
