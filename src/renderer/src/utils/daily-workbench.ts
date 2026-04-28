@@ -21,9 +21,9 @@ export interface DailyWorkbenchInput {
   streak: number
   currentChapterId: number | null
   currentChapterWords: number
-  saveStatus: ChapterSaveStatus
-  snapshotCount: number
-  latestSnapshotAt: string | null
+  saveStatus?: ChapterSaveStatus
+  snapshotCount?: number
+  latestSnapshotAt?: string | null
   backups: BackupFileSummary[]
   backupError?: string | null
 }
@@ -91,27 +91,29 @@ export function buildDailyWorkbenchModel(input: DailyWorkbenchInput): DailyWorkb
   const remainingWords = dailyGoal > 0 ? Math.max(0, dailyGoal - todayWords) : 0
   const progressPercent = dailyGoal > 0 ? Math.min(100, Math.round((todayWords / dailyGoal) * 100)) : 0
   const latestBackup = selectLatestBackup(input.backups)
+  const saveStatus = input.saveStatus ?? createInitialSaveStatus(input.currentChapterId)
+  const snapshotCount = input.snapshotCount ?? 0
 
   let save: DailyWorkbenchModel['save']
   if (!input.currentChapterId) {
     save = { tone: 'muted', label: '未选章节', detail: '选择章节后开始保存追踪' }
-  } else if (input.saveStatus.kind === 'error') {
-    save = { tone: 'danger', label: '保存失败', detail: input.saveStatus.error || '请手动重试保存' }
-  } else if (input.saveStatus.kind === 'dirty') {
+  } else if (saveStatus.kind === 'error') {
+    save = { tone: 'danger', label: '保存失败', detail: saveStatus.error || '请手动重试保存' }
+  } else if (saveStatus.kind === 'dirty') {
     save = { tone: 'warn', label: '有未保存内容', detail: '自动保存排队中' }
-  } else if (input.saveStatus.kind === 'saving') {
+  } else if (saveStatus.kind === 'saving') {
     save = { tone: 'warn', label: '保存中', detail: '正在写入本地数据库' }
-  } else if (input.saveStatus.kind === 'saved') {
-    save = { tone: 'ok', label: '正文已保存', detail: formatCompactDateTime(input.saveStatus.savedAt) }
+  } else if (saveStatus.kind === 'saved') {
+    save = { tone: 'ok', label: '正文已保存', detail: formatCompactDateTime(saveStatus.savedAt) }
   } else {
     save = { tone: 'muted', label: '等待写作', detail: '当前章节尚无新的保存记录' }
   }
 
   const snapshot =
-    input.snapshotCount > 0
+    snapshotCount > 0
       ? {
           tone: 'ok' as const,
-          label: `${input.snapshotCount} 个快照`,
+          label: `${snapshotCount} 个快照`,
           detail: `最近 ${formatCompactDateTime(input.latestSnapshotAt)}`
         }
       : {

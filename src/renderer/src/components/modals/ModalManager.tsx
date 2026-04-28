@@ -33,6 +33,8 @@ import CitationsManagerModal from './CitationsManagerModal'
 import CitationPickerModal from './CitationPickerModal'
 import ReferencesBuildModal from './ReferencesBuildModal'
 import TeamManagementModal from './TeamManagementModal'
+import ForeshadowBoardModal from './ForeshadowBoardModal'
+import QuickNotesModal from './QuickNotesModal'
 
 function renderModal(type: ModalType) {
   switch (type) {
@@ -43,6 +45,8 @@ function renderModal(type: ModalType) {
     case 'newVolume': return <NewVolumeModal />
     case 'newChapter': return <NewChapterModal />
     case 'foreshadow': return <ForeshadowModal />
+    case 'foreshadowBoard': return <ForeshadowBoardModal />
+    case 'quickNotes': return <QuickNotesModal />
     case 'projectSettings': return <ProjectSettingsModal />
     case 'snapshot': return <SnapshotModal />
     case 'export': return <ExportModal />

@@ -6,7 +6,7 @@ import type { AiWorkProfile } from '@/utils/ai/assistant-workflow'
 /**
  * DI-01 v2 — AI 风格学习面板
  *
- * 嵌入 AiSettingsModal 的"作品 AI 档案" tab，让作者粘贴 1~3 段过往作品，
+ * 嵌入 AiSettingsModal 的"作品上下文" tab，让作者粘贴 1~3 段过往作品，
  * 调用后端 layer2.style-learning Skill 抽取结构化风格指纹（用词偏好、句长
  * 分布、修辞密度、情感色彩）并保存到 ai_work_profiles.style_fingerprint。
  *

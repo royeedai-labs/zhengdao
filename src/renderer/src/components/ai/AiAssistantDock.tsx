@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Bot, Check, ClipboardCheck, Loader2, MessageSquare, MessageSquarePlus, MessagesSquare, Send, Settings2, ShieldCheck, Sparkles, Trash2, Users, X } from 'lucide-react'
+import { BookOpen, Bot, Check, ClipboardCheck, Loader2, MessageSquare, MessageSquarePlus, MessagesSquare, Plus, Send, Settings2, ShieldCheck, Sparkles, Trash2, Users, X } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useCharacterStore } from '@/stores/character-store'
 import { useForeshadowStore } from '@/stores/foreshadow-store'
 import { usePlotStore } from '@/stores/plot-store'
 import { useToastStore } from '@/stores/toast-store'
-import { useUIStore } from '@/stores/ui-store'
+import { useUIStore, type AiChapterDraft, type InlineAiDraft } from '@/stores/ui-store'
 import { useWikiStore } from '@/stores/wiki-store'
-import { aiPromptStream, getResolvedAiConfigForBook, isAiConfigReady, type AiCallerConfig } from '@/utils/ai'
+import { aiPromptStream, getResolvedGlobalAiConfig, isAiConfigReady, type AiCallerConfig } from '@/utils/ai'
 import {
   applyAssistantContextSelection,
   attachSelectionMetaToDrafts,
   buildAssistantContext,
   composeAssistantChatPrompt,
   composeSkillPrompt,
+  createChapterDraftFromAssistantResponse,
   parseAssistantDrafts,
   planTextDraftApplication,
   resolveAssistantContextPolicy,
@@ -28,12 +29,14 @@ import { stripHtmlToText } from '@/utils/html-to-text'
 import { getActiveEditor } from '@/components/editor/active-editor'
 import { applyProfessionalTemplate, getProfessionalTemplate } from '../../../../shared/professional-templates'
 import { buildConversationListItems, pickConversationAfterDelete } from './conversation-list'
+import { buildChapterEditorQuickActions, isBlankChapterContent } from './chapter-quick-actions'
 import {
   resolveAssistantIntent,
   resolveAssistantSkillSelection
 } from './conversation-mode'
 import { shouldSubmitAiAssistantInput } from './input-behavior'
 import { buildDraftPreviewModel } from './draft-preview'
+import { DEFAULT_CONTINUE_INPUT, toAiChapterDraft, toInlineAiDraft } from './inline-draft'
 import { buildAssistantMessageDisplay } from './message-display'
 import { translateAiAssistantLauncherPosition } from './panel-layout'
 import {
@@ -41,8 +44,21 @@ import {
   completeAssistantStreamMessage,
   createAssistantStreamChunkQueue,
   createPendingAssistantStreamMessage,
-  getAssistantStreamEmptyError
+  getAssistantStreamEmptyError,
+  replaceAssistantStreamContent
 } from './streaming-message'
+import { resolveAssistantContext } from '@/utils/ai/assistant-context'
+import {
+  CREATION_BRIEF_FIELDS,
+  getCreationBriefMissingFields,
+  isCreationBriefComplete,
+  normalizeCreationBrief,
+  stripBookCreationChapterContent,
+  validateBookCreationPackage,
+  type AiBookCreationPackage,
+  type AssistantCreationBrief,
+  type CreationBriefField
+} from '../../../../shared/ai-book-creation'
 
 type AiMessage = {
   id: number
@@ -62,11 +78,15 @@ type AiConversationRow = {
 
 type AiDraftRow = {
   id: number
+  conversation_id?: number | null
   kind: string
   title: string
   payload: Record<string, unknown>
   status: 'pending' | 'applied' | 'dismissed'
+  target_ref?: string
 }
+
+type AiBookCreationResult = { book?: { id: number }; firstChapterId?: number | null }
 
 function plainToHtml(text: string): string {
   return text
@@ -115,7 +135,14 @@ function normalizeAssistantDrafts(skill: AiSkillTemplate, content: string): { dr
     }
     return { drafts: [], errors: [] }
   }
-  return parseAssistantDrafts(content)
+  const parsed = parseAssistantDrafts(content)
+  if (skill.key === 'create_chapter' && parsed.drafts.length === 0) {
+    const draft = createChapterDraftFromAssistantResponse(content, 'AI 新章节', {
+      allowPlainTextFallback: true
+    })
+    if (draft) return { drafts: [draft], errors: [] }
+  }
+  return parsed
 }
 
 function withLocalRagChip(context: AiAssistantContext): AiAssistantContext {
@@ -134,10 +161,1066 @@ function withLocalRagChip(context: AiAssistantContext): AiAssistantContext {
   }
 }
 
+function formatProviderLabel(provider?: string | null): string {
+  switch (provider) {
+    case 'zhengdao_official':
+      return '官方 AI'
+    case 'openai':
+      return 'OpenAI 兼容'
+    case 'gemini':
+      return 'Gemini API'
+    case 'gemini_cli':
+      return 'Gemini CLI'
+    case 'ollama':
+      return 'Ollama'
+    case 'custom_openai':
+      return '自定义兼容'
+    default:
+      return '未配置'
+  }
+}
+
+function extractJsonObject(text: string): unknown | null {
+  const trimmed = text.trim()
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed)
+  const candidate = fenced ? fenced[1].trim() : trimmed
+  try {
+    return JSON.parse(candidate)
+  } catch {
+    const start = candidate.indexOf('{')
+    const end = candidate.lastIndexOf('}')
+    if (start < 0 || end <= start) return null
+    try {
+      return JSON.parse(candidate.slice(start, end + 1))
+    } catch {
+      return null
+    }
+  }
+}
+
+function mergeCreationBrief(current: AssistantCreationBrief, incoming: unknown): AssistantCreationBrief {
+  const normalized = normalizeCreationBrief(incoming)
+  const next: AssistantCreationBrief = { ...current }
+  const writable = next as Record<string, unknown>
+  for (const field of CREATION_BRIEF_FIELDS) {
+    const value = normalized[field.key]
+    if (typeof value === 'string' && value.trim()) {
+      writable[field.key] = value
+    }
+  }
+  if (normalized.author) next.author = normalized.author
+  if (normalized.productGenre) next.productGenre = normalized.productGenre
+  return { ...next, confirmed: false }
+}
+
+function formatBriefForPrompt(brief: AssistantCreationBrief): string {
+  const normalized = normalizeCreationBrief(brief)
+  return CREATION_BRIEF_FIELDS
+    .map((field) => {
+      const value = String(normalized[field.key] || '').trim()
+      const fallback = field.required ? '未确认' : '可由 AI 评估/代写'
+      return `${field.required ? '必填' : '可选'}｜${field.label}: ${value || fallback}`
+    })
+    .join('\n')
+}
+
+function formatCreationBriefFieldGuide(): string {
+  return CREATION_BRIEF_FIELDS
+    .map((field, index) => {
+      const options = field.quickOptions.map((option, optionIndex) => `${optionIndex + 1}) ${option}`).join('；')
+      return `${index + 1}. ${field.required ? '必填' : '可选'}${field.multiSelect ? '｜可多选' : ''}｜${field.label}：${options}`
+    })
+    .join('\n')
+}
+
+function buildBookshelfBriefSystemPrompt(): string {
+  return [
+    '你是证道的唯一 AI 创作助手，现在处于书架页的新作品沟通模式。',
+    '你的目标是快速收束起书需求，而不是一项一项审问用户。',
+    '核心必填只有：作品名或暂定名、题材/主题/核心冲突、目标总字数或篇幅范围。其余字段都是可选项；用户没填时，可以引导用户选择“让 AI 评估”“让 AI 写”“先按默认”。',
+    '不要一轮只追问一个字段。除非用户明确只讨论某一项，否则 assistant_message 只用 1-2 句告诉用户可以在输入框上方点选多项，也可以直接输入其他想法。',
+    '选项由界面提供，不要在 assistant_message 里输出编号清单、Markdown 标题、粗体、项目符号或长列表。',
+    '支持用户一次性回复多个编号、多个短语或自然语言，例如：“1 现实生活，2 10万字内，章节让AI评估，人物让AI写”。',
+    '只把用户明确说出的内容、用户选择的候选项，或用户明确授权 AI 评估/代写的内容写入 brief。用户只说不确定时，不要替用户写死方向，要把对应字段写成“让 AI 评估”或继续给组合选择。',
+    'brief 只能使用这些英文 key：title, genreTheme, targetLength, chapterPlan, characterPlan, styleAudiencePlatform, worldbuilding, boundaries, otherRequirements, author, productGenre。',
+    '请严格返回 JSON，不要 Markdown，不要额外解释。格式：{"assistant_message":"给用户看的回复","brief":{...},"suggestions":[{"field":"字段名","options":["选项1","选项2"]}]}。'
+  ].join('\n')
+}
+
+function buildBookshelfBriefUserPrompt(input: {
+  brief: AssistantCreationBrief
+  userInput: string
+  messages: AiMessage[]
+}): string {
+  const recent = input.messages
+    .slice(-8)
+    .map((message) => `${message.role}: ${message.content}`)
+    .join('\n')
+  return [
+    `当前已确认需求：\n${formatBriefForPrompt(input.brief)}`,
+    `字段规则与可选答案：\n${formatCreationBriefFieldGuide()}`,
+    recent ? `最近对话：\n${recent}` : '',
+    `用户新输入：\n${input.userInput}`,
+    '请更新 brief。assistant_message 不要列选项，只提示用户使用输入框上方选项区或直接输入其他内容；如果核心必填已齐，就提示用户可生成筹备包预览或继续补可选项。'
+  ].filter(Boolean).join('\n\n')
+}
+
+function buildBookPackagePrompt(brief: AssistantCreationBrief): { systemPrompt: string; userPrompt: string } {
+  return {
+    systemPrompt: [
+      '你是长篇小说开书策划助手。',
+      '你只能依据用户已确认的核心起书需求生成筹备包，不能新增未经确认的核心方向。',
+      '对用户留空或写明“让 AI 评估/让 AI 写/先按默认”的可选字段，你可以按题材常规和平台安全边界合理补全。',
+      '必须返回一个完整 JSON 对象。不要写章节正文，所有 chapters.content 必须是空字符串；用 summary 和 plotNodes 表达开篇规划。',
+      '请严格返回 JSON，不要 Markdown，不要解释。'
+    ].join('\n'),
+    userPrompt: [
+      `已确认需求：\n${formatBriefForPrompt(brief)}`,
+      [
+        '请生成 AiBookCreationPackage JSON，字段如下：',
+        '{"book":{"title":"","author":""},"workProfile":{"productGenre":"webnovel","styleGuide":"","genreRules":"","contentBoundaries":"","assetRules":"","rhythmRules":""},"volumes":[{"title":"第一卷","chapters":[{"title":"第一章","summary":"","content":""}]}],"characters":[{"name":"","faction":"neutral","status":"active","description":"","customFields":{}}],"wikiEntries":[{"category":"","title":"","content":""}],"plotNodes":[{"chapterNumber":1,"title":"","score":0,"nodeType":"main","description":""}],"foreshadowings":[{"text":"","expectedChapter":null,"expectedWordCount":null}]}',
+        '要求：1 个分卷，3-5 个章节规划；每章 content 都留空；人物 2-4 个；设定 2-4 条；剧情节点 3-6 个；伏笔 1-3 个。'
+      ].join('\n')
+    ].join('\n\n')
+  }
+}
+
+function coerceBookCreationPackage(value: unknown): AiBookCreationPackage | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Partial<AiBookCreationPackage>
+  if (raw.book && Array.isArray(raw.volumes)) return raw as AiBookCreationPackage
+  const wrapped = value as {
+    package?: unknown
+    bookPackage?: unknown
+    book_creation_package?: unknown
+    creationPackage?: unknown
+    data?: unknown
+    result?: unknown
+  }
+  if (wrapped.package && typeof wrapped.package === 'object') return wrapped.package as AiBookCreationPackage
+  if (wrapped.bookPackage && typeof wrapped.bookPackage === 'object') return wrapped.bookPackage as AiBookCreationPackage
+  if (wrapped.book_creation_package && typeof wrapped.book_creation_package === 'object') {
+    return wrapped.book_creation_package as AiBookCreationPackage
+  }
+  if (wrapped.creationPackage && typeof wrapped.creationPackage === 'object') {
+    return wrapped.creationPackage as AiBookCreationPackage
+  }
+  if (wrapped.data && typeof wrapped.data === 'object') return coerceBookCreationPackage(wrapped.data)
+  if (wrapped.result && typeof wrapped.result === 'object') return coerceBookCreationPackage(wrapped.result)
+  return null
+}
+
+function mergeBookCreationPackageWithFallback(
+  pkg: AiBookCreationPackage | null,
+  fallback: AiBookCreationPackage
+): AiBookCreationPackage {
+  if (!pkg) return fallback
+  const volumes = Array.isArray(pkg.volumes)
+    ? pkg.volumes
+        .map((volume, index) => ({
+          title: String(volume?.title || fallback.volumes[index]?.title || `第${index + 1}卷`),
+          chapters: Array.isArray(volume?.chapters) && volume.chapters.length > 0
+            ? volume.chapters.map((chapter, chapterIndex) => ({
+                title: String(chapter?.title || fallback.volumes[index]?.chapters[chapterIndex]?.title || `第${chapterIndex + 1}章`),
+                summary: String(chapter?.summary || fallback.volumes[index]?.chapters[chapterIndex]?.summary || ''),
+                content: String(chapter?.content || fallback.volumes[index]?.chapters[chapterIndex]?.content || '')
+              }))
+            : fallback.volumes[index]?.chapters || fallback.volumes[0].chapters
+        }))
+        .filter((volume) => volume.chapters.length > 0)
+    : []
+
+  return {
+    book: {
+      title: String(pkg.book?.title || fallback.book.title),
+      author: String(pkg.book?.author || fallback.book.author || '')
+    },
+    workProfile: {
+      ...fallback.workProfile,
+      ...(pkg.workProfile || {})
+    },
+    volumes: volumes.length > 0 ? volumes : fallback.volumes,
+    characters: Array.isArray(pkg.characters) && pkg.characters.length > 0 ? pkg.characters : fallback.characters,
+    wikiEntries: Array.isArray(pkg.wikiEntries) ? pkg.wikiEntries : fallback.wikiEntries,
+    plotNodes: Array.isArray(pkg.plotNodes) ? pkg.plotNodes : fallback.plotNodes,
+    foreshadowings: Array.isArray(pkg.foreshadowings) ? pkg.foreshadowings : fallback.foreshadowings
+  }
+}
+
+function pickFirstBriefPart(value: string | undefined, fallback: string): string {
+  const first = String(value || '')
+    .split(/[、,，/；;]/)
+    .map((part) => part.trim())
+    .find(Boolean)
+  return first || fallback
+}
+
+function clampPlotScore(value: unknown): number {
+  const score = Number(value)
+  if (!Number.isFinite(score)) return 0
+  return Math.max(-5, Math.min(5, Math.round(score)))
+}
+
+function resolveFallbackBookTitle(brief: AssistantCreationBrief): string {
+  const title = String(brief.title || '').trim()
+  if (title && !/AI 起名|暂定名|稍后改名/.test(title)) return title
+  const genre = pickFirstBriefPart(brief.genreTheme, '新作品')
+  if (genre.includes('现实')) return '平凡日子里的光'
+  if (genre.includes('职场')) return '逆风向上'
+  if (genre.includes('悬疑')) return '沉默的真相'
+  return `${genre}新篇`
+}
+
+function buildFallbackBookCreationPackage(briefInput: AssistantCreationBrief): AiBookCreationPackage {
+  const brief = normalizeCreationBrief(briefInput)
+  const title = resolveFallbackBookTitle(brief)
+  const genreTheme = brief.genreTheme || '让 AI 评估题材'
+  const targetLength = brief.targetLength || '让 AI 评估篇幅'
+  const chapterPlan = brief.chapterPlan || '按篇幅自动规划'
+  const characterPlan = brief.characterPlan || '让 AI 写人物组'
+  const style = brief.styleAudiencePlatform || '让 AI 评估平台'
+  const world = brief.worldbuilding || '现实城市'
+  const boundaries = brief.boundaries || '无明显禁区'
+  const protagonist = characterPlan.includes('老王') ? '老王' : '主角'
+
+  return {
+    book: {
+      title,
+      author: brief.author || ''
+    },
+    workProfile: {
+      productGenre: brief.productGenre || 'webnovel',
+      styleGuide: style,
+      genreRules: genreTheme,
+      contentBoundaries: boundaries,
+      assetRules: `人物方向：${characterPlan}`,
+      rhythmRules: `篇幅：${targetLength}；章节：${chapterPlan}`
+    },
+    volumes: [
+      {
+        title: '第一卷',
+        chapters: [
+          {
+            title: '第一章 开始',
+            summary: `围绕${genreTheme}展开开篇，建立${protagonist}的现实处境、生活压力和主要矛盾。篇幅目标为${targetLength}，章节节奏暂按“${chapterPlan}”推进。`,
+            content: ''
+          }
+        ]
+      }
+    ],
+    characters: [
+      {
+        name: protagonist,
+        faction: 'main',
+        status: 'active',
+        description: characterPlan
+      }
+    ],
+    wikiEntries: [
+      {
+        category: '世界观',
+        title: world,
+        content: `初始设定方向：${world}`
+      },
+      {
+        category: '创作边界',
+        title: '内容边界',
+        content: boundaries
+      }
+    ],
+    plotNodes: [
+      {
+        chapterNumber: 1,
+        title: '开篇处境',
+        score: 1,
+        nodeType: 'main',
+        description: `建立${protagonist}的日常处境和核心矛盾。`
+      },
+      {
+        chapterNumber: 1,
+        title: '变化发生',
+        score: 2,
+        nodeType: 'main',
+        description: '用一个明确事件推动故事进入主线。'
+      }
+    ],
+    foreshadowings: [
+      {
+        text: '第一章埋下后续转折的线索。',
+        expectedChapter: 3,
+        expectedWordCount: null
+      }
+    ]
+  }
+}
+
+async function createBookFromPackageThroughExistingApi(
+  briefInput: AssistantCreationBrief,
+  pkg: AiBookCreationPackage
+): Promise<AiBookCreationResult> {
+  const brief = normalizeCreationBrief(briefInput)
+  const book = (await window.api.createBook({
+    title: String(pkg.book.title || brief.title || 'AI 新作品'),
+    author: String(pkg.book.author || brief.author || '')
+  })) as { id: number }
+  if (!book?.id) throw new Error('创建作品失败：缺少作品 ID')
+
+  if (typeof window.api.aiSaveWorkProfile === 'function') {
+    await window.api.aiSaveWorkProfile(book.id, {
+      genre: pkg.workProfile?.productGenre || brief.productGenre || 'webnovel',
+      style_guide: pkg.workProfile?.styleGuide || '',
+      genre_rules: pkg.workProfile?.genreRules || '',
+      content_boundaries: pkg.workProfile?.contentBoundaries || '',
+      asset_rules: pkg.workProfile?.assetRules || '',
+      rhythm_rules: pkg.workProfile?.rhythmRules || ''
+    })
+  }
+
+  let firstChapterId: number | null = null
+  for (const [volumeIndex, volume] of pkg.volumes.entries()) {
+    const createdVolume = (await window.api.createVolume({
+      book_id: book.id,
+      title: String(volume.title || `第${volumeIndex + 1}卷`)
+    })) as { id: number }
+    for (const [chapterIndex, chapter] of volume.chapters.entries()) {
+      const createdChapter = (await window.api.createChapter({
+        volume_id: createdVolume.id,
+        title: String(chapter.title || `第${chapterIndex + 1}章`),
+        content: ensureHtmlContent(String(chapter.content || '')),
+        summary: String(chapter.summary || '')
+      })) as { id: number }
+      firstChapterId ??= createdChapter.id
+    }
+  }
+
+  for (const character of pkg.characters) {
+    await window.api.createCharacter({
+      book_id: book.id,
+      name: String(character.name || '未命名角色'),
+      faction: character.faction || 'neutral',
+      status: character.status || 'active',
+      description: character.description || '',
+      custom_fields: character.customFields || {}
+    })
+  }
+
+  for (const [index, entry] of pkg.wikiEntries.entries()) {
+    await window.api.createWikiEntry({
+      book_id: book.id,
+      category: entry.category || 'AI 设定',
+      title: entry.title || '未命名设定',
+      content: entry.content || '',
+      sort_order: index
+    })
+  }
+
+  for (const [index, node] of pkg.plotNodes.entries()) {
+    await window.api.createPlotNode({
+      book_id: book.id,
+      chapter_number: Number.isFinite(Number(node.chapterNumber)) ? Number(node.chapterNumber) : 0,
+      title: node.title || '剧情节点',
+      score: clampPlotScore(node.score),
+      node_type: node.nodeType === 'branch' ? 'branch' : 'main',
+      description: node.description || '',
+      sort_order: index
+    })
+  }
+
+  for (const item of pkg.foreshadowings) {
+    await window.api.createForeshadowing({
+      book_id: book.id,
+      chapter_id: firstChapterId,
+      text: item.text || 'AI 伏笔',
+      expected_chapter: item.expectedChapter ?? null,
+      expected_word_count: item.expectedWordCount ?? null
+    })
+  }
+
+  return { book, firstChapterId }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function decodeJsonStringFragment(fragment: string): string {
+  const safeFragment = fragment
+    .replace(/\\u[0-9a-fA-F]{0,3}$/, '')
+    .replace(/\\$/, '')
+
+  try {
+    return JSON.parse(`"${safeFragment}"`) as string
+  } catch {
+    return safeFragment
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, code: string) => String.fromCharCode(parseInt(code, 16)))
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+  }
+}
+
+function extractStreamingJsonStringProperty(text: string, key: string): string | null {
+  const match = new RegExp(`"${escapeRegExp(key)}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)`).exec(text)
+  const value = match ? decodeJsonStringFragment(match[1]).trim() : ''
+  return value || null
+}
+
+function extractAssistantMessageFromStructuredStream(text: string): string | null {
+  const parsed = extractJsonObject(text) as { assistant_message?: unknown } | null
+  if (typeof parsed?.assistant_message === 'string' && parsed.assistant_message.trim()) {
+    return parsed.assistant_message.trim()
+  }
+  return extractStreamingJsonStringProperty(text, 'assistant_message')
+}
+
+function looksLikeJsonResponse(text: string): boolean {
+  const trimmed = text.trim()
+  return /^(?:```json\s*)?\{/.test(trimmed) || trimmed.includes('"assistant_message"') || trimmed.includes('"brief"')
+}
+
+function buildBookshelfBriefFallbackContent(brief: AssistantCreationBrief): string {
+  const missing = getCreationBriefMissingFields(brief)
+  if (missing.length > 0) {
+    return `还缺 ${missing.length} 个核心必填项：${missing.map((field) => field.label).join('、')}。可以在输入框上方点选，或直接输入其他内容。`
+  }
+  return '核心需求已齐，可以生成筹备包预览；也可以继续在输入框上方补充可选项。'
+}
+
+function buildBookshelfBriefFinalContent(rawStream: string, brief: AssistantCreationBrief): string {
+  const assistantMessage = extractAssistantMessageFromStructuredStream(rawStream)
+  if (assistantMessage) return assistantMessage
+
+  if (looksLikeJsonResponse(rawStream)) {
+    return buildBookshelfBriefFallbackContent(brief)
+  }
+
+  return rawStream.trim() || buildBookshelfBriefFallbackContent(brief)
+}
+
+function countStreamingMatches(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length || 0
+}
+
+function formatBookPackageSummary(pkg: AiBookCreationPackage, title = '筹备包结构已解析'): string {
+  const chapterCount = pkg.volumes.reduce(
+    (total, volume) => total + (Array.isArray(volume.chapters) ? volume.chapters.length : 0),
+    0
+  )
+  return [
+    title,
+    `作品：《${pkg.book.title || '未命名'}》`,
+    `分卷 ${pkg.volumes.length} · 章节 ${chapterCount}`,
+    `人物 ${pkg.characters.length} · 设定 ${pkg.wikiEntries.length}`,
+    `剧情 ${pkg.plotNodes.length} · 伏笔 ${pkg.foreshadowings.length}`
+  ].join('\n')
+}
+
+function buildBookshelfBriefStreamContent(rawStream: string): string {
+  const assistantMessage = extractAssistantMessageFromStructuredStream(rawStream)
+  if (assistantMessage) return assistantMessage
+
+  const trimmed = rawStream.trim()
+  if (!trimmed || looksLikeJsonResponse(trimmed)) return ''
+  return trimmed
+}
+
+function buildBookPackageStreamContent(rawStream: string): string {
+  const pkg = coerceBookCreationPackage(extractJsonObject(rawStream))
+  if (pkg) return formatBookPackageSummary(pkg)
+
+  const bookTitle = extractStreamingJsonStringProperty(rawStream, 'title')
+  const volumeCount = countStreamingMatches(rawStream, /"chapters"\s*:/g)
+  const chapterCount = countStreamingMatches(rawStream, /"summary"\s*:/g)
+  const characterCount = countStreamingMatches(rawStream, /"name"\s*:/g)
+  const wikiCount = countStreamingMatches(rawStream, /"category"\s*:/g)
+  const plotCount = countStreamingMatches(rawStream, /"nodeType"\s*:/g)
+  const foreshadowCount = countStreamingMatches(rawStream, /"expectedChapter"\s*:/g)
+  const counts = [
+    volumeCount ? `分卷 ${volumeCount}` : '',
+    chapterCount ? `章节 ${chapterCount}` : '',
+    characterCount ? `人物 ${characterCount}` : '',
+    wikiCount ? `设定 ${wikiCount}` : '',
+    plotCount ? `剧情 ${plotCount}` : '',
+    foreshadowCount ? `伏笔 ${foreshadowCount}` : ''
+  ].filter(Boolean)
+
+  return [
+    '正在解析筹备包结构...',
+    bookTitle ? `作品：《${bookTitle}》` : '',
+    counts.length > 0 ? `已识别：${counts.join(' · ')}` : ''
+  ].filter(Boolean).join('\n')
+}
+
+function BookshelfCreationAssistantPanel() {
+  const closeAiAssistant = useUIStore((s) => s.closeAiAssistant)
+  const openAiAssistant = useUIStore((s) => s.openAiAssistant)
+  const aiAssistantCommand = useUIStore((s) => s.aiAssistantCommand)
+  const consumeAiAssistantCommand = useUIStore((s) => s.consumeAiAssistantCommand)
+  const loadBooks = useBookStore((s) => s.loadBooks)
+  const openBook = useBookStore((s) => s.openBook)
+  const selectChapter = useChapterStore((s) => s.selectChapter)
+  const [brief, setBrief] = useState<AssistantCreationBrief>({})
+  const [messages, setMessages] = useState<AiMessage[]>([])
+  const [input, setInput] = useState('')
+  const [customOptionInputs, setCustomOptionInputs] = useState<Record<string, string>>({})
+  const [packageDraft, setPackageDraft] = useState<AiBookCreationPackage | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const nextLocalMessageIdRef = useRef(-1)
+  const sendCommandRef = useRef<(text: string) => void>(() => {})
+  const missingFields = useMemo(() => getCreationBriefMissingFields(brief), [brief])
+  const packageValidation = useMemo(() => validateBookCreationPackage(packageDraft), [packageDraft])
+  const canConfirmBrief = isCreationBriefComplete(brief)
+  const canGeneratePackage = canConfirmBrief && !loading
+  const canCreate = packageValidation.ok && !creating
+  const composerOptionFields = useMemo(() => {
+    const normalized = normalizeCreationBrief(brief)
+    const missingRequired = CREATION_BRIEF_FIELDS.filter((field) => field.required && !String(normalized[field.key] || '').trim())
+    const otherFields = CREATION_BRIEF_FIELDS.filter((field) => !missingRequired.some((missing) => missing.key === field.key))
+    return [...missingRequired, ...otherFields]
+  }, [brief])
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages.length, loading])
+
+  useEffect(() => {
+    if (!aiAssistantCommand || aiAssistantCommand.surface !== 'bookshelf') return
+    consumeAiAssistantCommand(aiAssistantCommand.id)
+    if (!aiAssistantCommand.input.trim()) return
+    setInput(aiAssistantCommand.input)
+    if (aiAssistantCommand.autoSend) {
+      window.setTimeout(() => sendCommandRef.current(aiAssistantCommand.input), 0)
+    }
+  }, [aiAssistantCommand, consumeAiAssistantCommand])
+
+  const addLocalMessage = (role: AiMessage['role'], content: string, metadata?: Record<string, unknown>) => {
+    const message: AiMessage = {
+      id: nextLocalMessageIdRef.current,
+      role,
+      content,
+      metadata
+    }
+    nextLocalMessageIdRef.current -= 1
+    setMessages((current) => [...current, message])
+    return message
+  }
+
+  const updateBriefField = (key: keyof AssistantCreationBrief, value: string) => {
+    setBrief((current) => ({ ...current, [key]: value, confirmed: false }))
+    setPackageDraft(null)
+  }
+
+  const applyBriefOption = (field: CreationBriefField, option: string, toggleSelected: boolean) => {
+    setBrief((current) => {
+      const currentValue = String(current[field.key] || '').trim()
+      const values = currentValue.split(/[、,，]/).map((value) => value.trim()).filter(Boolean)
+      const nextValue = field.multiSelect
+        ? (values.includes(option) && toggleSelected
+            ? values.filter((value) => value !== option).join('、')
+            : values.includes(option)
+              ? values.join('、')
+              : [...values, option].join('、'))
+        : option
+      return { ...current, [field.key]: nextValue, confirmed: false }
+    })
+    setPackageDraft(null)
+  }
+
+  const applyBriefQuickOption = (field: CreationBriefField, option: string) => {
+    applyBriefOption(field, option, true)
+  }
+
+  const updateCustomOptionInput = (field: CreationBriefField, value: string) => {
+    setCustomOptionInputs((current) => ({ ...current, [field.key]: value }))
+  }
+
+  const applyCustomOptionInput = (field: CreationBriefField) => {
+    const option = String(customOptionInputs[field.key] || '').trim()
+    if (!option) return
+    applyBriefOption(field, option, false)
+    setCustomOptionInputs((current) => ({ ...current, [field.key]: '' }))
+  }
+
+  const isBriefQuickOptionSelected = (field: CreationBriefField, option: string) => {
+    const value = String(brief[field.key] || '').trim()
+    if (!value) return false
+    const values = value.split(/[、,，]/).map((item) => item.trim()).filter(Boolean)
+    return field.multiSelect ? values.includes(option) : value === option
+  }
+
+  const send = async (explicitInput?: string) => {
+    const text = (explicitInput ?? input).trim()
+    if (!text || loading) return
+    setInput('')
+    setError(null)
+    setLoading(true)
+    addLocalMessage('user', text)
+    const pendingId = nextLocalMessageIdRef.current
+    nextLocalMessageIdRef.current -= 1
+    setMessages((current) => [
+      ...current,
+      createPendingAssistantStreamMessage(pendingId, 'AI 正在整理起书需求...')
+    ])
+
+    try {
+      const config = await getResolvedGlobalAiConfig()
+      const aiConfig = config ? ({ ...(config as AiCallerConfig), ragMode: 'off' as const }) : null
+      if (!isAiConfigReady(aiConfig)) {
+        setMessages((current) => current.filter((message) => message.id !== pendingId))
+        setError('请先在应用设置 / AI 与模型中完成全局 AI 配置，或完成 Gemini CLI / Ollama 设置')
+        return
+      }
+      let streamedContent = ''
+      let streamError = ''
+      const queue = createAssistantStreamChunkQueue(() => {
+        setMessages((current) =>
+          replaceAssistantStreamContent(current, pendingId, buildBookshelfBriefStreamContent(streamedContent))
+        )
+      })
+      await aiPromptStream(
+        aiConfig,
+        buildBookshelfBriefSystemPrompt(),
+        buildBookshelfBriefUserPrompt({ brief, userInput: text, messages }),
+        {
+          onToken: (token) => {
+            streamedContent += token
+            queue.push(token)
+          },
+          onComplete: (content) => {
+            streamedContent = content || streamedContent
+          },
+          onError: (message) => {
+            streamError = message
+          }
+        },
+        1400,
+        0.55
+      )
+      await queue.drain()
+      if (streamError) {
+        setError(streamError)
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === pendingId ? { ...message, streaming: false, content: message.content || '生成失败' } : message
+          )
+        )
+        return
+      }
+      const parsed = extractJsonObject(streamedContent) as
+        | { assistant_message?: string; brief?: unknown; package?: unknown; bookPackage?: unknown }
+        | null
+      const nextBrief = parsed?.brief ? mergeCreationBrief(brief, parsed.brief) : brief
+      const assistantText = buildBookshelfBriefFinalContent(streamedContent, nextBrief)
+      if (parsed?.brief) {
+        setBrief((current) => mergeCreationBrief(current, parsed.brief))
+        setPackageDraft(null)
+      }
+      const maybePackage = coerceBookCreationPackage(parsed)
+      if (maybePackage && isCreationBriefComplete(nextBrief)) {
+        setPackageDraft(stripBookCreationChapterContent(maybePackage))
+      }
+      setMessages((current) =>
+        completeAssistantStreamMessage(current, pendingId, Math.abs(pendingId), assistantText)
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AI 请求失败')
+      setMessages((current) => current.filter((message) => message.id !== pendingId))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const generatePackage = async () => {
+    if (!canGeneratePackage || loading) {
+      setError('请先补齐作品名、题材和篇幅这 3 个核心必填项。')
+      return
+    }
+    setError(null)
+    setLoading(true)
+    setPackageDraft(null)
+    setBrief((current) => ({ ...current, confirmed: true }))
+    const pendingId = nextLocalMessageIdRef.current
+    nextLocalMessageIdRef.current -= 1
+    addLocalMessage('user', '请基于核心需求生成筹备包预览。')
+    setMessages((current) => [
+      ...current,
+      createPendingAssistantStreamMessage(pendingId, 'AI 正在生成筹备包...')
+    ])
+
+    try {
+      const config = await getResolvedGlobalAiConfig()
+      const aiConfig = config ? ({ ...(config as AiCallerConfig), ragMode: 'off' as const }) : null
+      if (!isAiConfigReady(aiConfig)) {
+        setMessages((current) => current.filter((message) => message.id !== pendingId))
+        setError('请先在应用设置 / AI 与模型中完成全局 AI 配置，或完成 Gemini CLI / Ollama 设置')
+        return
+      }
+      const prompt = buildBookPackagePrompt(brief)
+      let streamedContent = ''
+      let streamError = ''
+      const queue = createAssistantStreamChunkQueue(() => {
+        setMessages((current) =>
+          replaceAssistantStreamContent(current, pendingId, buildBookPackageStreamContent(streamedContent))
+        )
+      })
+      await aiPromptStream(
+        aiConfig,
+        prompt.systemPrompt,
+        prompt.userPrompt,
+        {
+          onToken: (token) => {
+            streamedContent += token
+            queue.push(token)
+          },
+          onComplete: (content) => {
+            streamedContent = content || streamedContent
+          },
+          onError: (message) => {
+            streamError = message
+          }
+        },
+        3200,
+        0.72
+      )
+      await queue.drain()
+      if (streamError) {
+        setError(streamError)
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === pendingId ? { ...message, streaming: false, content: message.content || '生成失败' } : message
+          )
+        )
+        return
+      }
+      const parsed = extractJsonObject(streamedContent)
+      const aiPackage = coerceBookCreationPackage(parsed)
+      const pkg = stripBookCreationChapterContent(
+        mergeBookCreationPackageWithFallback(aiPackage, buildFallbackBookCreationPackage(brief))
+      )
+      const validation = validateBookCreationPackage(pkg)
+      if (!validation.ok) {
+        setError(validation.errors.join('；') || 'AI 返回的筹备包格式无效，请重试。')
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === pendingId ? { ...message, streaming: false, content: '筹备包格式无效，请重试。' } : message
+          )
+        )
+        return
+      }
+      setPackageDraft(pkg)
+      setMessages((current) =>
+        completeAssistantStreamMessage(current, pendingId, Math.abs(pendingId), '筹备包预览已生成，请在右侧确认后创建作品。')
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '生成筹备包失败')
+      setMessages((current) => current.filter((message) => message.id !== pendingId))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    sendCommandRef.current = (text) => {
+      void send(text)
+    }
+  })
+
+  const createBookFromPackage = async () => {
+    if (!packageDraft || !canCreate) return
+    const packageForCreation = stripBookCreationChapterContent(packageDraft)
+    setCreating(true)
+    setError(null)
+    try {
+      const result = typeof window.api.createBookFromAiPackage === 'function'
+        ? ((await window.api.createBookFromAiPackage({
+            brief,
+            package: packageForCreation,
+            messages: messages
+              .filter((message) => message.role === 'user' || message.role === 'assistant' || message.role === 'system')
+              .map((message) => ({
+                role: message.role,
+                content: message.content,
+                metadata: message.metadata
+              }))
+          })) as AiBookCreationResult)
+        : await createBookFromPackageThroughExistingApi(brief, packageForCreation)
+      await loadBooks()
+      if (result.book?.id) {
+        openBook(result.book.id)
+        if (result.firstChapterId) await selectChapter(result.firstChapterId)
+        openAiAssistant()
+      }
+      useToastStore.getState().addToast('success', 'AI 筹备包已创建为新作品')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建作品失败')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[var(--bg-secondary)]">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-3">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+          <Bot size={17} className="text-[var(--accent-primary)]" />
+          <span>AI 创作助手 · 新作品</span>
+        </div>
+        <button
+          type="button"
+          onClick={closeAiAssistant}
+          title="收起 AI 助手"
+          className="rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-h-0 flex-col border-r border-[var(--border-primary)]">
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3 select-text">
+            {messages.length === 0 && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+                  把你的脑洞直接发给我。你可以一次性回答多个方向，也可以写“章节让 AI 评估”“人物让 AI 写”；只有作品名、题材和篇幅会卡住确认。
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {resolveAssistantContext({ currentBookId: null, requestedSurface: 'bookshelf' }).quickActions.map((action) => (
+                    <button
+                      key={action.key}
+                      type="button"
+                      onClick={() => void send(action.input)}
+                      className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2 text-left transition hover:border-[var(--accent-border)]"
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
+                        <Sparkles size={13} className="text-[var(--accent-primary)]" /> {action.label}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`rounded-lg border p-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                  message.role === 'user'
+                    ? 'ml-8 border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--text-primary)]'
+                    : 'mr-8 border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-secondary)]'
+                }`}
+              >
+                {message.streaming && (
+                  <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-[var(--accent-secondary)]">
+                    <Loader2 size={11} className="animate-spin" />
+                    <span>{message.streamingLabel || 'AI 正在回复...'}</span>
+                  </div>
+                )}
+                {message.content}
+              </div>
+            ))}
+
+            {error && (
+              <div className="rounded-lg border border-[var(--danger-border)] bg-[var(--danger-surface)] p-2 text-xs text-[var(--danger-primary)]">
+                {error}
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-[var(--border-primary)] bg-[var(--bg-primary)] p-3">
+            <div className="mb-2 max-h-[220px] overflow-y-auto rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="text-[11px] font-bold text-[var(--text-primary)]">快速选择</div>
+                <div className="text-[10px] text-[var(--text-muted)]">可点选 / 可多选，也可输入其他</div>
+              </div>
+              <div className="space-y-2">
+                {composerOptionFields.map((field) => {
+                  const currentValue = String(brief[field.key] || '').trim()
+                  return (
+                    <div key={`composer-${field.key}`} className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <span className="font-semibold text-[var(--text-secondary)]">{field.label}</span>
+                        <span
+                          className={`rounded border px-1 py-0.5 ${
+                            field.required
+                              ? 'border-[var(--accent-border)] text-[var(--accent-secondary)]'
+                              : 'border-[var(--border-primary)] text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {field.required ? '必填' : '可选'}
+                        </span>
+                        {field.multiSelect && <span className="text-[var(--text-muted)]">可多选</span>}
+                        {currentValue && <span className="min-w-0 max-w-[180px] truncate text-[var(--success-primary)]">已选：{currentValue}</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {field.quickOptions.map((option) => {
+                          const selected = isBriefQuickOptionSelected(field, option)
+                          return (
+                            <button
+                              key={`composer-${field.key}-${option}`}
+                              type="button"
+                              onClick={() => applyBriefQuickOption(field, option)}
+                              className={`rounded border px-1.5 py-0.5 text-[10px] transition ${
+                                selected
+                                  ? 'border-[var(--accent-border)] bg-[var(--accent-surface)] text-[var(--accent-secondary)]'
+                                  : 'border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:border-[var(--accent-border)] hover:text-[var(--accent-secondary)]'
+                              }`}
+                            >
+                              {option}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          value={customOptionInputs[field.key] || ''}
+                          onChange={(event) => updateCustomOptionInput(field, event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              applyCustomOptionInput(field)
+                            }
+                          }}
+                          placeholder={`输入其他${field.label}`}
+                          className="field h-7 min-w-0 flex-1 px-2 py-1 text-[10px]"
+                        />
+                        <button
+                          type="button"
+                          disabled={!String(customOptionInputs[field.key] || '').trim()}
+                          onClick={() => applyCustomOptionInput(field)}
+                          className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-[var(--border-primary)] px-2 text-[10px] font-semibold text-[var(--text-secondary)] hover:border-[var(--accent-border)] hover:text-[var(--accent-secondary)] disabled:opacity-40"
+                          title={`加入其他${field.label}`}
+                        >
+                          <Plus size={11} />
+                          加入
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <textarea
+                rows={2}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (shouldSubmitAiAssistantInput(event)) {
+                    event.preventDefault()
+                    void send()
+                  }
+                }}
+                placeholder="描述新作品想法，或一次性回答多个编号 / 让 AI 评估"
+                className="field resize-none text-xs"
+              />
+              <button
+                type="button"
+                disabled={!input.trim() || loading}
+                onClick={() => void send()}
+                className="primary-btn self-stretch px-3"
+                title="发送"
+              >
+                <Send size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-col bg-[var(--bg-primary)]">
+          <div className="border-b border-[var(--border-primary)] p-3">
+            <div className="text-xs font-bold text-[var(--text-primary)]">起书需求清单</div>
+            <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+              {missingFields.length === 0 ? '核心必填已齐；可选项可以留给 AI 评估。' : `还缺 ${missingFields.length} 个核心必填项。`}
+            </div>
+          </div>
+          <div className="flex-1 space-y-3 overflow-y-auto p-3">
+            {CREATION_BRIEF_FIELDS.map((field) => {
+              const value = String(brief[field.key] || '')
+              const complete = value.trim().length > 0
+              return (
+                <div key={field.key} className="block rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="min-w-0 text-[11px] font-semibold text-[var(--text-primary)]">{field.label}</span>
+                    <span
+                      className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${
+                        field.required
+                          ? 'border-[var(--accent-border)] text-[var(--accent-secondary)]'
+                          : 'border-[var(--border-primary)] text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {field.required ? '必填' : '可选'}
+                    </span>
+                    {complete ? <Check size={12} className="shrink-0 text-[var(--success-primary)]" /> : null}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={value}
+                    onChange={(event) => updateBriefField(field.key, event.target.value)}
+                    placeholder={field.prompt}
+                    className="field min-h-[54px] resize-none text-[11px]"
+                  />
+                </div>
+              )
+            })}
+
+            <div className="space-y-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-3">
+              <div className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                第一步生成筹备包预览；第二步确认预览后创建作品。
+              </div>
+              <button
+                type="button"
+                disabled={!canGeneratePackage}
+                onClick={() => void generatePackage()}
+                className="primary-btn w-full justify-center text-xs disabled:opacity-40"
+              >
+                {packageDraft ? '重新生成筹备包预览' : '确认并生成筹备包预览'}
+              </button>
+            </div>
+
+            {packageDraft && (
+              <div className="space-y-2 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-surface)] p-3 text-xs">
+                <div className="font-bold text-[var(--warning-primary)]">筹备包预览</div>
+                <div className="text-[var(--text-primary)]">《{packageDraft.book.title}》</div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--text-secondary)]">
+                  <div>分卷 {packageDraft.volumes.length}</div>
+                  <div>章节 {packageDraft.volumes.flatMap((volume) => volume.chapters).length}</div>
+                  <div>人物 {packageDraft.characters.length}</div>
+                  <div>设定 {packageDraft.wikiEntries.length}</div>
+                  <div>剧情 {packageDraft.plotNodes.length}</div>
+                  <div>伏笔 {packageDraft.foreshadowings.length}</div>
+                  <div className="col-span-2">正文待 AI 起草</div>
+                </div>
+                {packageValidation.errors.length > 0 && (
+                  <div className="text-[var(--danger-primary)]">{packageValidation.errors.join('；')}</div>
+                )}
+                <button
+                  type="button"
+                  disabled={!canCreate}
+                  onClick={() => void createBookFromPackage()}
+                  className="primary-btn mt-2 w-full justify-center text-xs disabled:opacity-40"
+                >
+                  {creating ? '创建中...' : '创建作品'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AiAssistantPanel() {
   const bookId = useBookStore((s) => s.currentBookId)
   const currentChapter = useChapterStore((s) => s.currentChapter)
   const volumes = useChapterStore((s) => s.volumes)
+  const createVolume = useChapterStore((s) => s.createVolume)
   const createChapter = useChapterStore((s) => s.createChapter)
   const selectChapter = useChapterStore((s) => s.selectChapter)
   const updateChapterContent = useChapterStore((s) => s.updateChapterContent)
@@ -157,7 +1240,12 @@ export function AiAssistantPanel() {
     aiAssistantCommand,
     closeAiAssistant,
     consumeAiAssistantCommand,
-    openModal
+    setInlineAiDraft,
+    clearInlineAiDraft,
+    setAiChapterDraft,
+    clearAiChapterDraft,
+    openModal,
+    activeModal
   } = useUIStore()
 
   const [conversationId, setConversationId] = useState<number | null>(null)
@@ -172,6 +1260,7 @@ export function AiAssistantPanel() {
   const [error, setError] = useState<string | null>(null)
   const [conversationListOpen, setConversationListOpen] = useState(false)
   const [enabledContextChipIds, setEnabledContextChipIds] = useState<string[]>([])
+  const [providerLabel, setProviderLabel] = useState('未配置')
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeRequestAbortRef = useRef<AbortController | null>(null)
   const sendCommandRef = useRef<(text: string) => void>(() => {})
@@ -203,7 +1292,7 @@ export function AiAssistantPanel() {
     return buildAssistantContext({
       policy: contextPolicy,
       currentChapter: currentChapter
-        ? { id: currentChapter.id, title: currentChapter.title, plainText: chapterPlain }
+        ? { id: currentChapter.id, title: currentChapter.title, plainText: chapterPlain, summary: currentChapter.summary }
         : null,
       selectedText: aiAssistantSelectionChapterId === currentChapter?.id ? aiAssistantSelectionText : '',
       characters: characters.map((character) => ({
@@ -240,6 +1329,18 @@ export function AiAssistantPanel() {
     () => applyAssistantContextSelection(baseContext, enabledContextChipIds),
     [baseContext, enabledContextChipIds]
   )
+  const resolvedPanelContext = useMemo(
+    () =>
+      resolveAssistantContext({
+        currentBookId: bookId,
+        currentChapterTitle: currentChapter?.title,
+        hasSelection: aiAssistantSelectionChapterId === currentChapter?.id && Boolean(aiAssistantSelectionText.trim()),
+        activeModal
+      }),
+    [activeModal, aiAssistantSelectionChapterId, aiAssistantSelectionText, bookId, currentChapter?.id, currentChapter?.title]
+  )
+  const hasCurrentSelection = aiAssistantSelectionChapterId === currentChapter?.id && Boolean(aiAssistantSelectionText.trim())
+  const currentChapterIsBlank = Boolean(currentChapter && isBlankChapterContent(currentChapter.content))
 
   const refreshConversation = useCallback(async (targetConversationId?: number | null) => {
     if (!bookId) return
@@ -251,11 +1352,34 @@ export function AiAssistantPanel() {
       window.api.aiGetMessages(conversation.id),
       window.api.aiGetDrafts(bookId, 'pending', conversation.id)
     ])
+    const allDrafts = draftRows as AiDraftRow[]
+    const inlineDraft = allDrafts.reduce<InlineAiDraft | null>(
+      (found, draft) => found ?? toInlineAiDraft(draft, currentChapter?.id),
+      null
+    )
+    const chapterDraft = allDrafts.reduce<AiChapterDraft | null>(
+      (found, draft) => found ?? toAiChapterDraft(draft),
+      null
+    )
+    const hiddenDraftIds = new Set(
+      [inlineDraft?.id, chapterDraft?.id].filter((id): id is number => typeof id === 'number')
+    )
     setMessages(messageRows as AiMessage[])
     setConversations(conversationRows as AiConversationRow[])
-    setDrafts(draftRows as AiDraftRow[])
+    setDrafts(allDrafts.filter((draft) => !hiddenDraftIds.has(draft.id)))
+    if (inlineDraft) {
+      setInlineAiDraft(inlineDraft)
+    } else {
+      clearInlineAiDraft()
+    }
+    if (chapterDraft) {
+      const currentDraft = useUIStore.getState().aiChapterDraft
+      if (currentDraft?.id !== chapterDraft.id) setAiChapterDraft(chapterDraft)
+    } else {
+      clearAiChapterDraft()
+    }
     setConversationId(conversation.id)
-  }, [bookId])
+  }, [bookId, clearAiChapterDraft, clearInlineAiDraft, currentChapter?.id, setAiChapterDraft, setInlineAiDraft])
 
   const refreshConfig = useCallback(async () => {
     if (!bookId) return
@@ -286,16 +1410,54 @@ export function AiAssistantPanel() {
         window.api.aiGetDrafts(bookId, 'pending', conversation.id)
       ])
       if (cancelled) return
+      const allDrafts = draftRows as AiDraftRow[]
+      const inlineDraft = allDrafts.reduce<InlineAiDraft | null>(
+        (found, draft) => found ?? toInlineAiDraft(draft, currentChapter?.id),
+        null
+      )
+      const chapterDraft = allDrafts.reduce<AiChapterDraft | null>(
+        (found, draft) => found ?? toAiChapterDraft(draft),
+        null
+      )
+      const hiddenDraftIds = new Set(
+        [inlineDraft?.id, chapterDraft?.id].filter((id): id is number => typeof id === 'number')
+      )
       setSkills(skillRows as AiSkillTemplate[])
       setOverrides(overrideRows as AiSkillOverride[])
       setProfile(profileRow as AiWorkProfile)
       setConversations(conversationRows as AiConversationRow[])
       setMessages(messageRows as AiMessage[])
-      setDrafts(draftRows as AiDraftRow[])
+      setDrafts(allDrafts.filter((draft) => !hiddenDraftIds.has(draft.id)))
+      if (inlineDraft) {
+        setInlineAiDraft(inlineDraft)
+      } else {
+        clearInlineAiDraft()
+      }
+      if (chapterDraft) {
+        const currentDraft = useUIStore.getState().aiChapterDraft
+        if (currentDraft?.id !== chapterDraft.id) setAiChapterDraft(chapterDraft)
+      } else {
+        clearAiChapterDraft()
+      }
       setConversationId(conversation.id)
     }
 
     void loadAssistantState()
+    return () => {
+      cancelled = true
+    }
+  }, [bookId, clearAiChapterDraft, clearInlineAiDraft, currentChapter?.id, setAiChapterDraft, setInlineAiDraft])
+
+  useEffect(() => {
+    if (!bookId) return
+    let cancelled = false
+    void getResolvedGlobalAiConfig()
+      .then((config) => {
+        if (!cancelled) setProviderLabel(formatProviderLabel(config?.ai_provider))
+      })
+      .catch(() => {
+        if (!cancelled) setProviderLabel('未配置')
+      })
     return () => {
       cancelled = true
     }
@@ -333,8 +1495,6 @@ export function AiAssistantPanel() {
     }
   }, [aiAssistantCommand, bookId, consumeAiAssistantCommand, conversationId, loading, skills.length])
 
-  if (!bookId) return null
-
   const validateSkillBeforeSend = (skill: AiSkillTemplate | null): string | null => {
     if (!skill) return null
     if (skill.key === 'polish_text' && !(aiAssistantSelectionChapterId === currentChapter?.id && aiAssistantSelectionText.trim())) {
@@ -346,15 +1506,12 @@ export function AiAssistantPanel() {
     if (skill.key === 'review_chapter' && !currentChapter) {
       return '请先打开目标章节，再使用“审核本章”。'
     }
-    if (skill.key === 'create_chapter' && volumes.length === 0) {
-      return '请先创建卷，再使用“创建章节”。'
-    }
     return null
   }
 
   const send = async (explicitSkill?: AiSkillTemplate, explicitInput?: string) => {
     const text = (explicitInput ?? input).trim()
-    if (!text || loading || !conversationId) return
+    if (!text || loading || !conversationId || !bookId) return
     const requestIntent =
       explicitSkill
         ? assistantIntent
@@ -376,10 +1533,10 @@ export function AiAssistantPanel() {
     setInput('')
 
     try {
-      const config = await getResolvedAiConfigForBook(bookId)
+      const config = await getResolvedGlobalAiConfig()
       const aiConfig = config ? ({ ...(config as AiCallerConfig), bookId, ragMode: 'auto' as const }) : null
       if (!isAiConfigReady(aiConfig)) {
-        setError('请先在应用设置中配置 AI 全局账号，或完成 Gemini CLI / Ollama 设置')
+        setError('请先在应用设置 / AI 与模型中完成全局 AI 配置，或完成 Gemini CLI / Ollama 设置')
         setLoading(false)
         return
       }
@@ -497,7 +1654,19 @@ export function AiAssistantPanel() {
         intent_confidence: requestIntent.confidence
       })) as { id: number }
       setMessages((current) =>
-        completeAssistantStreamMessage(current, pendingMessageId, assistantMessage.id, streamedContent)
+        completeAssistantStreamMessage(current, pendingMessageId, assistantMessage.id, streamedContent).map((message) =>
+          message.id === assistantMessage.id
+            ? {
+                ...message,
+                metadata: {
+                  skill_key: skill?.key ?? null,
+                  mode: skill ? 'skill' : 'chat',
+                  intent_reason: requestIntent.reason,
+                  intent_confidence: requestIntent.confidence
+                }
+              }
+            : message
+        )
       )
       if (skill) {
         const parsed = normalizeAssistantDrafts(skill, streamedContent)
@@ -508,15 +1677,26 @@ export function AiAssistantPanel() {
           to: aiAssistantSelectionTo
         })
         for (const draft of boundDrafts) {
-          await window.api.aiCreateDraft({
+          const payload =
+            draft.kind === 'insert_text' || draft.kind === 'create_chapter'
+              ? {
+                  ...draft,
+                  retry_input: text
+                }
+              : draft
+          const createdDraft = (await window.api.aiCreateDraft({
             book_id: bookId,
             conversation_id: conversationId,
             message_id: assistantMessage.id,
-            kind: draft.kind,
-            title: draftTitle(draft),
-            payload: draft,
+            kind: payload.kind,
+            title: draftTitle(payload),
+            payload,
             target_ref: currentChapter ? `chapter:${currentChapter.id}` : ''
-          })
+          })) as AiDraftRow
+          const inlineDraft = toInlineAiDraft(createdDraft, currentChapter?.id, text)
+          if (inlineDraft) setInlineAiDraft(inlineDraft)
+          const chapterDraft = toAiChapterDraft(createdDraft, text)
+          if (chapterDraft) setAiChapterDraft(chapterDraft)
         }
         if (parsed.errors.length > 0) {
           setError(parsed.errors.join('；'))
@@ -530,13 +1710,19 @@ export function AiAssistantPanel() {
     }
   }
 
-  sendCommandRef.current = (text) => {
-    void send(undefined, text)
-  }
+  useEffect(() => {
+    sendCommandRef.current = (text) => {
+      void send(undefined, text)
+    }
+  })
 
-  const seedQuickAction = (skill: AiSkillTemplate) => {
-    if (skill.key === 'continue_writing') {
-      setInput('从当前光标或章节末尾自然续写，保持当前节奏。')
+  if (!bookId) return <BookshelfCreationAssistantPanel />
+
+  const seedQuickAction = (skill: AiSkillTemplate, actionInput?: string) => {
+    if (actionInput) {
+      setInput(actionInput)
+    } else if (skill.key === 'continue_writing') {
+      setInput(DEFAULT_CONTINUE_INPUT)
     } else if (skill.key === 'review_chapter') {
       setInput('审核当前章节的节奏、人物一致性、伏笔和毒点风险。')
     } else if (skill.key === 'polish_text') {
@@ -649,12 +1835,32 @@ export function AiAssistantPanel() {
           break
         }
         case 'create_chapter': {
-          const volumeId = volumes[volumes.length - 1]?.id
-          if (!volumeId) throw new Error('请先创建卷')
+          const requestedVolumeId = Number(payload.volume_id || payload.volumeId)
+          const requestedVolumeTitle = String(
+            payload.volume_title || payload.volumeTitle || payload.volume || ''
+          ).trim()
+          let volumeId =
+            Number.isFinite(requestedVolumeId) && volumes.some((volume) => volume.id === requestedVolumeId)
+              ? requestedVolumeId
+              : null
+          if (volumeId == null && requestedVolumeTitle) {
+            const existingVolume = volumes.find((volume) => volume.title.trim() === requestedVolumeTitle)
+            volumeId = existingVolume?.id ?? null
+            if (volumeId == null) {
+              const createdVolume = await createVolume(bookId, requestedVolumeTitle)
+              volumeId = createdVolume.id
+            }
+          }
+          if (volumeId == null) {
+            const fallbackVolume = volumes[volumes.length - 1] ?? (await createVolume(bookId, '第一卷'))
+            volumeId = fallbackVolume.id
+          }
+          const content = String(payload.content || payload.body || '').trim()
+          if (!content) throw new Error('章节正文为空')
           const chapter = await createChapter(
             volumeId,
             String(payload.title || draft.title || 'AI 新章节'),
-            ensureHtmlContent(String(payload.content || '')),
+            ensureHtmlContent(content),
             String(payload.summary || '').trim()
           )
           await selectChapter(chapter.id)
@@ -813,26 +2019,21 @@ export function AiAssistantPanel() {
     }
   }
 
-  const quickActions = [
-    {
-      key: 'continue_writing',
-      label: '续写当前章',
-      description: '从当前章节末尾或光标位置继续推进正文。',
-      disabled: !currentChapter
-    },
-    {
-      key: 'polish_text',
-      label: '润色选区',
-      description: '改写当前选中文本，保留原意和人物口吻。',
-      disabled: !(aiAssistantSelectionChapterId === currentChapter?.id && aiAssistantSelectionText.trim())
-    },
-    {
-      key: 'review_chapter',
-      label: '审核本章',
-      description: '检查节奏、毒点、伏笔和人物一致性。',
-      disabled: !currentChapter
-    }
-  ]
+  const quickActions =
+    resolvedPanelContext.surface === 'chapter_editor'
+      ? buildChapterEditorQuickActions({
+          currentChapter,
+          volumes,
+          hasSelection: hasCurrentSelection
+        })
+      : resolvedPanelContext.quickActions.map((action) => ({
+          key: action.key,
+          label: action.label,
+          description: resolvedPanelContext.description,
+          disabled: Boolean(action.disabled),
+          input: action.input
+        }))
+  const showStarterActions = messages.length === 0 || (resolvedPanelContext.surface === 'chapter_editor' && currentChapterIsBlank)
   return (
         <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg-secondary)]">
           <div
@@ -840,7 +2041,10 @@ export function AiAssistantPanel() {
           >
             <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
               <Bot size={17} className="text-[var(--accent-primary)]" />
-              <span className="shrink-0">AI 创作助手</span>
+              <span className="min-w-0 truncate">{resolvedPanelContext.title}</span>
+              <span className="min-w-0 truncate rounded border border-[var(--accent-border)] bg-[var(--accent-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent-secondary)]">
+                {providerLabel}
+              </span>
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -917,7 +2121,7 @@ export function AiAssistantPanel() {
               <button
                 type="button"
                 onClick={() => openModal('aiSettings')}
-                title="AI 能力与作品配置"
+                title="AI 能力与上下文"
                 className="rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
               >
                 <Settings2 size={16} />
@@ -998,22 +2202,27 @@ export function AiAssistantPanel() {
             </div>
           )}
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
-            {messages.length === 0 && (
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3 select-text">
+            {showStarterActions && (
               <div className="space-y-3">
                 <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-secondary)]">
-                  直接输入你的写作意图即可。AI 会自动选择续写、润色、审稿或资产生成；涉及正文和资产的结果会先进入草稿篮。
+                  {resolvedPanelContext.description}
+                  {resolvedPanelContext.surface === 'chapter_editor'
+                    ? ' 直接输入你的写作意图即可；涉及正文和资产的结果会先进入草稿篮。'
+                    : ' 直接输入目标，助手会按当前页面切换建议和输出方式。'}
                 </div>
                 <div className="grid grid-cols-1 gap-2">
                   {quickActions.map((action) => {
                     const skill = skills.find((item) => item.key === action.key)
+                    const actionInput = (action as { input?: string }).input
                     return (
                     <button
                       key={action.key}
                       type="button"
-                      disabled={!skill || action.disabled}
+                      disabled={(!skill && !actionInput) || action.disabled}
                       onClick={() => {
-                        if (skill) seedQuickAction(skill)
+                        if (skill) seedQuickAction(skill, actionInput)
+                        else if (actionInput) setInput(actionInput)
                       }}
                       className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2 text-left transition hover:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -1041,6 +2250,10 @@ export function AiAssistantPanel() {
 
             {messages.map((message) => {
               const display = buildAssistantMessageDisplay(message)
+              const streamingLabel =
+                message.role === 'assistant' && message.streaming
+                  ? message.streamingLabel || 'AI 正在回复...'
+                  : ''
 
               return (
                 <div
@@ -1051,6 +2264,12 @@ export function AiAssistantPanel() {
                       : 'mr-8 border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-secondary)]'
                   }`}
                 >
+                  {streamingLabel && (
+                    <div className="mb-2 flex items-center gap-1.5 whitespace-normal text-[10px] font-semibold text-[var(--accent-secondary)]">
+                      <Loader2 size={11} className="animate-spin" />
+                      <span>{streamingLabel}</span>
+                    </div>
+                  )}
                   {display.kind === 'drafts' ? (
                     <div className="space-y-2 whitespace-normal">
                       <div className="text-xs text-[var(--text-secondary)]">{display.intro}</div>
@@ -1083,17 +2302,7 @@ export function AiAssistantPanel() {
                       </div>
                     </div>
                   ) : (
-                    display.text ||
-                    (message.streaming && message.streamingLabel ? (
-                      <span className="text-xs text-[var(--text-muted)]">{message.streamingLabel}</span>
-                    ) : (
-                      ''
-                    ))
-                  )}
-                  {message.streaming && (
-                    <span className="ml-1 inline-flex translate-y-0.5">
-                      <Loader2 size={12} className="animate-spin text-[var(--accent-primary)]" />
-                    </span>
+                    display.text
                   )}
                 </div>
               )
@@ -1157,11 +2366,6 @@ export function AiAssistantPanel() {
               </div>
             )}
 
-            {loading && (
-              <div className="flex items-center gap-2 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-muted)]">
-                <Loader2 size={14} className="animate-spin" /> {selectedSkill ? 'AI 正在生成草稿...' : 'AI 正在回复...'}
-              </div>
-            )}
             {error && (
               <div className="rounded-lg border border-[var(--danger-border)] bg-[var(--danger-surface)] p-2 text-xs text-[var(--danger-primary)]">
                 {error}
@@ -1170,6 +2374,27 @@ export function AiAssistantPanel() {
           </div>
 
           <div className="shrink-0 border-t border-[var(--border-primary)] bg-[var(--bg-primary)] p-3">
+            <div className="mb-2 grid grid-cols-3 gap-1.5">
+              {quickActions.map((action) => {
+                const skill = skills.find((item) => item.key === action.key)
+                const actionInput = (action as { input?: string }).input
+                return (
+                  <button
+                    key={action.key}
+                    type="button"
+                    disabled={(!skill && !actionInput) || action.disabled || loading}
+                    onClick={() => {
+                      if (skill) seedQuickAction(skill, actionInput)
+                      else if (actionInput) setInput(actionInput)
+                    }}
+                    className="truncate rounded border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-2 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent-secondary)] disabled:cursor-not-allowed disabled:opacity-45"
+                    title={action.description}
+                  >
+                    {action.label}
+                  </button>
+                )
+              })}
+            </div>
             <div className="flex gap-2">
               <textarea
                 rows={2}
@@ -1203,6 +2428,7 @@ export function AiAssistantPanel() {
 export default function AiAssistantDock() {
   const bookId = useBookStore((s) => s.currentBookId)
   const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
+  const aiAssistantOpen = useUIStore((s) => s.aiAssistantOpen)
   const aiAssistantLauncherPosition = useUIStore((s) => s.aiAssistantLauncherPosition)
   const setAiAssistantLauncherPosition = useUIStore((s) => s.setAiAssistantLauncherPosition)
   const openAiAssistant = useUIStore((s) => s.openAiAssistant)
@@ -1229,7 +2455,16 @@ export default function AiAssistantDock() {
     }
   }, [])
 
-  if (!bookId || rightPanelOpen) return null
+  if (!bookId) {
+    if (!aiAssistantOpen) return null
+    return (
+      <div className="fixed bottom-0 right-0 top-12 z-40 w-[min(920px,calc(100vw-24px))] border-l border-[var(--border-primary)] bg-[var(--bg-secondary)] shadow-2xl">
+        <AiAssistantPanel />
+      </div>
+    )
+  }
+
+  if (rightPanelOpen) return null
 
   const handleLauncherDragStart = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (event.button !== 0) return

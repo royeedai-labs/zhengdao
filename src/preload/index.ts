@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { ManualInstallerDownloadResult, UpdateSnapshot } from '../shared/update'
 import type { AiBridgeCompleteRequest, AiOfficialProfile, AiResponse, AiStreamCallbacks } from '../shared/ai'
+import type { AiBookCreationPackage, AssistantCreationBrief } from '../shared/ai-book-creation'
 
 let aiStreamRequestSeq = 0
 
@@ -8,6 +9,11 @@ const api = {
   // Books
   getBooks: () => ipcRenderer.invoke('db:getBooks'),
   createBook: (data: { title: string; author: string }) => ipcRenderer.invoke('db:createBook', data),
+  createBookFromAiPackage: (data: {
+    brief: AssistantCreationBrief
+    package: AiBookCreationPackage
+    messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string; metadata?: unknown }>
+  }) => ipcRenderer.invoke('db:createBookFromAiPackage', data),
   deleteBook: (id: number) => ipcRenderer.invoke('db:deleteBook', id),
   getBookStats: (bookId: number) => ipcRenderer.invoke('db:getBookStats', bookId),
 
@@ -254,7 +260,6 @@ const api = {
     options?: {
       probe?: boolean
       config?: {
-        accountId?: number | null
         api_key?: string
         api_endpoint?: string
         model?: string
@@ -263,9 +268,8 @@ const api = {
   ) =>
     ipcRenderer.invoke('ai:getProviderStatus', provider, options),
   aiSetupGeminiCli: () => ipcRenderer.invoke('ai:setupGeminiCli'),
-  aiGetAccounts: () => ipcRenderer.invoke('ai:getAccounts'),
-  aiSaveAccount: (data: Record<string, unknown>) => ipcRenderer.invoke('ai:saveAccount', data),
-  aiDeleteAccount: (id: number) => ipcRenderer.invoke('ai:deleteAccount', id),
+  aiGetGlobalConfig: () => ipcRenderer.invoke('ai:getGlobalConfig'),
+  aiSaveGlobalConfig: (data: Record<string, unknown>) => ipcRenderer.invoke('ai:saveGlobalConfig', data),
   aiGetSkillTemplates: () => ipcRenderer.invoke('ai:getSkillTemplates'),
   aiUpdateSkillTemplate: (key: string, updates: Record<string, unknown>) =>
     ipcRenderer.invoke('ai:updateSkillTemplate', key, updates),
@@ -296,7 +300,9 @@ const api = {
   aiCreateDraft: (data: Record<string, unknown>) => ipcRenderer.invoke('ai:createDraft', data),
   aiSetDraftStatus: (id: number, status: 'pending' | 'applied' | 'dismissed') =>
     ipcRenderer.invoke('ai:setDraftStatus', id, status),
+  aiGetResolvedGlobalConfig: () => ipcRenderer.invoke('ai:getResolvedGlobalConfig'),
   aiGetResolvedConfigForBook: (bookId: number) => ipcRenderer.invoke('ai:getResolvedConfigForBook', bookId),
+  aiGetResolvedWorkspaceConfig: () => ipcRenderer.invoke('ai:getResolvedWorkspaceConfig'),
 
   syncUploadBook: (bookId: number) => ipcRenderer.invoke('sync:uploadBook', bookId),
   syncListCloudBooks: () => ipcRenderer.invoke('sync:listCloudBooks'),

@@ -6,7 +6,7 @@ import type { AiWorkProfile, CanonLockEntry } from '@/utils/ai/assistant-workflo
 /**
  * DI-07 v1 — Canon Pack 手动锁定面板
  *
- * 嵌入 AiSettingsModal 的"作品 AI 档案" tab。允许写作者手动锁定关键设定 —
+ * 嵌入 AiSettingsModal 的"作品上下文" tab。允许写作者手动锁定关键设定 —
  * 例如人物年龄、世界观规则、不可调和的禁忌, 并附 priority 等级。后续
  * world-consistency / chapter-review-pro Skill 在检查冲突时, 会优先以这
  * 些锁定条目为参照。

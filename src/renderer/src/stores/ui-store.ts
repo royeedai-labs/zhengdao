@@ -18,6 +18,7 @@ import {
   type AiAssistantPanelRect
 } from '@/components/ai/panel-layout'
 import { createInitialSaveStatus, type ChapterSaveStatus } from '../utils/daily-workbench'
+import type { AssistantSurface } from '../../../shared/ai-book-creation'
 
 const THEME_STORAGE_KEY = 'write-ui-theme'
 const BOTTOM_PANEL_OPEN_STORAGE_KEY = 'write-bottom-panel-open'
@@ -120,7 +121,7 @@ function readStoredRightPanelTab(): RightPanelTab {
   } catch {
     void 0
   }
-  return 'foreshadow'
+  return 'ai'
 }
 
 function persistRightPanelTab(tab: RightPanelTab): void {
@@ -227,12 +228,34 @@ type TypewriterPosition = 'center' | 'upper' | 'lower'
 type AiAssistantOpenOptions = {
   input?: string
   autoSend?: boolean
+  surface?: AssistantSurface
+}
+
+export type InlineAiDraft = {
+  id: number
+  title: string
+  payload: Record<string, unknown>
+  chapterId: number
+  conversationId: number | null
+  retryInput: string
+}
+
+export type AiChapterDraft = {
+  id: number
+  title: string
+  content: string
+  summary: string
+  volumeId: number | null
+  volumeTitle: string
+  conversationId: number | null
+  retryInput: string
 }
 
 type AiAssistantCommand = {
   id: number
   input: string
   autoSend: boolean
+  surface?: AssistantSurface
 }
 
 interface ModalEntry {
@@ -267,6 +290,8 @@ interface UIStore {
   aiAssistantSelectionFrom: number | null
   aiAssistantSelectionTo: number | null
   aiAssistantCommand: AiAssistantCommand | null
+  inlineAiDraft: InlineAiDraft | null
+  aiChapterDraft: AiChapterDraft | null
   chapterSaveStatus: ChapterSaveStatus
 
   activeModal: ModalType
@@ -305,6 +330,11 @@ interface UIStore {
     from: number | null
     to: number | null
   }) => void
+  setInlineAiDraft: (draft: InlineAiDraft | null) => void
+  clearInlineAiDraft: (draftId?: number | null) => void
+  setAiChapterDraft: (draft: AiChapterDraft | null) => void
+  updateAiChapterDraft: (updates: Partial<Pick<AiChapterDraft, 'title' | 'content' | 'summary' | 'volumeId' | 'volumeTitle'>>) => void
+  clearAiChapterDraft: (draftId?: number | null) => void
   setChapterSaveStatus: (status: ChapterSaveStatus) => void
   markChapterDirty: (chapterId: number) => void
   markChapterSaving: (chapterId: number) => void
@@ -349,6 +379,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
   aiAssistantSelectionFrom: null,
   aiAssistantSelectionTo: null,
   aiAssistantCommand: null,
+  inlineAiDraft: null,
+  aiChapterDraft: null,
   chapterSaveStatus: createInitialSaveStatus(),
 
   activeModal: null,
@@ -441,9 +473,17 @@ export const useUIStore = create<UIStore>((set, get) => ({
           ? {
               id: Date.now(),
               input,
-              autoSend: Boolean(typeof options === 'object' && options?.autoSend)
+              autoSend: Boolean(typeof options === 'object' && options?.autoSend),
+              surface: typeof options === 'object' ? options?.surface : undefined
             }
-          : null
+          : typeof options === 'object' && options?.surface
+            ? {
+                id: Date.now(),
+                input: '',
+                autoSend: false,
+                surface: options.surface
+              }
+            : null
       }
     }),
   closeAiAssistant: () => set({ aiAssistantOpen: false, rightPanelOpen: false }),
@@ -473,6 +513,20 @@ export const useUIStore = create<UIStore>((set, get) => ({
       aiAssistantSelectionChapterId: chapterId,
       aiAssistantSelectionFrom: from,
       aiAssistantSelectionTo: to
+    }),
+  setInlineAiDraft: (draft) => set({ inlineAiDraft: draft }),
+  clearInlineAiDraft: (draftId = null) =>
+    set((s) => {
+      if (draftId != null && s.inlineAiDraft?.id !== draftId) return {}
+      return { inlineAiDraft: null }
+    }),
+  setAiChapterDraft: (draft) => set({ aiChapterDraft: draft }),
+  updateAiChapterDraft: (updates) =>
+    set((s) => (s.aiChapterDraft ? { aiChapterDraft: { ...s.aiChapterDraft, ...updates } } : {})),
+  clearAiChapterDraft: (draftId = null) =>
+    set((s) => {
+      if (draftId != null && s.aiChapterDraft?.id !== draftId) return {}
+      return { aiChapterDraft: null }
     }),
   setChapterSaveStatus: (status) => set({ chapterSaveStatus: status }),
   markChapterDirty: (chapterId) =>

@@ -479,7 +479,7 @@ const migrations: Migration[] = [
         db.prepare(`
           INSERT INTO ai_accounts (name, provider, api_endpoint, model, credential_ref, is_default, status)
           SELECT
-            '默认 AI 账号',
+            '旧全局模型配置',
             COALESCE(NULLIF(ai_provider, ''), 'openai'),
             COALESCE(ai_api_endpoint, ''),
             COALESCE(ai_model, ''),
@@ -645,6 +645,79 @@ const migrations: Migration[] = [
       const cols = db.prepare('PRAGMA table_info(ai_work_profiles)').all() as { name: string }[]
       if (cols.some((c) => c.name === 'canon_pack_locks')) return
       db.exec(`ALTER TABLE ai_work_profiles ADD COLUMN canon_pack_locks TEXT NOT NULL DEFAULT ''`)
+    }
+  },
+  {
+    version: 23,
+    description: 'Consolidate AI runtime selection into one global configuration',
+    up: (db) => {
+      const existingGlobal = db.prepare("SELECT value FROM app_state WHERE key = 'ai_global_provider'").get()
+      if (!existingGlobal) {
+        const thirdPartyEnabled =
+          ((db.prepare("SELECT value FROM app_state WHERE key = 'ai_third_party_enabled'").get() as
+            | { value?: string }
+            | undefined)?.value || '') === '1'
+        const account = db
+          .prepare(
+            `SELECT id, provider, api_endpoint, model, credential_ref
+             FROM ai_accounts
+             ORDER BY is_default DESC, id
+             LIMIT 1`
+          )
+          .get() as
+          | {
+              id: number
+              provider?: string
+              api_endpoint?: string
+              model?: string
+              credential_ref?: string
+            }
+          | undefined
+        const shouldUseAccount =
+          Boolean(account) && (thirdPartyEnabled || (account?.credential_ref || '').startsWith('legacy-project-config:'))
+
+        const putState = db.prepare(
+          `INSERT INTO app_state (key, value) VALUES (?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+        )
+
+        if (account && shouldUseAccount) {
+          putState.run('ai_global_provider', account.provider || 'openai')
+          putState.run('ai_global_api_endpoint', account.api_endpoint || '')
+          putState.run('ai_global_model', account.model || '')
+
+          const credentialRef = account.credential_ref || ''
+          let secret = ''
+          if (credentialRef.startsWith('app-state:')) {
+            secret =
+              (db.prepare('SELECT value FROM app_state WHERE key = ?').get(credentialRef.slice('app-state:'.length)) as
+                | { value?: string }
+                | undefined)?.value || ''
+          } else if (credentialRef.startsWith('legacy-project-config:')) {
+            const bookId = Number(credentialRef.slice('legacy-project-config:'.length))
+            if (Number.isFinite(bookId)) {
+              secret =
+                (db.prepare('SELECT ai_api_key FROM project_config WHERE book_id = ?').get(bookId) as
+                  | { ai_api_key?: string }
+                  | undefined)?.ai_api_key || ''
+            }
+          }
+          if (secret) putState.run('ai_global_api_key', secret)
+        } else {
+          putState.run('ai_global_provider', 'zhengdao_official')
+          putState.run('ai_global_api_endpoint', '')
+          putState.run('ai_global_model', '')
+        }
+      }
+
+      db.exec(`
+        DELETE FROM app_state WHERE key = 'ai_third_party_enabled';
+
+        UPDATE ai_work_profiles
+        SET default_account_id = NULL,
+            updated_at = datetime('now','localtime')
+        WHERE default_account_id IS NOT NULL
+      `)
     }
   },
   {

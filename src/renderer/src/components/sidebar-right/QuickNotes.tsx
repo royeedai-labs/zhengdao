@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Lightbulb, Plus, Trash2 } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useNoteStore } from '@/stores/note-store'
@@ -8,9 +8,19 @@ export default function QuickNotes() {
   const bookId = useBookStore((s) => s.currentBookId)!
   const pushModal = useUIStore((s) => s.pushModal)
   const notes = useNoteStore((s) => s.notes)
+  const loadNotes = useNoteStore((s) => s.loadNotes)
+  const resetNotes = useNoteStore((s) => s.reset)
   const createNote = useNoteStore((s) => s.createNote)
   const deleteNote = useNoteStore((s) => s.deleteNote)
   const [input, setInput] = useState('')
+
+  useEffect(() => {
+    if (!bookId) {
+      resetNotes()
+      return
+    }
+    void loadNotes(bookId)
+  }, [bookId, loadNotes, resetNotes])
 
   const addNote = async () => {
     if (!input.trim()) return

@@ -1,9 +1,33 @@
 import { getDb } from './connection'
+import type { AiCallerConfig, AiProvider } from '../../shared/ai'
 
 export type AiDraftStatus = 'pending' | 'applied' | 'dismissed'
 export const DEFAULT_AI_CONVERSATION_TITLE = 'AI 对话'
 const AI_OFFICIAL_PROFILE_ID_KEY = 'ai_official_profile_id'
 const AI_THIRD_PARTY_ENABLED_KEY = 'ai_third_party_enabled'
+const AI_GLOBAL_PROVIDER_KEY = 'ai_global_provider'
+const AI_GLOBAL_API_KEY_KEY = 'ai_global_api_key'
+const AI_GLOBAL_API_ENDPOINT_KEY = 'ai_global_api_endpoint'
+const AI_GLOBAL_MODEL_KEY = 'ai_global_model'
+
+const AI_PROVIDERS = new Set<AiProvider>(['zhengdao_official', 'openai', 'gemini', 'gemini_cli', 'ollama', 'custom'])
+
+export type GlobalAiConfigSettings = {
+  ai_provider: AiProvider
+  ai_api_endpoint: string
+  ai_model: string
+  ai_official_profile_id: string
+  has_secret: number
+}
+
+export type SaveGlobalAiConfigInput = {
+  ai_provider?: string
+  ai_api_endpoint?: string
+  ai_model?: string
+  ai_api_key?: string
+  ai_official_profile_id?: string
+  clear_api_key?: boolean
+}
 
 const DEFAULT_PROFILE = {
   style_guide: '',
@@ -89,6 +113,14 @@ function upsertAppState(key: string, value: string): void {
   ).run(key, encodeSecret(value))
 }
 
+function upsertPlainAppState(key: string, value: string): void {
+  const db = getDb()
+  db.prepare(
+    `INSERT INTO app_state (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(key, value)
+}
+
 function getAppState(key: string): string {
   const db = getDb()
   const row = db.prepare('SELECT value FROM app_state WHERE key = ?').get(key) as { value?: string } | undefined
@@ -107,6 +139,11 @@ function deleteAppState(key: string): void {
   getDb().prepare('DELETE FROM app_state WHERE key = ?').run(key)
 }
 
+function normalizeAiProvider(provider?: string): AiProvider {
+  if (provider && AI_PROVIDERS.has(provider as AiProvider)) return provider as AiProvider
+  return 'zhengdao_official'
+}
+
 function resolveCredential(ref: string): string {
   if (!ref) return ''
   if (ref.startsWith('legacy-project-config:')) {
@@ -121,27 +158,6 @@ function resolveCredential(ref: string): string {
     return getAppState(ref.slice('app-state:'.length))
   }
   return ''
-}
-
-export function getAiAccounts() {
-  const db = getDb()
-  return db
-    .prepare(
-      `SELECT
-        id,
-        name,
-        provider,
-        api_endpoint,
-        model,
-        status,
-        is_default,
-        created_at,
-        updated_at,
-        CASE WHEN credential_ref <> '' THEN 1 ELSE 0 END AS has_secret
-       FROM ai_accounts
-       ORDER BY is_default DESC, id`
-    )
-    .all()
 }
 
 export function getAiAccountRuntimeConfig(accountId: number) {
@@ -162,72 +178,6 @@ export function getAiAccountRuntimeConfig(accountId: number) {
     ai_api_endpoint: account.api_endpoint || '',
     ai_model: account.model || ''
   }
-}
-
-export function saveAiAccount(data: {
-  id?: number | null
-  name: string
-  provider: string
-  api_endpoint?: string
-  model?: string
-  api_key?: string
-  is_default?: number | boolean
-}) {
-  const db = getDb()
-  const isDefault = data.is_default ? 1 : 0
-  if (isDefault) db.prepare('UPDATE ai_accounts SET is_default = 0').run()
-
-  if (data.id) {
-    const existing = db.prepare('SELECT credential_ref FROM ai_accounts WHERE id = ?').get(data.id) as
-      | { credential_ref: string }
-      | undefined
-    const credentialRef = data.api_key
-      ? `app-state:ai_account_secret:${data.id}`
-      : existing?.credential_ref || ''
-    db.prepare(
-      `UPDATE ai_accounts SET
-        name = ?, provider = ?, api_endpoint = ?, model = ?, credential_ref = ?,
-        is_default = ?, updated_at = datetime('now','localtime')
-       WHERE id = ?`
-    ).run(
-      data.name.trim() || 'AI 账号',
-      data.provider || 'openai',
-      data.api_endpoint || '',
-      data.model || '',
-      credentialRef,
-      isDefault,
-      data.id
-    )
-    if (data.api_key) upsertAppState(`ai_account_secret:${data.id}`, data.api_key)
-    return db.prepare('SELECT * FROM ai_accounts WHERE id = ?').get(data.id)
-  }
-
-  const result = db
-    .prepare(
-      `INSERT INTO ai_accounts (name, provider, api_endpoint, model, credential_ref, is_default, status)
-       VALUES (?, ?, ?, ?, '', ?, 'unknown')`
-    )
-    .run(data.name.trim() || 'AI 账号', data.provider || 'openai', data.api_endpoint || '', data.model || '', isDefault)
-  const id = Number(result.lastInsertRowid)
-  const credentialRef = data.api_key ? `app-state:ai_account_secret:${id}` : ''
-  if (credentialRef) {
-    upsertAppState(`ai_account_secret:${id}`, data.api_key || '')
-    db.prepare('UPDATE ai_accounts SET credential_ref = ? WHERE id = ?').run(credentialRef, id)
-  }
-  return db.prepare('SELECT * FROM ai_accounts WHERE id = ?').get(id)
-}
-
-export function deleteAiAccount(id: number) {
-  const db = getDb()
-  const existing = db.prepare('SELECT credential_ref FROM ai_accounts WHERE id = ?').get(id) as
-    | { credential_ref?: string }
-    | undefined
-  const credentialRef = existing?.credential_ref || ''
-  if (credentialRef.startsWith('app-state:')) {
-    deleteAppState(credentialRef.slice('app-state:'.length))
-  }
-  db.prepare('UPDATE ai_work_profiles SET default_account_id = NULL WHERE default_account_id = ?').run(id)
-  db.prepare('DELETE FROM ai_accounts WHERE id = ?').run(id)
 }
 
 export function getAiSkillTemplates() {
@@ -330,6 +280,76 @@ function getDefaultAiAccountRuntimeConfig() {
     | { id?: number }
     | undefined
   return row?.id ? getAiAccountRuntimeConfig(row.id) : null
+}
+
+function getLegacyGlobalAiRuntimeConfig(): AiCallerConfig | null {
+  const thirdPartyEnabled = getAppState(AI_THIRD_PARTY_ENABLED_KEY) === '1'
+  const account = thirdPartyEnabled ? getDefaultAiAccountRuntimeConfig() : null
+  if (!account) return null
+  return {
+    ai_provider: normalizeAiProvider(account.ai_provider),
+    ai_api_key: account.ai_api_key,
+    ai_api_endpoint: account.ai_api_endpoint,
+    ai_model: account.ai_model,
+    ai_official_profile_id: ''
+  }
+}
+
+function getStoredGlobalProvider(): AiProvider | null {
+  const storedProvider = getAppState(AI_GLOBAL_PROVIDER_KEY)
+  if (!storedProvider) return null
+  return normalizeAiProvider(storedProvider)
+}
+
+export function getGlobalAiConfig(): GlobalAiConfigSettings {
+  const storedProvider = getStoredGlobalProvider()
+  const legacyConfig = storedProvider ? null : getLegacyGlobalAiRuntimeConfig()
+  const provider = storedProvider || normalizeAiProvider(legacyConfig?.ai_provider)
+  const apiKey = storedProvider ? getAppState(AI_GLOBAL_API_KEY_KEY) : legacyConfig?.ai_api_key || ''
+
+  return {
+    ai_provider: provider,
+    ai_api_endpoint: storedProvider ? getAppState(AI_GLOBAL_API_ENDPOINT_KEY) : legacyConfig?.ai_api_endpoint || '',
+    ai_model: storedProvider ? getAppState(AI_GLOBAL_MODEL_KEY) : legacyConfig?.ai_model || '',
+    ai_official_profile_id: getAppState(AI_OFFICIAL_PROFILE_ID_KEY),
+    has_secret: provider === 'zhengdao_official' ? 0 : apiKey ? 1 : 0
+  }
+}
+
+export function saveGlobalAiConfig(data: SaveGlobalAiConfigInput) {
+  const provider = normalizeAiProvider(data.ai_provider)
+  upsertPlainAppState(AI_GLOBAL_PROVIDER_KEY, provider)
+  upsertPlainAppState(AI_GLOBAL_API_ENDPOINT_KEY, provider === 'zhengdao_official' ? '' : data.ai_api_endpoint || '')
+  upsertPlainAppState(AI_GLOBAL_MODEL_KEY, provider === 'zhengdao_official' ? '' : data.ai_model || '')
+
+  if (data.ai_official_profile_id != null) {
+    upsertPlainAppState(AI_OFFICIAL_PROFILE_ID_KEY, data.ai_official_profile_id || '')
+  }
+  if (data.clear_api_key) {
+    deleteAppState(AI_GLOBAL_API_KEY_KEY)
+  } else if (data.ai_api_key?.trim()) {
+    upsertAppState(AI_GLOBAL_API_KEY_KEY, data.ai_api_key.trim())
+  }
+  deleteAppState(AI_THIRD_PARTY_ENABLED_KEY)
+
+  return getGlobalAiConfig()
+}
+
+export function getResolvedGlobalAiConfig(): AiCallerConfig {
+  const storedProvider = getStoredGlobalProvider()
+  if (!storedProvider) {
+    const legacyConfig = getLegacyGlobalAiRuntimeConfig()
+    if (legacyConfig) return legacyConfig
+  }
+
+  const provider = storedProvider || 'zhengdao_official'
+  return {
+    ai_provider: provider,
+    ai_api_key: provider === 'zhengdao_official' ? '' : getAppState(AI_GLOBAL_API_KEY_KEY),
+    ai_api_endpoint: provider === 'zhengdao_official' ? '' : getAppState(AI_GLOBAL_API_ENDPOINT_KEY),
+    ai_model: provider === 'zhengdao_official' ? '' : getAppState(AI_GLOBAL_MODEL_KEY),
+    ai_official_profile_id: provider === 'zhengdao_official' ? getAppState(AI_OFFICIAL_PROFILE_ID_KEY) : ''
+  }
 }
 
 export function getAiSkillOverrides(bookId: number) {
@@ -526,24 +546,5 @@ export function setAiDraftStatus(id: number, status: AiDraftStatus) {
 }
 
 export function getResolvedAiConfigForBook(_bookId: number) {
-  const thirdPartyEnabled = getAppState(AI_THIRD_PARTY_ENABLED_KEY) === '1'
-  const account = thirdPartyEnabled ? getDefaultAiAccountRuntimeConfig() : null
-
-  if (account) {
-    return {
-      ai_provider: account.ai_provider,
-      ai_api_key: account.ai_api_key,
-      ai_api_endpoint: account.ai_api_endpoint,
-      ai_model: account.ai_model,
-      ai_official_profile_id: ''
-    }
-  }
-
-  return {
-    ai_provider: 'zhengdao_official',
-    ai_api_key: '',
-    ai_api_endpoint: '',
-    ai_model: '',
-    ai_official_profile_id: getAppState(AI_OFFICIAL_PROFILE_ID_KEY)
-  }
+  return getResolvedGlobalAiConfig()
 }

@@ -266,7 +266,7 @@ export default function ProjectSettingsModal() {
                   AI 作品能力
                 </div>
                 <p className="mt-2 text-[var(--text-secondary)]">
-                  这里仅进入当前作品的 AI 档案、上下文策略和能力卡。官方 AI 选择和第三方模型高级入口统一在应用设置中管理。
+                  这里仅进入当前作品的上下文档案、上下文策略和能力卡。Provider、API Key、Gemini CLI 和 Ollama 统一在应用设置中管理。
                 </p>
               </div>
 

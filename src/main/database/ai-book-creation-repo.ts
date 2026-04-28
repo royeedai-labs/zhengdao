@@ -1,0 +1,269 @@
+import { coerceGenre } from '../../shared/genre'
+import {
+  normalizeCreationBrief,
+  stripBookCreationChapterContent,
+  validateBookCreationPackage,
+  type AiBookCreationPackage,
+  type AssistantCreationBrief
+} from '../../shared/ai-book-creation'
+import { getDb } from './connection'
+
+type GenreTemplateRow = {
+  id: number
+  slug: string
+  character_fields: string
+  faction_labels: string
+  status_labels: string
+  emotion_labels: string
+}
+
+function parseArray(value: unknown): unknown[] {
+  if (typeof value !== 'string' || !value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function cleanText(value: unknown, fallback = ''): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback
+}
+
+function toHtml(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (/<\/?[a-z][^>]*>/i.test(trimmed)) return trimmed
+  return trimmed
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) =>
+      `<p>${paragraph
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>')}</p>`
+    )
+    .join('')
+}
+
+function countWordsFromHtml(html: string): number {
+  return html.replace(/<[^>]*>/g, '').replace(/\s/g, '').length
+}
+
+function clampScore(value: unknown): number {
+  const score = Number(value)
+  if (!Number.isFinite(score)) return 0
+  return Math.max(-5, Math.min(5, Math.round(score)))
+}
+
+function pickDefaultGenreTemplate(): GenreTemplateRow | null {
+  const db = getDb()
+  const rawDefault = db.prepare("SELECT value FROM app_state WHERE key = 'system_default_genre_template_id'").get() as
+    | { value?: string }
+    | undefined
+  const defaultId = Number(rawDefault?.value)
+  if (Number.isFinite(defaultId) && defaultId > 0) {
+    const row = db.prepare('SELECT * FROM genre_templates WHERE id = ?').get(defaultId) as GenreTemplateRow | undefined
+    if (row) return row
+  }
+  return db
+    .prepare('SELECT * FROM genre_templates ORDER BY is_seed DESC, created_at ASC, id ASC LIMIT 1')
+    .get() as GenreTemplateRow | null
+}
+
+function readSystemDailyGoal(): number {
+  const row = getDb().prepare("SELECT value FROM app_state WHERE key = 'system_default_daily_goal'").get() as
+    | { value?: string }
+    | undefined
+  const parsed = Number(row?.value)
+  if (!Number.isFinite(parsed)) return 6000
+  return Math.max(500, Math.min(50000, Math.round(parsed)))
+}
+
+function aiWorkProfileColumns(): Set<string> {
+  return new Set(
+    (getDb().prepare('PRAGMA table_info(ai_work_profiles)').all() as Array<{ name: string }>).map((column) => column.name)
+  )
+}
+
+function insertAiWorkProfile(bookId: number, pkg: AiBookCreationPackage, brief: AssistantCreationBrief): void {
+  const db = getDb()
+  db.prepare(
+    `INSERT INTO ai_work_profiles (
+      book_id, default_account_id, style_guide, genre_rules, content_boundaries,
+      asset_rules, rhythm_rules, context_policy
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(book_id) DO UPDATE SET
+      style_guide = excluded.style_guide,
+      genre_rules = excluded.genre_rules,
+      content_boundaries = excluded.content_boundaries,
+      asset_rules = excluded.asset_rules,
+      rhythm_rules = excluded.rhythm_rules,
+      context_policy = excluded.context_policy,
+      updated_at = datetime('now','localtime')`
+  ).run(
+    bookId,
+    null,
+    cleanText(pkg.workProfile?.styleGuide, brief.styleAudiencePlatform || ''),
+    cleanText(pkg.workProfile?.genreRules, [brief.genreTheme, brief.coreConflict].filter(Boolean).join('\n')),
+    cleanText(pkg.workProfile?.contentBoundaries, brief.boundaries || ''),
+    cleanText(pkg.workProfile?.assetRules, brief.characterPlan || ''),
+    cleanText(pkg.workProfile?.rhythmRules, brief.chapterPlan || ''),
+    'smart_minimal'
+  )
+
+  const columns = aiWorkProfileColumns()
+  if (columns.has('genre')) {
+    db.prepare("UPDATE ai_work_profiles SET genre = ?, updated_at = datetime('now','localtime') WHERE book_id = ?").run(
+      coerceGenre(pkg.workProfile?.productGenre || brief.productGenre),
+      bookId
+    )
+  }
+}
+
+export function createBookFromAiPackage(input: {
+  brief: AssistantCreationBrief
+  package: AiBookCreationPackage
+  messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string; metadata?: unknown }>
+}) {
+  const validation = validateBookCreationPackage(input.package)
+  if (!validation.ok) {
+    throw new Error(validation.errors.join('；'))
+  }
+
+  const brief = normalizeCreationBrief(input.brief)
+  const pkg = stripBookCreationChapterContent(input.package)
+  const db = getDb()
+  const tx = db.transaction(() => {
+    const template = pickDefaultGenreTemplate()
+    const dailyGoal = readSystemDailyGoal()
+    const bookResult = db
+      .prepare('INSERT INTO books (title, author) VALUES (?, ?)')
+      .run(cleanText(pkg.book.title, brief.title || 'AI 新作品'), cleanText(pkg.book.author, brief.author || ''))
+    const bookId = Number(bookResult.lastInsertRowid)
+
+    db.prepare(
+      `INSERT INTO project_config (
+        book_id, genre, character_fields, faction_labels, status_labels, emotion_labels,
+        daily_goal, daily_goal_mode, sensitive_list,
+        editor_font, editor_font_size, editor_line_height, editor_width
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      bookId,
+      template?.slug || 'urban',
+      JSON.stringify(parseArray(template?.character_fields)),
+      JSON.stringify(parseArray(template?.faction_labels)),
+      JSON.stringify(parseArray(template?.status_labels)),
+      JSON.stringify(parseArray(template?.emotion_labels)),
+      dailyGoal,
+      'follow_system',
+      'default',
+      'serif',
+      19,
+      2.2,
+      'standard'
+    )
+
+    insertAiWorkProfile(bookId, pkg, brief)
+
+    let firstChapterId: number | null = null
+    pkg.volumes.forEach((volume, volumeIndex) => {
+      const volumeResult = db
+        .prepare('INSERT INTO volumes (book_id, title, sort_order) VALUES (?, ?, ?)')
+        .run(bookId, cleanText(volume.title, `第${volumeIndex + 1}卷`), volumeIndex)
+      const volumeId = Number(volumeResult.lastInsertRowid)
+      volume.chapters.forEach((chapter, chapterIndex) => {
+        const html = toHtml(cleanText(chapter.content))
+        const chapterResult = db
+          .prepare(
+            'INSERT INTO chapters (volume_id, title, content, word_count, summary, sort_order) VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          .run(
+            volumeId,
+            cleanText(chapter.title, `第${chapterIndex + 1}章`),
+            html,
+            countWordsFromHtml(html),
+            cleanText(chapter.summary),
+            chapterIndex
+          )
+        firstChapterId ??= Number(chapterResult.lastInsertRowid)
+      })
+    })
+    if (firstChapterId == null) throw new Error('缺少章节草稿')
+
+    pkg.characters.forEach((character) => {
+      db.prepare(
+        `INSERT INTO characters (book_id, name, faction, status, custom_fields, description)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(
+        bookId,
+        cleanText(character.name, '未命名角色'),
+        cleanText(character.faction, 'neutral'),
+        cleanText(character.status, 'active'),
+        JSON.stringify(character.customFields || {}),
+        cleanText(character.description)
+      )
+    })
+
+    pkg.wikiEntries.forEach((entry, index) => {
+      db.prepare(
+        'INSERT INTO settings_wiki (book_id, category, title, content, sort_order) VALUES (?, ?, ?, ?, ?)'
+      ).run(bookId, cleanText(entry.category, 'AI 设定'), cleanText(entry.title, '未命名设定'), cleanText(entry.content), index)
+    })
+
+    pkg.plotNodes.forEach((node, index) => {
+      db.prepare(
+        `INSERT INTO plot_nodes (book_id, chapter_number, title, score, node_type, description, sort_order, plotline_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        bookId,
+        Number.isFinite(Number(node.chapterNumber)) ? Number(node.chapterNumber) : 0,
+        cleanText(node.title, '剧情节点'),
+        clampScore(node.score),
+        node.nodeType === 'branch' ? 'branch' : 'main',
+        cleanText(node.description),
+        index,
+        null
+      )
+    })
+
+    pkg.foreshadowings.forEach((item) => {
+      db.prepare(
+        'INSERT INTO foreshadowings (book_id, chapter_id, text, expected_chapter, expected_word_count) VALUES (?, ?, ?, ?, ?)'
+      ).run(
+        bookId,
+        firstChapterId,
+        cleanText(item.text, 'AI 伏笔'),
+        item.expectedChapter == null ? null : Number(item.expectedChapter),
+        item.expectedWordCount == null ? null : Number(item.expectedWordCount)
+      )
+    })
+
+    const conversationResult = db
+      .prepare('INSERT INTO ai_conversations (book_id, title) VALUES (?, ?)')
+      .run(bookId, 'AI 起书会话')
+    const conversationId = Number(conversationResult.lastInsertRowid)
+    const messages = input.messages?.length
+      ? input.messages
+      : [{ role: 'system' as const, content: '本会话由书架页 AI 起书流程转存。' }]
+    messages.forEach((message) => {
+      db.prepare('INSERT INTO ai_messages (conversation_id, role, content, metadata) VALUES (?, ?, ?, ?)').run(
+        conversationId,
+        message.role,
+        message.content,
+        JSON.stringify(message.metadata || {})
+      )
+    })
+    db.prepare("UPDATE books SET updated_at = datetime('now','localtime') WHERE id = ?").run(bookId)
+    return {
+      book: db.prepare('SELECT * FROM books WHERE id = ?').get(bookId),
+      firstChapterId,
+      conversationId
+    }
+  })
+
+  return tx()
+}

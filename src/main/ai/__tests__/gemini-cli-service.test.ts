@@ -35,7 +35,7 @@ describe('Gemini CLI service', () => {
       parseGeminiCliJsonOutput('{"error":{"type":"AuthError","message":"not logged in"}}')
     ).toEqual({
       content: '',
-      error: 'Gemini CLI 尚未完成 Google 登录，请先在项目设置中启动 Gemini CLI 登录。'
+      error: 'Gemini CLI 尚未完成 Google 登录，请先在应用设置 / AI 与模型中启动 Gemini CLI 登录。'
     })
 
     expect(
@@ -258,7 +258,7 @@ describe('Gemini CLI service', () => {
       )
     ).toEqual({
       done: true,
-      error: 'Gemini CLI 尚未完成 Google 登录，请先在项目设置中启动 Gemini CLI 登录。'
+      error: 'Gemini CLI 尚未完成 Google 登录，请先在应用设置 / AI 与模型中启动 Gemini CLI 登录。'
     })
 
     expect(parseGeminiCliStreamJsonLine('')).toEqual({})

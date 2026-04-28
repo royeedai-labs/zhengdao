@@ -196,9 +196,9 @@ export async function getProviderStatus(
 
   if (!probe) {
     if ((provider === 'openai' || provider === 'gemini' || provider === 'custom') && !trim(input.apiKey)) {
-      return makeStatus(provider, false, true, '缺少 API Key / Token，请先填写账号密钥。')
+      return makeStatus(provider, false, true, '缺少 API Key / Token，请先填写全局密钥。')
     }
-    return makeStatus(provider, true, false, '当前账号配置已填写，可点击“检测”验证连通性。')
+    return makeStatus(provider, true, false, '当前全局模型配置已填写，可点击“检测”验证连通性。')
   }
 
   if (provider === 'gemini') return probeGemini(input)

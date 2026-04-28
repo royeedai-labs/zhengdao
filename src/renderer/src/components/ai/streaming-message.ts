@@ -43,6 +43,22 @@ export function appendAssistantStreamToken<T extends AiMessageLike>(
   )
 }
 
+export function replaceAssistantStreamContent<T extends AiMessageLike>(
+  messages: T[],
+  messageId: number,
+  content: string
+): T[] {
+  return messages.map((message) =>
+    message.id === messageId
+      ? {
+          ...message,
+          content,
+          streaming: true
+        }
+      : message
+  )
+}
+
 export function completeAssistantStreamMessage<T extends AiMessageLike>(
   messages: T[],
   pendingId: number,

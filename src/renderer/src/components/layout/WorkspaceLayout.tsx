@@ -56,7 +56,7 @@ export default function WorkspaceLayout() {
     }
   }, [bookId, triggerOnboardingTour])
 
-  const { leftPanelOpen, rightPanelOpen, blackRoomMode, toggleRightPanel, splitView } = useUIStore()
+  const { leftPanelOpen, rightPanelOpen, blackRoomMode, splitView, openModal } = useUIStore()
   const leftPanelWidth = useUIStore((s) => s.leftPanelWidth)
   const rightPanelWidth = useUIStore((s) => s.rightPanelWidth)
   const setLeftPanelWidth = useUIStore((s) => s.setLeftPanelWidth)
@@ -187,10 +187,10 @@ export default function WorkspaceLayout() {
       <AiAssistantDock />
       {warningCount > 0 && !rightPanelOpen && (
         <button
-          onClick={() => toggleRightPanel()}
-          aria-label="打开辅助面板查看催债中的伏笔"
+          onClick={() => openModal('foreshadowBoard')}
+          aria-label="打开伏笔看板查看催债中的伏笔"
           className="fixed bottom-16 right-4 z-40 flex items-center gap-1.5 px-3 py-2 bg-[var(--danger-primary)] hover:brightness-105 text-[var(--text-inverse)] text-xs font-bold rounded-full shadow-lg animate-pulse transition no-drag"
-          title="有伏笔催债！点击打开辅助面板查看"
+          title="有伏笔催债！点击打开伏笔看板"
         >
           <BellRing size={14} />
           <span>{warningCount} 坑待填</span>

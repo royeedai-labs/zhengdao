@@ -1,4 +1,4 @@
-export type AiAccountProviderUiMeta = {
+export type AiProviderUiMeta = {
   showApiKeyField: boolean
   apiKeyOptional: boolean
   apiKeyLabel: string
@@ -10,7 +10,7 @@ export type AiAccountProviderUiMeta = {
   supportsAuthLaunch: boolean
 }
 
-const DEFAULT_META: AiAccountProviderUiMeta = {
+const DEFAULT_META: AiProviderUiMeta = {
   showApiKeyField: true,
   apiKeyOptional: false,
   apiKeyLabel: 'API Key / Token',
@@ -22,7 +22,7 @@ const DEFAULT_META: AiAccountProviderUiMeta = {
   supportsAuthLaunch: false
 }
 
-export function getAiAccountProviderUiMeta(provider: string): AiAccountProviderUiMeta {
+export function getAiProviderUiMeta(provider: string): AiProviderUiMeta {
   switch (provider) {
     case 'gemini':
       return {

@@ -34,14 +34,11 @@ export function saveConfig(bookId: number, config: Record<string, unknown>) {
     db.prepare(`
       UPDATE project_config SET genre = ?, character_fields = ?, faction_labels = ?,
         status_labels = ?, emotion_labels = ?, daily_goal = ?, daily_goal_mode = ?, sensitive_list = ?,
-        ai_api_key = ?, ai_api_endpoint = ?, ai_model = ?, ai_provider = ?,
         editor_font = ?, editor_font_size = ?, editor_line_height = ?, editor_width = ?
       WHERE book_id = ?
     `).run(
       config.genre || 'urban', charFields, factionLabels, statusLabels, emotionLabels,
       config.daily_goal || 6000, config.daily_goal_mode || 'follow_system', config.sensitive_list || 'default',
-      config.ai_api_key || '', config.ai_api_endpoint || '', config.ai_model || '',
-      config.ai_provider || 'openai',
       config.editor_font ?? 'serif',
       config.editor_font_size ?? 19,
       config.editor_line_height ?? 2.2,
@@ -51,14 +48,12 @@ export function saveConfig(bookId: number, config: Record<string, unknown>) {
   } else {
     db.prepare(`
       INSERT INTO project_config (book_id, genre, character_fields, faction_labels,
-        status_labels, emotion_labels, daily_goal, daily_goal_mode, sensitive_list, ai_api_key, ai_api_endpoint, ai_model, ai_provider,
+        status_labels, emotion_labels, daily_goal, daily_goal_mode, sensitive_list,
         editor_font, editor_font_size, editor_line_height, editor_width)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       bookId, config.genre || 'urban', charFields, factionLabels, statusLabels, emotionLabels,
       config.daily_goal || 6000, config.daily_goal_mode || 'follow_system', config.sensitive_list || 'default',
-      config.ai_api_key || '', config.ai_api_endpoint || '', config.ai_model || '',
-      config.ai_provider || 'openai',
       config.editor_font ?? 'serif',
       config.editor_font_size ?? 19,
       config.editor_line_height ?? 2.2,

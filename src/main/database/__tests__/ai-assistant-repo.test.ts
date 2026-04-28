@@ -24,7 +24,10 @@ import {
   getAiDrafts,
   getAiMessages,
   getAiWorkProfile,
+  getGlobalAiConfig,
   getResolvedAiConfigForBook,
+  getResolvedGlobalAiConfig,
+  saveGlobalAiConfig,
   saveAiWorkProfile
 } from '../ai-assistant-repo'
 
@@ -112,7 +115,7 @@ describe('ai assistant conversation repository', () => {
     ])
   })
 
-  it('uses official AI by default and only resolves third-party accounts when enabled', () => {
+  it('uses one global AI config and ignores work-level account references', () => {
     state.db!
       .prepare(
         `INSERT INTO ai_accounts (id, name, provider, api_endpoint, model, credential_ref, is_default, status)
@@ -134,11 +137,20 @@ describe('ai assistant conversation repository', () => {
       ai_model: ''
     })
 
-    state.db!
-      .prepare("INSERT INTO app_state (key, value) VALUES ('ai_third_party_enabled', '1')")
-      .run()
+    saveGlobalAiConfig({
+      ai_provider: 'gemini_cli',
+      ai_model: 'global-model'
+    })
 
     expect(getResolvedAiConfigForBook(1)).toMatchObject({
+      ai_provider: 'gemini_cli',
+      ai_model: 'global-model'
+    })
+    expect(getResolvedGlobalAiConfig()).toMatchObject({
+      ai_provider: 'gemini_cli',
+      ai_model: 'global-model'
+    })
+    expect(getGlobalAiConfig()).toMatchObject({
       ai_provider: 'gemini_cli',
       ai_model: 'global-model'
     })

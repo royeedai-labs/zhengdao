@@ -15,7 +15,7 @@ import {
   X
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import AiGlobalAccountsSettings from '@/components/ai/AiGlobalAccountsSettings'
+import AiGlobalConfigSettings from '@/components/ai/AiGlobalConfigSettings'
 import BackupMigrationSettingsPanel from '@/components/settings/BackupMigrationSettingsPanel'
 import GenreTemplatesSettingsPanel from '@/components/settings/GenreTemplatesSettingsPanel'
 import ShortcutSettingsPanel from '@/components/settings/ShortcutSettingsPanel'
@@ -34,7 +34,7 @@ type AppSettingsTab =
   | 'appearance'
   | 'genreTemplates'
   | 'dailyDefaults'
-  | 'aiAccounts'
+  | 'aiModels'
   | 'shortcuts'
   | 'backup'
   | 'updates'
@@ -44,7 +44,7 @@ const SETTINGS_TABS: Array<{ id: AppSettingsTab; label: string; icon: typeof Pal
   { id: 'appearance', label: '外观', icon: Palette },
   { id: 'genreTemplates', label: '题材模板', icon: SlidersHorizontal },
   { id: 'dailyDefaults', label: '日更默认', icon: Target },
-  { id: 'aiAccounts', label: 'AI 与模型', icon: KeyRound },
+  { id: 'aiModels', label: 'AI 与模型', icon: KeyRound },
   { id: 'shortcuts', label: '快捷键', icon: Keyboard },
   { id: 'backup', label: '备份与迁移', icon: Database },
   { id: 'updates', label: '更新与关于', icon: Info }
@@ -52,12 +52,13 @@ const SETTINGS_TABS: Array<{ id: AppSettingsTab; label: string; icon: typeof Pal
 
 function normalizeAppSettingsTab(value: unknown): AppSettingsTab | null {
   if (value === 'account') return 'overview'
+  if (value === 'aiAccounts') return 'aiModels'
   return (
     value === 'overview' ||
     value === 'appearance' ||
     value === 'genreTemplates' ||
     value === 'dailyDefaults' ||
-    value === 'aiAccounts' ||
+    value === 'aiModels' ||
     value === 'shortcuts' ||
     value === 'backup' ||
     value === 'updates'
@@ -401,7 +402,7 @@ export default function AppSettingsModal() {
 
             {tab === 'dailyDefaults' && <SystemDailyGoalSettingsPanel />}
 
-            {tab === 'aiAccounts' && <AiGlobalAccountsSettings />}
+            {tab === 'aiModels' && <AiGlobalConfigSettings />}
 
             {tab === 'shortcuts' && <ShortcutSettingsPanel />}
 

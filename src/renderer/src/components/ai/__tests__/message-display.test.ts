@@ -46,7 +46,84 @@ describe('assistant message display', () => {
     })
   })
 
-  it('hides malformed structured draft JSON behind a readable error', () => {
+  it('summarizes chapter drafts instead of rendering long chapter content in chat', () => {
+    expect(
+      buildAssistantMessageDisplay({
+        role: 'assistant',
+        content: JSON.stringify({
+          drafts: [
+            {
+              kind: 'create_chapter',
+              title: '第二章 风雪归人',
+              content: '他推开门，风雪倒灌进来。'
+            }
+          ]
+        })
+      })
+    ).toEqual({
+      kind: 'text',
+      text: '已生成《第二章 风雪归人》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。'
+    })
+  })
+
+  it('summarizes a single unwrapped chapter draft object', () => {
+    expect(
+      buildAssistantMessageDisplay({
+        role: 'assistant',
+        content: JSON.stringify({
+          kind: 'create_chapter',
+          title: '第三章 雨夜追兵',
+          content: '雨声压住了马蹄声。'
+        })
+      })
+    ).toEqual({
+      kind: 'text',
+      text: '已生成《第三章 雨夜追兵》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。'
+    })
+  })
+
+  it('summarizes chapter-shaped JSON even when the model omits kind', () => {
+    expect(
+      buildAssistantMessageDisplay({
+        role: 'assistant',
+        content: JSON.stringify({
+          chapter_title: '第三章 雨夜追兵',
+          content: '雨声压住了马蹄声。'
+        })
+      })
+    ).toEqual({
+      kind: 'text',
+      text: '已生成《第三章 雨夜追兵》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。'
+    })
+  })
+
+  it('summarizes malformed structured chapter output using the plain-text fallback', () => {
+    expect(
+      buildAssistantMessageDisplay({
+        role: 'assistant',
+        metadata: { skill_key: 'create_chapter' },
+        content: '{"title":"第三章 雨夜追兵","content":"雨声压住了马蹄声。"'
+      })
+    ).toEqual({
+      kind: 'text',
+      text: '已生成《AI 新章节》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。'
+    })
+  })
+
+  it('summarizes plain-text chapter skill output after the draft is promoted to editor preview', () => {
+    expect(
+      buildAssistantMessageDisplay({
+        role: 'assistant',
+        metadata: { skill_key: 'create_chapter' },
+        content: '第二章 风雪归人\n\n他推开门，风雪倒灌进来。'
+      })
+    ).toEqual({
+      kind: 'text',
+      text: '已生成《第二章 风雪归人》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。'
+    })
+  })
+
+  it('keeps malformed non-chapter structured output as text', () => {
     expect(
       buildAssistantMessageDisplay({
         role: 'assistant',
@@ -54,7 +131,7 @@ describe('assistant message display', () => {
       })
     ).toEqual({
       kind: 'text',
-      text: 'AI 返回了结构化草稿，但内容无法解析。请重试或清空当前会话。'
+      text: '{"drafts":[{"kind":"create_character","name":"赵烈"'
     })
   })
 })

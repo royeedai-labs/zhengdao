@@ -1,4 +1,5 @@
 import {
+  createChapterDraftFromAssistantResponse,
   parseAssistantDrafts,
   type AiDraftPayload
 } from '../../utils/ai/assistant-workflow'
@@ -21,6 +22,7 @@ export type AssistantMessageDisplay =
 type MessageLike = {
   role: 'user' | 'assistant' | 'system'
   content: string
+  metadata?: Record<string, unknown>
 }
 
 function draftTitle(draft: AiDraftPayload): string {
@@ -54,15 +56,45 @@ function looksLikeStructuredDraft(text: string): boolean {
 
 export function buildAssistantMessageDisplay(message: MessageLike): AssistantMessageDisplay {
   const text = message.content.trim()
-  if (message.role !== 'assistant' || !looksLikeStructuredDraft(text)) {
+  if (message.role !== 'assistant') {
+    return { kind: 'text', text: message.content }
+  }
+
+  if (!looksLikeStructuredDraft(text)) {
+    if (message.metadata?.skill_key === 'create_chapter') {
+      const draft = createChapterDraftFromAssistantResponse(text, 'AI 新章节', {
+        allowPlainTextFallback: true
+      })
+      if (draft) {
+        return {
+          kind: 'text',
+          text: `已生成《${draftTitle(draft)}》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。`
+        }
+      }
+    }
     return { kind: 'text', text: message.content }
   }
 
   const parsed = parseAssistantDrafts(text)
   if (parsed.drafts.length === 0) {
+    const chapterDraft = createChapterDraftFromAssistantResponse(text, 'AI 新章节', {
+      allowPlainTextFallback: message.metadata?.skill_key === 'create_chapter'
+    })
+    if (chapterDraft) {
+      return {
+        kind: 'text',
+        text: `已生成《${draftTitle(chapterDraft)}》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。`
+      }
+    }
+    return { kind: 'text', text: message.content }
+  }
+
+  if (parsed.drafts.every((draft) => draft.kind === 'create_chapter')) {
+    const firstTitle = draftTitle(parsed.drafts[0])
+    const countLabel = parsed.drafts.length > 1 ? `${parsed.drafts.length} 个章节草稿` : `《${firstTitle}》`
     return {
       kind: 'text',
-      text: 'AI 返回了结构化草稿，但内容无法解析。请重试或清空当前会话。'
+      text: `已生成${parsed.drafts.length > 1 ? ' ' : ''}${countLabel}，已切到中间的 AI 章节草稿预览。确认后才会写入小说。`
     }
   }
 

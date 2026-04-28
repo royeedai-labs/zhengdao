@@ -7,7 +7,7 @@ import { useForeshadowStore } from '@/stores/foreshadow-store'
 import { usePlotStore } from '@/stores/plot-store'
 import { useToastStore } from '@/stores/toast-store'
 import { useUIStore } from '@/stores/ui-store'
-import { getResolvedAiConfigForBook, isAiConfigReady, aiPrompt } from '@/utils/ai'
+import { getResolvedGlobalAiConfig, isAiConfigReady, aiPrompt } from '@/utils/ai'
 import {
   CHAPTER_REVIEW_SECTIONS,
   buildChapterReviewPrompt,
@@ -58,9 +58,9 @@ export default function ChapterReviewModal() {
       return
     }
 
-    const config = await getResolvedAiConfigForBook(bookId)
+    const config = await getResolvedGlobalAiConfig()
     if (!isAiConfigReady(config)) {
-      useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI 全局账号，或补充作品 AI 档案')
+      useToastStore.getState().addToast('warning', '请先在应用设置 / AI 与模型中完成全局 AI 配置')
       return
     }
 

@@ -74,12 +74,29 @@ export function isAiConfigReady(config?: Partial<AiCallerConfig> | null): config
   return Boolean(config.ai_api_key?.trim())
 }
 
+export async function getResolvedGlobalAiConfig(): Promise<AiCallerConfig | null> {
+  if (typeof window === 'undefined' || !window.api) return null
+  if (window.api.aiGetResolvedGlobalConfig) {
+    return (window.api.aiGetResolvedGlobalConfig() as Promise<AiCallerConfig>) || null
+  }
+  if (window.api.aiGetResolvedWorkspaceConfig) {
+    return (window.api.aiGetResolvedWorkspaceConfig() as Promise<AiCallerConfig>) || null
+  }
+  if (window.api.aiGetResolvedConfigForBook) {
+    return (window.api.aiGetResolvedConfigForBook(0) as Promise<AiCallerConfig>) || null
+  }
+  return null
+}
+
+export async function getResolvedWorkspaceAiConfig(): Promise<AiCallerConfig | null> {
+  return getResolvedGlobalAiConfig()
+}
+
 export async function getResolvedAiConfigForBook(
   bookId: number | null | undefined
 ): Promise<AiCallerConfig | null> {
   if (bookId == null) return null
-  if (typeof window === 'undefined' || !window.api?.aiGetResolvedConfigForBook) return null
-  return (window.api.aiGetResolvedConfigForBook(bookId) as Promise<AiCallerConfig>) || null
+  return getResolvedGlobalAiConfig()
 }
 
 function bridgeComplete(request: AiBridgeCompleteRequest): Promise<AiResponse> {
@@ -160,7 +177,7 @@ async function completeWithProvider(
 ): Promise<AiResponse> {
   const normalized = normalizeConfig(config)
   if (!isAiConfigReady(normalized)) {
-    return { content: '', error: '请先在项目设置中配置 AI 助手 API' }
+    return { content: '', error: '请先在应用设置 / AI 与模型中完成全局 AI 配置' }
   }
 
   if (normalized.ai_provider === 'zhengdao_official' || normalized.ai_provider === 'gemini_cli') {
@@ -199,7 +216,7 @@ async function streamWithProvider(
 ): Promise<void> {
   const normalized = normalizeConfig(config)
   if (!isAiConfigReady(normalized)) {
-    callbacks.onError('请先在项目设置中配置 AI 助手 API')
+    callbacks.onError('请先在应用设置 / AI 与模型中完成全局 AI 配置')
     return
   }
 

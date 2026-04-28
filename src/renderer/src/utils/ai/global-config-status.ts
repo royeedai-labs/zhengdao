@@ -1,17 +1,15 @@
-export type AiGlobalAccountStatusDraft = {
-  id: number | null
+export type AiGlobalConfigStatusDraft = {
   provider: string
   api_endpoint: string
   model: string
   api_key: string
 }
 
-export type AiGlobalAccountStatusRequest = {
+export type AiGlobalConfigStatusRequest = {
   provider: string
   options: {
     probe: boolean
     config: {
-      accountId: number | null
       api_key: string
       api_endpoint: string
       model: string
@@ -19,16 +17,15 @@ export type AiGlobalAccountStatusRequest = {
   }
 }
 
-export function buildAiGlobalAccountStatusRequest(
-  draft: AiGlobalAccountStatusDraft,
+export function buildAiGlobalConfigStatusRequest(
+  draft: AiGlobalConfigStatusDraft,
   probe = false
-): AiGlobalAccountStatusRequest {
+): AiGlobalConfigStatusRequest {
   return {
     provider: draft.provider,
     options: {
       probe,
       config: {
-        accountId: draft.id,
         api_key: draft.api_key,
         api_endpoint: draft.api_endpoint,
         model: draft.model

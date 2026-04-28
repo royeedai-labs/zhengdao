@@ -33,8 +33,8 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     target: '.sidebar-right',
-    title: '上下文助手',
-    description: '在伏笔、角色和灵感之间切换，一次聚焦一个辅助任务，不打断正文创作。',
+    title: 'AI 创作工作台',
+    description: '右侧栏集中承载 AI 会话、上下文和草稿确认。伏笔与灵感可以从顶部更多工具或命令面板打开。',
     position: 'left'
   },
   {

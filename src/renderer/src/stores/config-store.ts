@@ -46,11 +46,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       emotion_labels: preset.emotion_labels,
       daily_goal: 6000,
       daily_goal_mode: 'follow_system',
-      sensitive_list: 'default',
-      ai_api_key: '',
-      ai_api_endpoint: '',
-      ai_model: '',
-      ai_provider: 'openai'
+      sensitive_list: 'default'
     })
   },
 
@@ -63,11 +59,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       emotion_labels: template.emotion_labels,
       daily_goal: systemDailyGoal,
       daily_goal_mode: 'follow_system',
-      sensitive_list: 'default',
-      ai_api_key: '',
-      ai_api_endpoint: '',
-      ai_model: '',
-      ai_provider: 'openai'
+      sensitive_list: 'default'
     })
   }
 }))

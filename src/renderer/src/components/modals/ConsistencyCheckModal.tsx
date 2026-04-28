@@ -4,7 +4,7 @@ import { useUIStore } from '@/stores/ui-store'
 import { useCharacterStore } from '@/stores/character-store'
 import { useBookStore } from '@/stores/book-store'
 import { useToastStore } from '@/stores/toast-store'
-import { aiComplete, getResolvedAiConfigForBook, isAiConfigReady } from '@/utils/ai'
+import { aiComplete, getResolvedGlobalAiConfig, isAiConfigReady } from '@/utils/ai'
 import type { Character } from '@/types'
 
 function stripHtml(html: string): string {
@@ -33,7 +33,7 @@ export default function ConsistencyCheckModal() {
     const character = characters.find((c) => c.id === characterId) as Character | undefined
     if (!character) return
 
-    const config = await getResolvedAiConfigForBook(bookId)
+    const config = await getResolvedGlobalAiConfig()
     if (!isAiConfigReady(config)) {
       useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI')
       return

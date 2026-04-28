@@ -1,11 +1,11 @@
 export type WorkspacePanelKind = 'left' | 'right'
-export type RightPanelTab = 'foreshadow' | 'characters' | 'notes' | 'ai'
+export type RightPanelTab = 'ai'
 
-export const RIGHT_PANEL_TABS: RightPanelTab[] = ['foreshadow', 'characters', 'notes', 'ai']
+export const RIGHT_PANEL_TABS: RightPanelTab[] = ['ai']
 
 const PANEL_LIMITS: Record<WorkspacePanelKind, { min: number; max: number; fallback: number; viewportRatio: number }> = {
   left: { min: 232, max: 420, fallback: 296, viewportRatio: 0.34 },
-  right: { min: 296, max: 520, fallback: 344, viewportRatio: 0.38 }
+  right: { min: 360, max: 640, fallback: 420, viewportRatio: 0.42 }
 }
 
 function roundFinite(value: number): number {
@@ -46,8 +46,6 @@ export function chooseDefaultRightPanelTab(input: {
   warningCount: number
   currentChapterCharacterCount: number
 }): RightPanelTab {
-  if (input.storedTab) return input.storedTab
-  if (input.warningCount > 0) return 'foreshadow'
-  if (input.currentChapterCharacterCount > 0) return 'characters'
-  return 'notes'
+  void input
+  return 'ai'
 }

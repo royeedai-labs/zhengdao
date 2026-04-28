@@ -37,7 +37,6 @@ export function resolveAssistantIntent(input: {
   const text = normalizeText(input.userInput)
   const hasSelection = Boolean(input.selectedText?.trim())
   const hasCurrentChapter = input.hasCurrentChapter !== false
-  const hasVolumes = input.hasVolumes !== false
 
   const wantsRewrite = includesAny(text, [
     '润色',
@@ -58,9 +57,25 @@ export function resolveAssistantIntent(input: {
     return skillIntent('polish_text', 0.92, '检测到选区和润色/改写意图')
   }
 
-  const wantsChapterDraft =
-    hasVolumes &&
-    includesAny(text, ['新章节', '创建章节', '生成章节', '写一章', '写下一章', '下一章草稿', 'chapter'])
+  const wantsChapterDraft = includesAny(text, [
+    '新章节',
+    '新建章节',
+    '创建章节',
+    '生成章节',
+    '章节草稿',
+    '新建一章',
+    '创建一章',
+    '生成一章',
+    '新建第',
+    '创建第',
+    '生成第',
+    '写第',
+    '写一章',
+    '写下一章',
+    '下一章草稿',
+    '章节卷',
+    'chapter'
+  ])
   if (wantsChapterDraft && hasSkill(input.skills, 'create_chapter')) {
     return skillIntent('create_chapter', 0.9, '检测到章节生成意图')
   }

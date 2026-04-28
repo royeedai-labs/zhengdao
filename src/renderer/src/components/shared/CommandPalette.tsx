@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertCircle,
   BookOpen,
   Bot,
   Coffee,
@@ -8,6 +9,7 @@ import {
   FilePlus,
   Layers,
   Leaf,
+  Lightbulb,
   Maximize2,
   Moon,
   Monitor,
@@ -97,6 +99,22 @@ function useCommands(): Command[] {
         action: () => openModal('projectSettings')
       },
       {
+        id: 'nav-foreshadow-board',
+        label: '打开伏笔看板',
+        category: '导航',
+        icon: AlertCircle,
+        requiresBook: true,
+        action: () => openModal('foreshadowBoard')
+      },
+      {
+        id: 'nav-quick-notes',
+        label: '打开灵感速记',
+        category: '导航',
+        icon: Lightbulb,
+        requiresBook: true,
+        action: () => openModal('quickNotes')
+      },
+      {
         id: 'nav-export',
         label: '打开导出面板',
         category: '导航',
@@ -147,7 +165,7 @@ function useCommands(): Command[] {
       },
       {
         id: 'ai-settings',
-        label: 'AI 能力与作品配置',
+        label: 'AI 能力与上下文',
         category: 'AI',
         icon: SlidersHorizontal,
         requiresBook: true,

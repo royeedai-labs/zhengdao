@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertTriangle, Bot, CheckCircle2, FileCheck2, HardDrive, History, Loader2, RefreshCw, ShieldCheck, Target } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { AlertTriangle, Bot, FileCheck2, HardDrive, Loader2, RefreshCw, ShieldCheck, Target } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useConfigStore } from '@/stores/config-store'
@@ -9,7 +9,6 @@ import { useToastStore } from '@/stores/toast-store'
 import { useUIStore } from '@/stores/ui-store'
 import {
   buildDailyWorkbenchModel,
-  createInitialSaveStatus,
   getLocalDateKey,
   type BackupFileSummary,
   type WorkbenchTone
@@ -82,17 +81,11 @@ export default function DailyWorkbench() {
   const systemDailyGoal = useSettingsStore((s) => s.systemDailyGoal)
   const warningCount = useForeshadowStore((s) => s.getWarningCount())
   const openModal = useUIStore((s) => s.openModal)
-  const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
-  const toggleRightPanel = useUIStore((s) => s.toggleRightPanel)
-  const chapterSaveStatus = useUIStore((s) => s.chapterSaveStatus)
   const [todayWords, setTodayWords] = useState(0)
   const [streak, setStreak] = useState(0)
-  const [snapshotCount, setSnapshotCount] = useState(0)
-  const [latestSnapshotAt, setLatestSnapshotAt] = useState<string | null>(null)
   const [backups, setBackups] = useState<BackupFileSummary[]>([])
   const [backupError, setBackupError] = useState<string | null>(null)
   const [backupBusy, setBackupBusy] = useState(false)
-  const currentChapterId = currentChapter?.id ?? null
 
   useEffect(() => {
     if (!bookId) return
@@ -110,25 +103,7 @@ export default function DailyWorkbench() {
     return () => {
       cancelled = true
     }
-  }, [bookId, currentChapter?.word_count, chapterSaveStatus.savedAt])
-
-  useEffect(() => {
-    if (currentChapterId == null) {
-      setSnapshotCount(0)
-      setLatestSnapshotAt(null)
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      const rows = (await window.api.getSnapshots(currentChapterId)) as Array<{ created_at?: string }>
-      if (cancelled) return
-      setSnapshotCount(rows.length)
-      setLatestSnapshotAt(rows[0]?.created_at ?? null)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [currentChapterId, chapterSaveStatus.savedAt])
+  }, [bookId, currentChapter?.word_count])
 
   const refreshBackups = async () => {
     try {
@@ -144,26 +119,12 @@ export default function DailyWorkbench() {
     void refreshBackups()
   }, [])
 
-  const effectiveSaveStatus = useMemo(() => {
-    if (!currentChapter) return createInitialSaveStatus(null)
-    if (chapterSaveStatus.chapterId === currentChapter.id) return chapterSaveStatus
-    return {
-      kind: 'saved' as const,
-      chapterId: currentChapter.id,
-      savedAt: currentChapter.updated_at,
-      error: null
-    }
-  }, [chapterSaveStatus, currentChapter])
-
   const model = buildDailyWorkbenchModel({
     dailyGoal: resolveProjectDailyGoal(config, systemDailyGoal),
     todayWords,
     streak,
     currentChapterId: currentChapter?.id ?? null,
     currentChapterWords: currentChapter?.word_count ?? 0,
-    saveStatus: effectiveSaveStatus,
-    snapshotCount,
-    latestSnapshotAt,
     backups,
     backupError
   })
@@ -210,14 +171,6 @@ export default function DailyWorkbench() {
         tone="ok"
         title="代码运行状态正常；此状态不等同于外部备份完成"
       />
-      <StatusChip icon={<CheckCircle2 size={13} />} label={model.save.label} detail={model.save.detail} tone={model.save.tone} />
-      <StatusChip
-        icon={<History size={13} />}
-        label={model.snapshot.label}
-        detail={model.snapshot.detail}
-        tone={model.snapshot.tone}
-        onClick={currentChapter ? () => openModal('snapshot') : undefined}
-      />
       <StatusChip
         icon={backupBusy ? <Loader2 size={13} className="animate-spin" /> : <HardDrive size={13} />}
         label={backupBusy ? '备份中' : model.localBackup.label}
@@ -229,12 +182,9 @@ export default function DailyWorkbench() {
       <StatusChip
         icon={<AlertTriangle size={13} />}
         label={warningCount > 0 ? `${warningCount} 个风险` : '暂无伏笔风险'}
-        detail={warningCount > 0 ? '打开右侧伏笔' : '继续写作'}
+        detail={warningCount > 0 ? '打开伏笔看板' : '继续写作'}
         tone={warningCount > 0 ? 'warn' : 'muted'}
-        onClick={() => {
-          useUIStore.getState().setRightPanelTab('foreshadow')
-          if (!rightPanelOpen) toggleRightPanel()
-        }}
+        onClick={() => openModal('foreshadowBoard')}
       />
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <button

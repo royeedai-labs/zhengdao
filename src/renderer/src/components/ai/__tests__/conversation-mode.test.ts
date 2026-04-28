@@ -201,6 +201,24 @@ describe('resolveAssistantIntent', () => {
         hasVolumes: true
       })
     ).toMatchObject({ mode: 'skill', skillKey: 'create_chapter' })
+
+    expect(
+      resolveAssistantIntent({
+        skills,
+        userInput: '帮我新建章节卷，写出标题和正文',
+        hasCurrentChapter: true,
+        hasVolumes: true
+      })
+    ).toMatchObject({ mode: 'skill', skillKey: 'create_chapter' })
+
+    expect(
+      resolveAssistantIntent({
+        skills,
+        userInput: '创建第二章，写出标题和正文',
+        hasCurrentChapter: false,
+        hasVolumes: false
+      })
+    ).toMatchObject({ mode: 'skill', skillKey: 'create_chapter' })
   })
 
   it('routes chapter review requests to review_chapter', () => {

@@ -21,7 +21,6 @@ type SkillDraft = Partial<AiSkillTemplate & AiSkillOverride>
 const EMPTY_PROFILE: AiWorkProfile = {
   id: 0,
   book_id: 0,
-  default_account_id: null,
   style_guide: '',
   genre_rules: '',
   content_boundaries: '',
@@ -36,11 +35,10 @@ const EMPTY_PROFILE: AiWorkProfile = {
   updated_at: ''
 }
 
-function normalizeWorkProfile(profile: AiWorkProfile): AiWorkProfile {
-  return {
-    ...profile,
-    default_account_id: null
-  }
+function normalizeWorkProfile(profile: AiWorkProfile & { default_account_id?: number | null }): AiWorkProfile {
+  const workProfile = { ...profile }
+  delete workProfile.default_account_id
+  return workProfile
 }
 
 function createSkillDraft(
@@ -118,11 +116,8 @@ export default function AiSettingsModal() {
   }, [loadModalState, selectedSkillKey])
 
   const saveProfile = async () => {
-    await window.api.aiSaveWorkProfile(bookId, {
-      ...profile,
-      default_account_id: null
-    })
-    useToastStore.getState().addToast('success', '作品 AI 档案已保存')
+    await window.api.aiSaveWorkProfile(bookId, profile)
+    useToastStore.getState().addToast('success', '作品上下文档案已保存')
     await refresh()
   }
 
@@ -152,7 +147,7 @@ export default function AiSettingsModal() {
   }
 
   const tabs: Array<[Tab, string]> = [
-    ['profile', '作品 AI 档案'],
+    ['profile', '作品上下文'],
     ['skills', 'AI 能力卡']
   ]
 
@@ -162,7 +157,7 @@ export default function AiSettingsModal() {
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-5">
           <div className="flex items-center gap-2 font-bold text-[var(--text-primary)]">
             <Bot size={18} className="text-[var(--accent-secondary)]" />
-            <span>AI 能力与作品配置</span>
+            <span>AI 能力与上下文</span>
           </div>
           <button
             type="button"
@@ -196,7 +191,7 @@ export default function AiSettingsModal() {
           {tab === 'profile' && (
             <div className="space-y-4">
               <p className="text-xs text-[var(--text-muted)]">
-                这里配置 AI 如何理解当前作品，只保存作品提示词、上下文策略和能力卡。账号、API Key、Gemini CLI 和 Ollama 在“应用设置 / AI 全局账号”里统一管理。
+                这里配置 AI 如何理解当前作品，只保存作品提示词、上下文策略和能力卡。Provider、API Key、Gemini CLI 和 Ollama 在“应用设置 / AI 与模型”里统一管理。
               </p>
               <div className="max-w-xl">
                 <Field label="上下文策略">
@@ -220,7 +215,7 @@ export default function AiSettingsModal() {
               <CanonLocksSection bookId={bookId} profile={profile} onSaved={refresh} />
               <div className="flex justify-end">
                 <button type="button" onClick={() => void saveProfile()} className="primary-btn">
-                  <Save size={14} /> 保存作品 AI 档案
+                  <Save size={14} /> 保存作品上下文
                 </button>
               </div>
             </div>

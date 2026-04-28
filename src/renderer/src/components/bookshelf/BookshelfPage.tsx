@@ -1,11 +1,12 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { PenTool, Plus, Search, LayoutGrid, List, Trash2 } from 'lucide-react'
+import { Bot, PenTool, Plus, Search, LayoutGrid, List, Trash2 } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useUIStore } from '@/stores/ui-store'
 import BookCard from './BookCard'
 import AppBrand from '@/components/shared/AppBrand'
 import AccountSettingsMenu from '@/components/shared/AccountSettingsMenu'
 import { getCurrentTitlebarSafeArea } from '@/utils/window-shell'
+import AiAssistantDock from '@/components/ai/AiAssistantDock'
 
 type SortBy = 'updated' | 'created' | 'words' | 'title'
 
@@ -13,6 +14,7 @@ export default function BookshelfPage() {
   const { books, loadBooks } = useBookStore()
   const openBook = useBookStore((s) => s.openBook)
   const openModal = useUIStore((s) => s.openModal)
+  const openAiAssistant = useUIStore((s) => s.openAiAssistant)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy, setSortBy] = useState<SortBy>('updated')
   const [searchQuery, setSearchQuery] = useState('')
@@ -48,6 +50,10 @@ export default function BookshelfPage() {
     (b) => !searchQuery || b.title.includes(searchQuery) || (b.author || '').includes(searchQuery)
   )
 
+  const openBookshelfAssistant = () => {
+    openAiAssistant({ surface: 'bookshelf' })
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[var(--bg-primary)]">
       <div
@@ -80,6 +86,14 @@ export default function BookshelfPage() {
             <p className="text-[var(--text-secondary)] mb-8 max-w-md">
               证道是为长篇网文作者打造的沉浸式写作工具，帮助你驾驭百万字级别的宏大叙事。
             </p>
+            <button
+              type="button"
+              onClick={openBookshelfAssistant}
+              className="mb-3 inline-flex items-center px-6 py-3 border border-[var(--accent-border)] bg-[var(--accent-surface)] hover:bg-[var(--bg-tertiary)] text-[var(--accent-secondary)] rounded-xl text-base font-bold transition"
+            >
+              <Bot size={18} className="mr-2" />
+              和 AI 讨论新作品
+            </button>
             <button
               onClick={() => openModal('newBook')}
               className="px-6 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-[var(--accent-contrast)] rounded-xl text-base font-bold transition shadow-lg shadow-[0_10px_24px_rgba(63,111,159,0.16)]"
@@ -138,6 +152,21 @@ export default function BookshelfPage() {
               <p className="text-center text-[var(--text-muted)] text-sm py-12">没有匹配的作品</p>
             ) : viewMode === 'list' ? (
               <div className="space-y-2">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={openBookshelfAssistant}
+                  onKeyDown={(e) => e.key === 'Enter' && openBookshelfAssistant()}
+                  className="flex items-center bg-[var(--accent-surface)] border border-[var(--accent-border)] hover:border-[var(--accent-primary)] rounded-lg px-4 py-3 cursor-pointer transition"
+                >
+                  <div className="w-10 h-10 rounded bg-[var(--accent-primary)] flex items-center justify-center text-[var(--accent-contrast)] mr-4 shrink-0">
+                    <Bot size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-[var(--text-primary)] text-sm truncate">和 AI 讨论新作品</h3>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">先确认字数、章节、人物、主题和边界，再创建作品。</p>
+                  </div>
+                </div>
                 {filteredBooks.map((book) => (
                   <div
                     key={book.id}
@@ -180,6 +209,26 @@ export default function BookshelfPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={openBookshelfAssistant}
+                  onKeyDown={(e) => e.key === 'Enter' && openBookshelfAssistant()}
+                  className="min-h-[188px] cursor-pointer rounded-xl border border-[var(--accent-border)] bg-[var(--accent-surface)] p-5 transition hover:border-[var(--accent-primary)] hover:bg-[var(--bg-tertiary)] focus:outline-none focus:border-[var(--accent-primary)]"
+                >
+                  <div className="flex h-full flex-col justify-between">
+                    <div>
+                      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast)]">
+                        <Bot size={22} />
+                      </div>
+                      <h3 className="text-base font-bold text-[var(--text-primary)]">和 AI 讨论新作品</h3>
+                      <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+                        先沟通字数、章节、人物、主题和边界，确认后再创建。
+                      </p>
+                    </div>
+                    <div className="mt-4 text-xs font-semibold text-[var(--accent-secondary)]">打开 AI 创作助手</div>
+                  </div>
+                </div>
                 {filteredBooks.map((book) => (
                   <BookCard key={book.id} book={book} />
                 ))}
@@ -188,6 +237,7 @@ export default function BookshelfPage() {
           </div>
         )}
       </div>
+      <AiAssistantDock />
     </div>
   )
 }

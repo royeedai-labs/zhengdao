@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RefreshCw, X } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useChapterStore } from '@/stores/chapter-store'
-import { useBookStore } from '@/stores/book-store'
 import { useToastStore } from '@/stores/toast-store'
-import { aiAnalyzeStyle, getResolvedAiConfigForBook, isAiConfigReady } from '@/utils/ai'
+import { aiAnalyzeStyle, getResolvedGlobalAiConfig, isAiConfigReady } from '@/utils/ai'
 
 const METRIC_LABELS = [
   '句长均衡度',
@@ -52,7 +51,6 @@ export default function StyleAnalysisModal() {
   const closeModal = useUIStore((s) => s.closeModal)
   const modalData = useUIStore((s) => s.modalData) as { text?: string } | null
   const { volumes, currentChapter } = useChapterStore()
-  const bookId = useBookStore((s) => s.currentBookId)
   const [tab, setTab] = useState<'chapter' | 'book'>('chapter')
   const [loading, setLoading] = useState(false)
   const [metrics, setMetrics] = useState<Record<string, number>>({})
@@ -78,7 +76,7 @@ export default function StyleAnalysisModal() {
   }, [volumes])
 
   const runAnalyze = useCallback(async () => {
-    const cfg = await getResolvedAiConfigForBook(bookId)
+    const cfg = await getResolvedGlobalAiConfig()
     if (!isAiConfigReady(cfg)) {
       useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI')
       return
@@ -119,7 +117,7 @@ export default function StyleAnalysisModal() {
         setLoading(false)
       }
     }
-  }, [chapterPlain, bookPlain, tab, bookId])
+  }, [chapterPlain, bookPlain, tab])
 
   useEffect(() => {
     void runAnalyze()

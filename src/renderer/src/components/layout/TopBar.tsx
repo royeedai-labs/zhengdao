@@ -10,7 +10,9 @@ import {
   BookOpen,
   Settings,
   ArrowUpRight,
+  AlertCircle,
   BarChart3,
+  Lightbulb,
   LayoutDashboard,
   MoreHorizontal
 } from 'lucide-react'
@@ -211,6 +213,22 @@ export default function TopBar() {
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
             >
               <BarChart3 size={14} /> 数据中心
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('foreshadowBoard')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <AlertCircle size={14} /> 伏笔看板
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => closeToolsAndOpenModal('quickNotes')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              <Lightbulb size={14} /> 灵感速记
             </button>
             <button
               role="menuitem"

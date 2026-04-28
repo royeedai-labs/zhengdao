@@ -52,10 +52,6 @@ function makeConfig(overrides: Partial<ProjectConfig> = {}): ProjectConfig {
     daily_goal: 6000,
     daily_goal_mode: 'follow_system',
     sensitive_list: 'default',
-    ai_api_key: '',
-    ai_api_endpoint: '',
-    ai_model: '',
-    ai_provider: 'openai',
     ...overrides
   }
 }

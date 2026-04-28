@@ -5,6 +5,8 @@ import {
   buildDesktopCanonPack,
   composeAssistantChatPrompt,
   composeSkillPrompt,
+  createChapterDraftFromAssistantResponse,
+  createChapterDraftFromPlainText,
   parseAssistantDrafts,
   planTextDraftApplication,
   resolveAssistantContextPolicy,
@@ -33,7 +35,6 @@ const baseSkill: AiSkillTemplate = {
 const profile: AiWorkProfile = {
   id: 1,
   book_id: 10,
-  default_account_id: 2,
   style_guide: '短句，强节奏。',
   genre_rules: '都市逆袭，不写玄幻修仙。',
   content_boundaries: '不要改写已经确认的主线设定。',
@@ -104,6 +105,25 @@ describe('buildAssistantContext', () => {
     expect(context.contextText).toContain('赵天宇')
     expect(context.contextText).not.toContain('苏离')
     expect(context.contextText.length).toBeLessThan(5000)
+  })
+
+  it('keeps a blank chapter visible when it has a summary for AI drafting', () => {
+    const context = buildAssistantContext({
+      policy: 'smart_minimal',
+      currentChapter: {
+        id: 1,
+        title: '第一章 开始',
+        plainText: '',
+        summary: '建立老王的现实处境和即将到来的变化。'
+      },
+      plotNodes: [
+        { id: 1, title: '现实处境', description: '主角在生活压力中登场', chapter_number: 1 }
+      ]
+    })
+
+    expect(context.chips.map((chip) => chip.kind)).toContain('chapter')
+    expect(context.contextText).toContain('本章摘要：建立老王的现实处境')
+    expect(context.contextText).toContain('现实处境')
   })
 })
 
@@ -269,6 +289,23 @@ describe('parseAssistantDrafts', () => {
     expect(parsed.drafts).toEqual([{ kind: 'insert_text', content: '续写段落' }])
   })
 
+  it('accepts a single draft object without a drafts wrapper', () => {
+    const parsed = parseAssistantDrafts(`{
+      "kind": "create_chapter",
+      "title": "第三章 雨夜追兵",
+      "content": "雨声压住了马蹄声。"
+    }`)
+
+    expect(parsed.errors).toEqual([])
+    expect(parsed.drafts).toEqual([
+      {
+        kind: 'create_chapter',
+        title: '第三章 雨夜追兵',
+        content: '雨声压住了马蹄声。'
+      }
+    ])
+  })
+
   it('accepts new GP-05 academic and professional draft kinds', () => {
     const parsed = parseAssistantDrafts(
       JSON.stringify({
@@ -280,6 +317,67 @@ describe('parseAssistantDrafts', () => {
     )
     expect(parsed.errors).toEqual([])
     expect(parsed.drafts).toHaveLength(2)
+  })
+})
+
+describe('createChapterDraftFromPlainText', () => {
+  it('wraps non-JSON chapter output as a confirmable chapter draft', () => {
+    expect(createChapterDraftFromPlainText('第十二章 风雪归人\n\n他推开门，风雪倒灌进来。')).toEqual({
+      kind: 'create_chapter',
+      title: '第十二章 风雪归人',
+      content: '他推开门，风雪倒灌进来。'
+    })
+  })
+
+  it('keeps prose without a chapter title as body content with a fallback title', () => {
+    expect(createChapterDraftFromPlainText('他推开门，风雪倒灌进来。', 'AI 章节草稿')).toEqual({
+      kind: 'create_chapter',
+      title: 'AI 章节草稿',
+      content: '他推开门，风雪倒灌进来。'
+    })
+  })
+
+  it('preserves a plain volume heading when wrapping chapter prose', () => {
+    expect(createChapterDraftFromPlainText('第一卷 潜龙在渊\n\n第二章 风雪归人\n\n他推开门，风雪倒灌进来。')).toEqual({
+      kind: 'create_chapter',
+      volume_title: '第一卷 潜龙在渊',
+      title: '第二章 风雪归人',
+      content: '他推开门，风雪倒灌进来。'
+    })
+  })
+})
+
+describe('createChapterDraftFromAssistantResponse', () => {
+  it('coerces chapter-shaped JSON without a kind field', () => {
+    expect(
+      createChapterDraftFromAssistantResponse(`{
+        "volume_title": "第一卷 潜龙在渊",
+        "chapter_title": "第三章 雨夜追兵",
+        "content": "雨声压住了马蹄声。",
+        "summary": "追兵逼近。"
+      }`)
+    ).toEqual({
+      kind: 'create_chapter',
+      volume_title: '第一卷 潜龙在渊',
+      title: '第三章 雨夜追兵',
+      content: '雨声压住了马蹄声。',
+      summary: '追兵逼近。'
+    })
+  })
+
+  it('coerces nested chapter payloads from common model wrappers', () => {
+    expect(
+      createChapterDraftFromAssistantResponse(`{
+        "chapter": {
+          "title": "第三章 雨夜追兵",
+          "body": "雨声压住了马蹄声。"
+        }
+      }`)
+    ).toEqual({
+      kind: 'create_chapter',
+      title: '第三章 雨夜追兵',
+      content: '雨声压住了马蹄声。'
+    })
   })
 })
 

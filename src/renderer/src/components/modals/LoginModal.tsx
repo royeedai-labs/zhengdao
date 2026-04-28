@@ -254,7 +254,7 @@ export function AccountSyncSettings() {
 
       {user && !hasPro && (
         <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3 text-xs leading-5 text-[var(--text-muted)]">
-          云备份和官方 AI 使用同一套 Pro 权益。当前账号仍可使用本地写作、第三方模型和自带 API Key。
+          云备份和官方 AI 使用同一套 Pro 权益。当前状态仍可使用本地写作、Gemini CLI、Ollama 或全局 API Key。
         </div>
       )}
 

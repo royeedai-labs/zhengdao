@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getAiAccountProviderUiMeta } from '../account-provider'
+import { getAiProviderUiMeta } from '../provider-ui'
 
-describe('getAiAccountProviderUiMeta', () => {
+describe('getAiProviderUiMeta', () => {
   it('treats Gemini CLI as an auth-based provider', () => {
-    expect(getAiAccountProviderUiMeta('gemini_cli')).toMatchObject({
+    expect(getAiProviderUiMeta('gemini_cli')).toMatchObject({
       showApiKeyField: false,
       modelPlaceholder: '默认 gemini-3-pro-preview',
       supportsStatusCheck: true,
@@ -12,12 +12,12 @@ describe('getAiAccountProviderUiMeta', () => {
   })
 
   it('keeps API-key providers on secret-based configuration with status checks', () => {
-    expect(getAiAccountProviderUiMeta('gemini')).toMatchObject({
+    expect(getAiProviderUiMeta('gemini')).toMatchObject({
       showApiKeyField: true,
       supportsStatusCheck: true,
       supportsAuthLaunch: false
     })
-    expect(getAiAccountProviderUiMeta('openai')).toMatchObject({
+    expect(getAiProviderUiMeta('openai')).toMatchObject({
       showApiKeyField: true,
       supportsStatusCheck: true,
       supportsAuthLaunch: false

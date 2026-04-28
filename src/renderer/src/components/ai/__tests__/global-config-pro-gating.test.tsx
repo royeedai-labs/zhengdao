@@ -15,7 +15,7 @@ function makeUser(patch: Partial<ZhengdaoUser> = {}): ZhengdaoUser {
   }
 }
 
-describe('AiGlobalAccountsSettings Pro gating', () => {
+describe('AiGlobalConfigSettings Pro gating', () => {
   afterEach(() => {
     vi.doUnmock('@/stores/auth-store')
     vi.resetModules()
@@ -26,18 +26,18 @@ describe('AiGlobalAccountsSettings Pro gating', () => {
       useAuthStore: (selector: (state: { user: ZhengdaoUser; loadUser: () => Promise<void> }) => unknown) =>
         selector({ user, loadUser: vi.fn().mockResolvedValue(undefined) })
     }))
-    const { default: AiGlobalAccountsSettings } = await import('../AiGlobalAccountsSettings')
-    return renderToString(<AiGlobalAccountsSettings />)
+    const { default: AiGlobalConfigSettings } = await import('../AiGlobalConfigSettings')
+    return renderToString(<AiGlobalConfigSettings />)
   }
 
-  it('shows an upgrade gate for Free accounts while keeping third-party model settings visible', async () => {
+  it('shows an upgrade gate for Free users while keeping provider selection visible', async () => {
     const html = await renderWithUser(makeUser())
 
     expect(html).toContain('官方 AI 需要 Pro 权益')
-    expect(html).toContain('高级 / 自定义第三方模型')
+    expect(html).toContain('OpenAI 兼容')
   })
 
-  it('shows the official AI area for Pro accounts without the upgrade gate', async () => {
+  it('shows the official AI area for Pro users without the upgrade gate', async () => {
     const html = await renderWithUser(makeUser({ tier: 'pro', pro: true }))
 
     expect(html).toContain('官方 AI')

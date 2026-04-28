@@ -4,7 +4,8 @@ import {
   createAssistantStreamChunkQueue,
   createPendingAssistantStreamMessage,
   completeAssistantStreamMessage,
-  getAssistantStreamEmptyError
+  getAssistantStreamEmptyError,
+  replaceAssistantStreamContent
 } from '../streaming-message'
 
 afterEach(() => {
@@ -40,6 +41,20 @@ describe('assistant streaming message helpers', () => {
     expect(getAssistantStreamEmptyError('')).toBe('AI 返回了空响应，请重试。')
     expect(getAssistantStreamEmptyError('   \n')).toBe('AI 返回了空响应，请重试。')
     expect(getAssistantStreamEmptyError('正常回复')).toBeNull()
+  })
+
+  it('can replace pending stream content with parsed display text', () => {
+    const pending = createPendingAssistantStreamMessage(-1)
+
+    expect(replaceAssistantStreamContent([pending], pending.id, '正在解析结构...')).toEqual([
+      {
+        id: -1,
+        role: 'assistant',
+        content: '正在解析结构...',
+        streaming: true,
+        streamingLabel: 'AI 正在生成...'
+      }
+    ])
   })
 
   it('renders provider delta chunks one by one and resolves after the queue drains', async () => {

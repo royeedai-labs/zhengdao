@@ -132,7 +132,7 @@ export default function NewBookWizard() {
                   })}
                 </div>
                 <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-                  题材决定 AI 行为：网文含在 Pro 内；剧本/小说/学术/公文需另行订阅对应题材包。可在作品 AI 设置中修改。
+                  题材决定 AI 行为：网文含在 Pro 内；剧本/小说/学术/公文需另行订阅对应题材包。可在作品上下文设置中修改。
                 </p>
               </div>
             </>

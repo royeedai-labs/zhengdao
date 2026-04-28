@@ -32,7 +32,6 @@ export type AiSkillOverride = {
 export type AiWorkProfile = {
   id: number
   book_id: number
-  default_account_id: number | null
   style_guide: string
   genre_rules: string
   content_boundaries: string
@@ -54,7 +53,7 @@ export type AiWorkProfile = {
 /**
  * DI-07 v1 — Canon Pack 手动锁定条目
  *
- * 写作者在 AiSettingsModal "作品 AI 档案" tab 的 CanonLocksSection 里手动维护,
+ * 写作者在 AiSettingsModal "作品上下文" tab 的 CanonLocksSection 里手动维护,
  * world-consistency Skill 在检查时按 priority 决定: critical = 强校验/必抛冲突,
  * high = 警告, medium = 建议, low = 仅记录。
  */
@@ -339,7 +338,7 @@ export function resolveAssistantContextPolicy(
 
 export function buildAssistantContext(input: {
   policy: 'smart_minimal' | 'manual' | 'full' | string
-  currentChapter?: { id: number; title: string; plainText: string } | null
+  currentChapter?: { id: number; title: string; plainText: string; summary?: string } | null
   selectedText?: string
   characters?: Array<{ id: number; name: string; description?: string }>
   foreshadowings?: Array<{ id: number; text: string; status: string }>
@@ -348,7 +347,7 @@ export function buildAssistantContext(input: {
   const policy = input.policy || 'smart_minimal'
   const maxChapterChars = policy === 'full' ? 16000 : 2600
   const defaultEnabled = policy !== 'manual'
-  const referenceText = `${input.selectedText || ''}\n${input.currentChapter?.plainText || ''}`.trim()
+  const referenceText = `${input.selectedText || ''}\n${input.currentChapter?.summary || ''}\n${input.currentChapter?.plainText || ''}`.trim()
   const blocks: AiContextBlock[] = []
 
   const selectionBlock = createContextBlock({
@@ -360,16 +359,21 @@ export function buildAssistantContext(input: {
   })
   if (selectionBlock) blocks.push(selectionBlock)
 
+  const chapterBody = input.currentChapter
+    ? [
+        nonEmpty(input.currentChapter.summary)
+          ? `本章摘要：${clip(input.currentChapter.summary || '', 900)}`
+          : '',
+        clip(input.currentChapter.plainText || '', maxChapterChars)
+      ].filter(Boolean).join('\n\n')
+    : ''
   const chapterBlock = input.currentChapter
     ? createContextBlock({
         id: `chapter:${input.currentChapter.id}`,
         kind: 'chapter',
         label: input.currentChapter.title,
         enabled: defaultEnabled,
-        body: section(
-          `当前章节：${input.currentChapter.title}`,
-          clip(input.currentChapter.plainText || '', maxChapterChars)
-        )
+        body: section(`当前章节：${input.currentChapter.title}`, chapterBody)
       })
     : null
   if (chapterBlock) blocks.push(chapterBlock)
@@ -595,6 +599,19 @@ function parseStructuredDraftPayload(text: string): unknown | undefined {
   return embedded ? tryParseJson(embedded) : undefined
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
+
+function firstTextField(source: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  }
+  return ''
+}
+
 export function parseAssistantDrafts(text: string): { drafts: AiDraftPayload[]; errors: string[] } {
   const errors: string[] = []
   const data = parseStructuredDraftPayload(text)
@@ -606,7 +623,11 @@ export function parseAssistantDrafts(text: string): { drafts: AiDraftPayload[]; 
     ? data
     : data && typeof data === 'object' && Array.isArray((data as { drafts?: unknown[] }).drafts)
       ? (data as { drafts: unknown[] }).drafts
-      : []
+      : data && typeof data === 'object' && typeof (data as { kind?: unknown }).kind === 'string'
+        ? [data]
+        : data && typeof data === 'object' && (data as { draft?: unknown }).draft
+          ? [(data as { draft: unknown }).draft]
+          : []
 
   const drafts: AiDraftPayload[] = []
   for (const raw of rawDrafts) {
@@ -624,6 +645,142 @@ export function parseAssistantDrafts(text: string): { drafts: AiDraftPayload[]; 
   }
 
   return { drafts, errors }
+}
+
+function coerceChapterDraftFromStructuredPayload(
+  data: unknown,
+  fallbackTitle: string
+): AiDraftPayload | null {
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const draft = coerceChapterDraftFromStructuredPayload(item, fallbackTitle)
+      if (draft) return draft
+    }
+    return null
+  }
+
+  const record = asRecord(data)
+  if (!record) return null
+
+  const nestedCandidates = [record.draft, record.chapter]
+  for (const candidate of nestedCandidates) {
+    const draft = coerceChapterDraftFromStructuredPayload(candidate, fallbackTitle)
+    if (draft) return draft
+  }
+  for (const key of ['drafts', 'chapters']) {
+    const draft = coerceChapterDraftFromStructuredPayload(record[key], fallbackTitle)
+    if (draft) return draft
+  }
+
+  const kind = typeof record.kind === 'string' ? record.kind : ''
+  const content = firstTextField(record, ['content', 'body', 'text', 'chapter_content', 'chapterContent', '正文'])
+  if (!content) return null
+
+  const hasChapterShape =
+    kind === 'create_chapter' ||
+    Boolean(
+      firstTextField(record, [
+        'title',
+        'chapter_title',
+        'chapterTitle',
+        'chapterName',
+        '章节标题',
+        '章节名'
+      ])
+    )
+  if (!hasChapterShape) return null
+
+  const title =
+    firstTextField(record, ['title', 'chapter_title', 'chapterTitle', 'chapterName', '章节标题', '章节名']) ||
+    fallbackTitle
+  const summary = firstTextField(record, ['summary', 'synopsis', '摘要'])
+  const volumeTitle = firstTextField(record, ['volume_title', 'volumeTitle', 'volume', '卷名'])
+
+  return {
+    kind: 'create_chapter',
+    title,
+    content,
+    ...(summary ? { summary } : {}),
+    ...(volumeTitle ? { volume_title: volumeTitle } : {})
+  }
+}
+
+function normalizePlainDraftLines(text: string): string[] {
+  return text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function cleanPlainTitle(line: string): string {
+  return line
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/^标题\s*[:：]\s*/, '')
+    .replace(/^卷名\s*[:：]\s*/, '')
+    .replace(/^章节名\s*[:：]\s*/, '')
+    .trim()
+}
+
+function isLikelyChapterTitle(line: string): boolean {
+  const cleaned = cleanPlainTitle(line)
+  if (!cleaned) return false
+  if (/^标题\s*[:：]/.test(line)) return true
+  if (/^章节名\s*[:：]/.test(line)) return true
+  if (/^第.{1,12}[章节]/.test(cleaned)) return true
+  if (/^chapter\s+\d+/i.test(cleaned)) return true
+  return false
+}
+
+function isLikelyVolumeTitle(line: string): boolean {
+  const cleaned = cleanPlainTitle(line)
+  if (!cleaned) return false
+  if (/^卷名\s*[:：]/.test(line)) return true
+  if (/^第.{1,12}[卷部]/.test(cleaned)) return true
+  if (/^volume\s+\d+/i.test(cleaned)) return true
+  return false
+}
+
+export function createChapterDraftFromPlainText(
+  text: string,
+  fallbackTitle = 'AI 新章节'
+): AiDraftPayload | null {
+  const lines = normalizePlainDraftLines(text)
+  if (lines.length === 0) return null
+
+  const first = lines[0]
+  const second = lines[1] || ''
+  const hasVolumeTitle = isLikelyVolumeTitle(first)
+  const chapterTitleLine = hasVolumeTitle && isLikelyChapterTitle(second) ? second : first
+  const hasTitle = isLikelyChapterTitle(chapterTitleLine)
+  const title = hasTitle ? cleanPlainTitle(chapterTitleLine) : fallbackTitle
+  const bodyStartIndex = hasVolumeTitle && hasTitle ? 2 : hasTitle ? 1 : hasVolumeTitle ? 1 : 0
+  const bodyLines = lines.slice(bodyStartIndex)
+  const body = bodyLines
+    .map((line, index) => (index === 0 ? line.replace(/^正文\s*[:：]\s*/, '').trim() : line))
+    .filter(Boolean)
+    .join('\n\n')
+    .trim()
+
+  return {
+    kind: 'create_chapter',
+    title,
+    content: body || lines.slice(hasVolumeTitle ? 1 : 0).join('\n\n'),
+    ...(hasVolumeTitle ? { volume_title: cleanPlainTitle(first) } : {})
+  }
+}
+
+export function createChapterDraftFromAssistantResponse(
+  text: string,
+  fallbackTitle = 'AI 新章节',
+  options: { allowPlainTextFallback?: boolean } = {}
+): AiDraftPayload | null {
+  const structured = parseStructuredDraftPayload(text)
+  if (structured !== undefined) {
+    const draft = coerceChapterDraftFromStructuredPayload(structured, fallbackTitle)
+    if (draft) return draft
+  }
+  return options.allowPlainTextFallback ? createChapterDraftFromPlainText(text, fallbackTitle) : null
 }
 
 export function attachSelectionMetaToDrafts(

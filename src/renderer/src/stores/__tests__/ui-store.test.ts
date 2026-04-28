@@ -103,4 +103,41 @@ describe('ui store bottom panel state', () => {
     useUIStore.getState().consumeAiAssistantCommand(commandId)
     expect(useUIStore.getState().aiAssistantCommand).toBeNull()
   })
+
+  it('falls back old right sidebar context tabs to the AI workbench', async () => {
+    vi.resetModules()
+    installLocalStorage({ 'write-right-panel-tab': 'foreshadow' })
+
+    const { useUIStore } = await import('../ui-store')
+
+    expect(useUIStore.getState().rightPanelTab).toBe('ai')
+  })
+
+  it('keeps AI chapter drafts as explicit not-yet-written workspace state', async () => {
+    const { useUIStore } = await import('../ui-store')
+
+    useUIStore.getState().setAiChapterDraft({
+      id: 31,
+      title: '第二章 风雪归人',
+      content: '他推开门，风雪倒灌进来。',
+      summary: '',
+      volumeId: null,
+      volumeTitle: '第一卷 潜龙在渊',
+      conversationId: 2,
+      retryInput: '重新写第二章。'
+    })
+    useUIStore.getState().updateAiChapterDraft({ title: '第二章 风雪夜归人', volumeId: 8, volumeTitle: '' })
+
+    expect(useUIStore.getState().aiChapterDraft).toMatchObject({
+      id: 31,
+      title: '第二章 风雪夜归人',
+      volumeId: 8,
+      volumeTitle: ''
+    })
+
+    useUIStore.getState().clearAiChapterDraft(99)
+    expect(useUIStore.getState().aiChapterDraft?.id).toBe(31)
+    useUIStore.getState().clearAiChapterDraft(31)
+    expect(useUIStore.getState().aiChapterDraft).toBeNull()
+  })
 })

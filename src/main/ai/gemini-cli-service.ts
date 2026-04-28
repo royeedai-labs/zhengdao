@@ -143,7 +143,7 @@ export function resolveGeminiCliRuntime(
 function normalizeCliError(message: string): string {
   const lower = message.toLowerCase()
   if (/auth|login|logged|oauth|credential/.test(lower)) {
-    return 'Gemini CLI 尚未完成 Google 登录，请先在项目设置中启动 Gemini CLI 登录。'
+    return 'Gemini CLI 尚未完成 Google 登录，请先在应用设置 / AI 与模型中启动 Gemini CLI 登录。'
   }
   if (/403|permission_denied|permission denied|forbidden/.test(lower)) {
     return 'Gemini CLI 请求被拒绝，可能是账号权限、地区或额度限制。请检查 Google 登录账号与 Gemini 权益。'

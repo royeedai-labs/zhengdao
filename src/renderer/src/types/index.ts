@@ -19,10 +19,6 @@ export interface ProjectConfig {
   daily_goal: number
   daily_goal_mode: 'follow_system' | 'custom'
   sensitive_list: string
-  ai_provider?: string
-  ai_api_key: string
-  ai_api_endpoint: string
-  ai_model: string
   editor_font?: string
   editor_font_size?: number
   editor_line_height?: number
@@ -193,6 +189,8 @@ export type ModalType =
   | 'newVolume'
   | 'newChapter'
   | 'foreshadow'
+  | 'foreshadowBoard'
+  | 'quickNotes'
   | 'projectSettings'
   | 'snapshot'
   | 'export'
@@ -218,6 +216,7 @@ export type ModalType =
   | 'citationsManager'
   | 'citationPicker'
   | 'referencesBuild'
+  | 'teamManagement'
   | 'teamManagement'
 
 export interface GenrePreset {

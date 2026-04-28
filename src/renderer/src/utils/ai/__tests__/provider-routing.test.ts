@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { aiSummarize, aiComplete, aiPromptStream } from '../index'
+import { aiSummarize, aiComplete, aiPromptStream, getResolvedGlobalAiConfig } from '../index'
 
 const originalFetch = globalThis.fetch
 const originalWindow = globalThis.window
@@ -281,6 +281,48 @@ describe('AI provider routing', () => {
       '正文'
     )
 
-    expect(result.error).toBe('请先在项目设置中配置 AI 助手 API')
+    expect(result.error).toBe('请先在应用设置 / AI 与模型中完成全局 AI 配置')
+  })
+
+  it('falls back to the legacy unified resolver for global AI config', async () => {
+    const aiGetResolvedConfigForBook = vi.fn(async () => ({
+      ai_provider: 'gemini_cli',
+      ai_api_key: '',
+      ai_api_endpoint: '',
+      ai_model: 'gemini-2.5-flash'
+    }))
+    Object.defineProperty(globalThis, 'window', {
+      value: { api: { aiGetResolvedConfigForBook } },
+      configurable: true,
+      writable: true
+    })
+
+    await expect(getResolvedGlobalAiConfig()).resolves.toMatchObject({
+      ai_provider: 'gemini_cli',
+      ai_model: 'gemini-2.5-flash'
+    })
+    expect(aiGetResolvedConfigForBook).toHaveBeenCalledWith(0)
+  })
+
+  it('prefers the global AI config resolver bridge', async () => {
+    const aiGetResolvedGlobalConfig = vi.fn(async () => ({
+      ai_provider: 'ollama',
+      ai_api_key: '',
+      ai_api_endpoint: 'http://localhost:11434',
+      ai_model: 'llama3'
+    }))
+    const aiGetResolvedConfigForBook = vi.fn()
+    Object.defineProperty(globalThis, 'window', {
+      value: { api: { aiGetResolvedGlobalConfig, aiGetResolvedConfigForBook } },
+      configurable: true,
+      writable: true
+    })
+
+    await expect(getResolvedGlobalAiConfig()).resolves.toMatchObject({
+      ai_provider: 'ollama',
+      ai_model: 'llama3'
+    })
+    expect(aiGetResolvedGlobalConfig).toHaveBeenCalledTimes(1)
+    expect(aiGetResolvedConfigForBook).not.toHaveBeenCalled()
   })
 })

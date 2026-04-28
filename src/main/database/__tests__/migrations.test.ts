@@ -108,7 +108,7 @@ describe('runMigrations', () => {
     }
   })
 
-  it('migrates legacy per-book AI config into a global account and work profile', () => {
+  it('migrates legacy per-book AI config into the single global AI config', () => {
     const db = new BetterSqlite3(':memory:') as Database.Database
 
     try {
@@ -133,6 +133,18 @@ describe('runMigrations', () => {
         api_endpoint: 'https://example.test/v1/chat/completions',
         model: 'legacy-model',
         is_default: 1
+      })
+
+      const appStateRows = db
+        .prepare(
+          "SELECT key, value FROM app_state WHERE key IN ('ai_global_provider', 'ai_global_api_endpoint', 'ai_global_model', 'ai_global_api_key') ORDER BY key"
+        )
+        .all() as Array<{ key: string; value: string }>
+      expect(Object.fromEntries(appStateRows.map((row) => [row.key, row.value]))).toMatchObject({
+        ai_global_provider: 'custom',
+        ai_global_api_endpoint: 'https://example.test/v1/chat/completions',
+        ai_global_model: 'legacy-model',
+        ai_global_api_key: 'legacy-key'
       })
 
       const profile = db

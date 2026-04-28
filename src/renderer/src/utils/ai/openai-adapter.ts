@@ -25,7 +25,7 @@ export class OpenAIAdapter implements AiProviderAdapter {
   ): Promise<AiResponse> {
     const c = toOpenAIConfig(config)
     if (!c.ai_api_key?.trim()) {
-      return { content: '', error: '请先在项目设置中配置 AI 助手 API' }
+      return { content: '', error: '请先在应用设置 / AI 与模型中完成全局 AI 配置' }
     }
 
     try {
@@ -77,7 +77,7 @@ export class OpenAIAdapter implements AiProviderAdapter {
   ): Promise<void> {
     const c = toOpenAIConfig(config)
     if (!c.ai_api_key?.trim()) {
-      callbacks.onError('请先在项目设置中配置 AI 助手 API')
+      callbacks.onError('请先在应用设置 / AI 与模型中完成全局 AI 配置')
       return
     }
 

@@ -8,7 +8,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Mention from '@tiptap/extension-mention'
 import tippy from 'tippy.js'
-import { Crosshair, History, Palette, Search, Sparkles, X } from 'lucide-react'
+import { Check, Copy, Crosshair, History, Palette, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useCharacterStore } from '@/stores/character-store'
 import { useUIStore } from '@/stores/ui-store'
@@ -17,7 +17,8 @@ import { useForeshadowStore } from '@/stores/foreshadow-store'
 import { useConfigStore } from '@/stores/config-store'
 import { useToastStore } from '@/stores/toast-store'
 import { useUpdateStore } from '@/stores/update-store'
-import { aiSummarize, getResolvedAiConfigForBook, isAiConfigReady } from '@/utils/ai'
+import { aiSummarize, getResolvedGlobalAiConfig, isAiConfigReady } from '@/utils/ai'
+import { stripHtmlToText } from '@/utils/html-to-text'
 import { useDailyStats } from '@/hooks/useDailyStats'
 import { useAchievementCheck } from '@/hooks/useAchievements'
 import { getSensitiveWords } from '@/utils/sensitive-words'
@@ -32,7 +33,10 @@ import ScriptToolbar from '@/components/editor/ScriptToolbar'
 import { collectCharacterIdsFromContent } from '@/utils/character-association'
 import { setActiveEditor } from '@/components/editor/active-editor'
 import { buildAiAssistantSelectionSnapshot } from '@/components/editor/ai-selection'
+import { aiInlineDraftKey, createAiInlineDraftExtension } from '@/components/editor/AiInlineDraft'
 import { getLocalDateKey } from '@/utils/daily-workbench'
+import { planTextDraftApplication, type AiDraftPayload } from '@/utils/ai/assistant-workflow'
+import type { AiChapterDraft, InlineAiDraft } from '@/stores/ui-store'
 import MentionList from './MentionList'
 import type { MentionListRef } from './MentionList'
 
@@ -137,15 +141,40 @@ type PostSave = 'none' | 'syncOnly' | 'full'
 const AI_CONTINUE_PROMPT = '从当前光标或章节末尾自然续写，保持当前节奏。'
 const AI_POLISH_PROMPT = '润色选中文本，保留原意和人物口吻。'
 
+function plainToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => `<p>${part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
+function ensureHtmlContent(text: string): string {
+  const value = text.trim()
+  if (!value) return ''
+  return /<\/?[a-z][^>]*>/i.test(value) ? value : plainToHtml(value)
+}
+
+function countPlainWords(text: string): number {
+  return text.replace(/\s/g, '').length
+}
+
 export default function EditorArea() {
-  const { currentChapter, volumes, updateChapterContent, updateChapterSummary, getTotalWords, getCurrentChapterNumber } =
+  const { currentChapter, volumes, createVolume, createChapter, selectChapter, updateChapterContent, updateChapterSummary, getTotalWords, getCurrentChapterNumber } =
     useChapterStore()
   const {
     openModal,
     focusMode,
     toggleFocusMode,
     openAiAssistant,
-    setAiAssistantSelection
+    setAiAssistantSelection,
+    inlineAiDraft,
+    clearInlineAiDraft,
+    aiChapterDraft,
+    updateAiChapterDraft,
+    clearAiChapterDraft,
+    chapterSaveStatus
   } = useUIStore()
   const syncAppearances = useCharacterStore((s) => s.syncAppearances)
   const bookId = useBookStore((s) => s.currentBookId)!
@@ -191,12 +220,20 @@ export default function EditorArea() {
   const lastSavedRef = useRef<string>('')
   const prevWordCountRef = useRef(0)
   const prevChapterIdRef = useRef<number | undefined>(undefined)
+  const currentChapterIdRef = useRef<number | null>(currentChapter?.id ?? null)
+  const inlineAiDraftRef = useRef<InlineAiDraft | null>(inlineAiDraft)
+  const acceptInlineDraftRef = useRef<(draft: InlineAiDraft) => void>(() => {})
+  const dismissInlineDraftRef = useRef<(draft: InlineAiDraft) => void>(() => {})
+  const retryInlineDraftRef = useRef<(draft: InlineAiDraft) => void>(() => {})
+  currentChapterIdRef.current = currentChapter?.id ?? null
+  inlineAiDraftRef.current = inlineAiDraft
   // DI-03: 当前作品题材包. 仅 'script' 时挂 ScriptToolbar。
   const [aiWorkGenre, setAiWorkGenre] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [summaryModalOpen, setSummaryModalOpen] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [editorHudVisible, setEditorHudVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [replaceQuery, setReplaceQuery] = useState('')
   const [contextMenu, setContextMenu] = useState<{
@@ -356,6 +393,19 @@ export default function EditorArea() {
       createAnnotationExtension(() => getEditorAnnotations()),
       TextReplaceExtension,
       ScriptKindAttr,
+      createAiInlineDraftExtension({
+        getDraft: () => inlineAiDraftRef.current,
+        getPosition: (draft, state) => {
+          const currentChapterId = currentChapterIdRef.current
+          if (currentChapterId == null || draft.chapterId !== currentChapterId) return null
+          const plan = planTextDraftApplication(draft.payload as AiDraftPayload, currentChapterId)
+          if (!plan || plan.kind !== 'insert_text') return null
+          return plan.insertAt ?? state.doc.content.size
+        },
+        onAccept: (draft) => acceptInlineDraftRef.current(draft),
+        onDismiss: (draft) => dismissInlineDraftRef.current(draft),
+        onRetry: (draft) => retryInlineDraftRef.current(draft)
+      }),
       Mention.configure({
         HTMLAttributes: {
           class: 'mention-node bg-[var(--danger-surface)] text-[var(--danger-primary)] rounded cursor-pointer'
@@ -411,6 +461,171 @@ export default function EditorArea() {
       }, 800)
     }
   })
+
+  const acceptInlineDraft = useCallback(
+    async (draft: InlineAiDraft) => {
+      if (!editor || !currentChapter) {
+        useToastStore.getState().addToast('warning', '请先打开目标章节')
+        return
+      }
+      const plan = planTextDraftApplication(draft.payload as AiDraftPayload, currentChapter.id)
+      if (!plan || plan.kind !== 'insert_text') {
+        useToastStore.getState().addToast('error', '续写草稿已失效，请重新生成')
+        clearInlineAiDraft(draft.id)
+        return
+      }
+
+      const htmlFragment = ensureHtmlContent(plan.content)
+      if (!htmlFragment) {
+        useToastStore.getState().addToast('error', '续写草稿为空')
+        clearInlineAiDraft(draft.id)
+        return
+      }
+
+      try {
+        const beforeHtml = editor.getHTML()
+        const beforeWordCount = editor.getText().replace(/\s/g, '').length
+        await window.api.createSnapshot({
+          chapter_id: currentChapter.id,
+          content: beforeHtml,
+          word_count: beforeWordCount
+        })
+        const maxPos = editor.state.doc.content.size
+        const insertAt = Math.max(0, Math.min(plan.insertAt ?? maxPos, maxPos))
+        const inserted = editor.commands.insertContentAt(insertAt, htmlFragment)
+        if (!inserted) throw new Error('无法将 AI 续写草稿插入当前正文。')
+        const nextHtml = editor.getHTML()
+        const nextWordCount = stripHtmlToText(nextHtml).replace(/\s/g, '').length
+        await updateChapterContent(currentChapter.id, nextHtml, nextWordCount)
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current)
+          saveTimerRef.current = null
+        }
+        lastSavedRef.current = nextHtml
+        prevWordCountRef.current = nextWordCount
+        useUIStore.getState().markChapterSaved(currentChapter.id)
+        await window.api.aiSetDraftStatus(draft.id, 'applied')
+        clearInlineAiDraft(draft.id)
+        useToastStore.getState().addToast('success', 'AI 续写已采纳')
+      } catch (error) {
+        useToastStore
+          .getState()
+          .addToast('error', error instanceof Error ? error.message : '采纳续写草稿失败')
+      }
+    },
+    [clearInlineAiDraft, currentChapter, editor, updateChapterContent]
+  )
+
+  const dismissInlineDraft = useCallback(
+    async (draft: InlineAiDraft) => {
+      await window.api.aiSetDraftStatus(draft.id, 'dismissed')
+      clearInlineAiDraft(draft.id)
+      useToastStore.getState().addToast('info', '已丢弃 AI 续写草稿')
+    },
+    [clearInlineAiDraft]
+  )
+
+  const retryInlineDraft = useCallback(
+    async (draft: InlineAiDraft) => {
+      await window.api.aiSetDraftStatus(draft.id, 'dismissed')
+      clearInlineAiDraft(draft.id)
+      openAiAssistant({ input: draft.retryInput || AI_CONTINUE_PROMPT, autoSend: true })
+    },
+    [clearInlineAiDraft, openAiAssistant]
+  )
+
+  const acceptAiChapterDraft = useCallback(
+    async (draft: AiChapterDraft) => {
+      const title = draft.title.trim()
+      const content = draft.content.trim()
+      if (!title || !content) {
+        useToastStore.getState().addToast('warning', '章节标题和正文不能为空')
+        return
+      }
+
+      try {
+        const requestedVolume = draft.volumeId
+          ? volumes.find((volume) => volume.id === draft.volumeId)
+          : null
+        const requestedVolumeTitle = draft.volumeTitle.trim()
+        let targetVolumeId = requestedVolume?.id ?? null
+        if (targetVolumeId == null && requestedVolumeTitle) {
+          const existingVolume = volumes.find((volume) => volume.title.trim() === requestedVolumeTitle)
+          targetVolumeId = existingVolume?.id ?? null
+          if (targetVolumeId == null) {
+            const createdVolume = await createVolume(bookId, requestedVolumeTitle)
+            targetVolumeId = createdVolume.id
+          }
+        }
+        if (targetVolumeId == null) {
+          const fallbackVolume = volumes[volumes.length - 1] ?? (await createVolume(bookId, '第一卷'))
+          targetVolumeId = fallbackVolume.id
+        }
+
+        const html = ensureHtmlContent(content)
+        const chapter = await createChapter(targetVolumeId, title, html, draft.summary.trim())
+        await window.api.aiSetDraftStatus(draft.id, 'applied')
+        clearAiChapterDraft(draft.id)
+        await selectChapter(chapter.id)
+        useToastStore.getState().addToast('success', `已创建 ${title}`)
+      } catch (error) {
+        useToastStore
+          .getState()
+          .addToast('error', error instanceof Error ? error.message : '创建章节失败')
+      }
+    },
+    [bookId, clearAiChapterDraft, createChapter, createVolume, selectChapter, volumes]
+  )
+
+  const dismissAiChapterDraft = useCallback(
+    async (draft: AiChapterDraft) => {
+      await window.api.aiSetDraftStatus(draft.id, 'dismissed')
+      clearAiChapterDraft(draft.id)
+      useToastStore.getState().addToast('info', '已丢弃 AI 章节草稿')
+    },
+    [clearAiChapterDraft]
+  )
+
+  const retryAiChapterDraft = useCallback(
+    async (draft: AiChapterDraft) => {
+      await window.api.aiSetDraftStatus(draft.id, 'dismissed')
+      clearAiChapterDraft(draft.id)
+      openAiAssistant({ input: draft.retryInput, autoSend: true })
+    },
+    [clearAiChapterDraft, openAiAssistant]
+  )
+
+  const copyAiChapterDraft = useCallback(async (draft: AiChapterDraft) => {
+    try {
+      await navigator.clipboard.writeText(`${draft.title.trim()}\n\n${draft.content.trim()}`.trim())
+      useToastStore.getState().addToast('success', '章节草稿已复制')
+    } catch {
+      useToastStore.getState().addToast('error', '复制失败，请检查剪贴板权限')
+    }
+  }, [])
+
+  acceptInlineDraftRef.current = (draft) => {
+    void acceptInlineDraft(draft)
+  }
+  dismissInlineDraftRef.current = (draft) => {
+    void dismissInlineDraft(draft)
+  }
+  retryInlineDraftRef.current = (draft) => {
+    void retryInlineDraft(draft)
+  }
+
+  useEffect(() => {
+    if (!editor) return
+    if (inlineAiDraft && (!currentChapter || inlineAiDraft.chapterId !== currentChapter.id)) {
+      clearInlineAiDraft(inlineAiDraft.id)
+      return
+    }
+    editor.view.dispatch(editor.state.tr.setMeta(aiInlineDraftKey, 'refresh'))
+  }, [clearInlineAiDraft, currentChapter, editor, inlineAiDraft])
+
+  useEffect(() => {
+    setEditorHudVisible(false)
+  }, [currentChapter?.id])
 
   const syncAiAssistantSelection = useCallback(() => {
     setAiAssistantSelection(
@@ -660,7 +875,7 @@ export default function EditorArea() {
       const ok = window.confirm('当前章节已有摘要。确定重新生成并覆盖吗？')
       if (!ok) return
     }
-    const cfg = await getResolvedAiConfigForBook(bookId)
+    const cfg = await getResolvedGlobalAiConfig()
     if (!isAiConfigReady(cfg)) {
       useToastStore.getState().addToast('warning', '请先在应用设置中配置 AI')
       return
@@ -697,7 +912,7 @@ export default function EditorArea() {
     } finally {
       setSummaryLoading(false)
     }
-  }, [editor, currentChapter, summaryLoading, updateChapterSummary, bookId])
+  }, [editor, currentChapter, summaryLoading, updateChapterSummary])
 
   const handleFindReplace = () => {
     if (!editor || !searchQuery) return
@@ -734,6 +949,150 @@ export default function EditorArea() {
 
   const totalWords = getTotalWords()
   const currentSummary = currentChapter?.summary?.trim() ?? ''
+  const saveStatusLabel =
+    chapterSaveStatus.kind === 'saving'
+      ? '正文保存中'
+      : chapterSaveStatus.kind === 'dirty'
+        ? '正文未保存'
+        : chapterSaveStatus.kind === 'error'
+          ? '正文保存失败'
+          : savedAt
+            ? `正文已保存 ${savedAt}`
+            : '正文已保存'
+  const saveStatusClass =
+    chapterSaveStatus.kind === 'error'
+      ? 'text-[var(--danger-primary)]'
+      : chapterSaveStatus.kind === 'dirty' || chapterSaveStatus.kind === 'saving'
+        ? 'text-[var(--warning-primary)]'
+        : 'text-[var(--text-muted)]'
+
+  if (aiChapterDraft) {
+    const draftWordCount = countPlainWords(aiChapterDraft.content)
+    return (
+      <div className="flex-1 flex flex-col bg-[var(--bg-editor)] relative min-h-0 min-w-0 select-text">
+        <div className="shrink-0 border-b border-[var(--warning-border)] bg-[var(--warning-surface)] px-4 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-xs font-bold text-[var(--warning-primary)]">
+                <Sparkles size={14} /> AI 章节草稿
+                <span className="rounded border border-[var(--warning-border)] px-1.5 py-0.5 text-[10px]">
+                  尚未写入小说
+                </span>
+              </div>
+              <div className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">
+                {draftWordCount.toLocaleString()} 字
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void acceptAiChapterDraft(aiChapterDraft)}
+                disabled={!aiChapterDraft.title.trim() || !aiChapterDraft.content.trim()}
+                className="primary-btn"
+                title="创建章节"
+              >
+                <Check size={14} /> 创建章节
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyAiChapterDraft(aiChapterDraft)}
+                className="secondary-btn"
+                title="复制正文"
+              >
+                <Copy size={14} /> 复制正文
+              </button>
+              <button
+                type="button"
+                onClick={() => void retryAiChapterDraft(aiChapterDraft)}
+                className="secondary-btn"
+                title="重生成"
+              >
+                <RotateCcw size={14} /> 重生成
+              </button>
+              <button
+                type="button"
+                onClick={() => void dismissAiChapterDraft(aiChapterDraft)}
+                className="secondary-btn text-[var(--danger-primary)] hover:border-[var(--danger-border)] hover:text-[var(--danger-primary)]"
+                title="丢弃"
+              >
+                <Trash2 size={14} /> 丢弃
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-8 pt-6 pb-14 lg:px-32">
+          <div className={`${widthClass} mx-auto space-y-4`}>
+            <div className="grid gap-3 rounded-lg border border-[var(--border-primary)] bg-[var(--surface-primary)] p-3 shadow-sm md:grid-cols-[1fr_220px]">
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-semibold text-[var(--text-muted)]">章节标题</span>
+                <input
+                  value={aiChapterDraft.title}
+                  onChange={(event) => updateAiChapterDraft({ title: event.target.value })}
+                  className="field"
+                />
+              </label>
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-semibold text-[var(--text-muted)]">目标卷</span>
+                <select
+                  value={aiChapterDraft.volumeId ?? ''}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    updateAiChapterDraft({
+                      volumeId: value ? Number(value) : null,
+                      volumeTitle: value ? '' : aiChapterDraft.volumeTitle
+                    })
+                  }}
+                  className="field"
+                >
+                  <option value="">新建或使用默认卷</option>
+                  {volumes.map((volume) => (
+                    <option key={volume.id} value={volume.id}>
+                      {volume.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="min-w-0 md:col-span-2">
+                <span className="mb-1 block text-[11px] font-semibold text-[var(--text-muted)]">新卷名</span>
+                <input
+                  value={aiChapterDraft.volumeTitle}
+                  onChange={(event) => updateAiChapterDraft({ volumeTitle: event.target.value, volumeId: null })}
+                  placeholder={volumes.length > 0 ? '留空则使用最新卷' : '第一卷'}
+                  className="field"
+                />
+              </label>
+              <label className="min-w-0 md:col-span-2">
+                <span className="mb-1 block text-[11px] font-semibold text-[var(--text-muted)]">摘要</span>
+                <textarea
+                  rows={3}
+                  value={aiChapterDraft.summary}
+                  onChange={(event) => updateAiChapterDraft({ summary: event.target.value })}
+                  className="field resize-none"
+                />
+              </label>
+            </div>
+
+            <textarea
+              value={aiChapterDraft.content}
+              onChange={(event) => updateAiChapterDraft({ content: event.target.value })}
+              className="min-h-[62vh] w-full resize-y rounded-lg border border-[var(--border-primary)] bg-[var(--surface-primary)] px-8 py-7 text-[var(--text-primary)] shadow-sm focus:border-[var(--accent-primary)] focus:outline-none"
+              style={{
+                fontFamily: editorFont,
+                fontSize: editorFontSize,
+                lineHeight: editorLineHeight
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="absolute bottom-0 left-0 z-10 flex h-7 w-full items-center justify-between border-t border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 text-[10px] text-[var(--text-muted)]">
+          <span>AI 草稿 {draftWordCount.toLocaleString()} 字</span>
+          <span>确认创建后进入正式目录</span>
+        </div>
+      </div>
+    )
+  }
 
   if (!currentChapter) {
     return (
@@ -812,6 +1171,23 @@ export default function EditorArea() {
         </div>
       </div>
 
+      {editorHudVisible && !showSearch && (
+        <div
+          className="absolute right-3 top-3 z-30 flex items-center gap-2 rounded-md border border-[var(--border-primary)] bg-[var(--bg-secondary)]/95 px-2 py-1 text-[10px] shadow-md backdrop-blur-sm"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => openModal('snapshot')}
+            className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[var(--text-secondary)] transition hover:bg-[var(--bg-tertiary)] hover:text-[var(--info-primary)]"
+            title="查看历史快照"
+          >
+            <History size={11} /> 快照
+          </button>
+          <span className={`px-1.5 py-1 ${saveStatusClass}`}>{saveStatusLabel}</span>
+        </div>
+      )}
+
       {aiWorkGenre === 'script' && <ScriptToolbar editor={editor} />}
       {aiWorkGenre === 'academic' && (
         <div className="flex items-center gap-1 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-3 py-1.5 text-xs">
@@ -850,6 +1226,7 @@ export default function EditorArea() {
 
       <div
         className="flex-1 overflow-y-auto px-8 pt-16 pb-32 lg:px-32 scroll-smooth"
+        onClick={() => setEditorHudVisible(true)}
         onContextMenu={handleContextMenu}
       >
         {currentSummary && (
@@ -880,13 +1257,6 @@ export default function EditorArea() {
             <Crosshair size={11} /> 聚焦
           </button>
           <button
-            onClick={() => openModal('snapshot')}
-            className="flex items-center gap-1 hover:text-[var(--info-primary)] transition"
-            title="查看历史快照"
-          >
-            <History size={11} /> 快照
-          </button>
-          <button
             type="button"
             onClick={() => requestAiContinuation(false)}
             className="flex items-center gap-1 hover:text-[var(--accent-secondary)] transition"
@@ -910,7 +1280,6 @@ export default function EditorArea() {
           >
             <Palette size={11} /> 风格
           </button>
-          <span>{savedAt ? `已保存 ${savedAt}` : '未保存'}</span>
         </div>
       </div>
 
@@ -973,6 +1342,8 @@ export default function EditorArea() {
         <div
           className="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg shadow-2xl py-1 z-50 min-w-[160px] text-xs"
           style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <button
             onClick={() => { editor?.commands.undo(); setContextMenu(null) }}

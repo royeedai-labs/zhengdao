@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildAiGlobalAccountStatusRequest } from '../global-account-status'
+import { buildAiGlobalConfigStatusRequest } from '../global-config-status'
 
-describe('buildAiGlobalAccountStatusRequest', () => {
-  it('passes the in-progress draft secret for unsaved accounts', () => {
+describe('buildAiGlobalConfigStatusRequest', () => {
+  it('passes the in-progress global API key for status checks', () => {
     expect(
-      buildAiGlobalAccountStatusRequest({
-        id: null,
+      buildAiGlobalConfigStatusRequest({
         provider: 'openai',
         api_endpoint: 'http://127.0.0.1:8045/v1',
         model: 'gemini-3-flash',
@@ -16,7 +15,6 @@ describe('buildAiGlobalAccountStatusRequest', () => {
       options: {
         probe: true,
         config: {
-          accountId: null,
           api_key: 'local-token',
           api_endpoint: 'http://127.0.0.1:8045/v1',
           model: 'gemini-3-flash'
@@ -25,10 +23,9 @@ describe('buildAiGlobalAccountStatusRequest', () => {
     })
   })
 
-  it('keeps the saved account id so the main process can reuse the stored secret', () => {
+  it('omits saved config ids because there is only one global config', () => {
     expect(
-      buildAiGlobalAccountStatusRequest({
-        id: 12,
+      buildAiGlobalConfigStatusRequest({
         provider: 'custom',
         api_endpoint: 'https://example.test/v1',
         model: 'gpt-4o-mini',
@@ -39,7 +36,6 @@ describe('buildAiGlobalAccountStatusRequest', () => {
       options: {
         probe: false,
         config: {
-          accountId: 12,
           api_key: '',
           api_endpoint: 'https://example.test/v1',
           model: 'gpt-4o-mini'

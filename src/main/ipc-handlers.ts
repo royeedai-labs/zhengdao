@@ -15,6 +15,7 @@ import * as citationRepo from './database/citation-repo'
 import * as snapshotRepo from './database/snapshot-repo'
 import * as configRepo from './database/config-repo'
 import * as aiAssistantRepo from './database/ai-assistant-repo'
+import * as aiBookCreationRepo from './database/ai-book-creation-repo'
 import * as statsRepo from './database/stats-repo'
 import * as sessionRepo from './database/session-repo'
 import * as achievementRepo from './database/achievement-repo'
@@ -169,6 +170,7 @@ export function registerIpcHandlers(): void {
   // Books
   ipcMain.handle('db:getBooks', () => bookRepo.getBooks())
   ipcMain.handle('db:createBook', (_, data) => bookRepo.createBook(data))
+  ipcMain.handle('db:createBookFromAiPackage', (_, data) => aiBookCreationRepo.createBookFromAiPackage(data))
   ipcMain.handle('db:deleteBook', (_, id) => bookRepo.deleteBook(id))
   ipcMain.handle('db:getBookStats', (_, bookId) => bookRepo.getBookStats(bookId))
 
@@ -185,9 +187,10 @@ export function registerIpcHandlers(): void {
     shortcutRepo.upsertCustomShortcut(action, keys)
   })
 
-  ipcMain.handle('ai:getAccounts', () => aiAssistantRepo.getAiAccounts())
-  ipcMain.handle('ai:saveAccount', (_, data) => aiAssistantRepo.saveAiAccount(data))
-  ipcMain.handle('ai:deleteAccount', (_, id: number) => aiAssistantRepo.deleteAiAccount(id))
+  ipcMain.handle('ai:getGlobalConfig', () => aiAssistantRepo.getGlobalAiConfig())
+  ipcMain.handle('ai:saveGlobalConfig', (_, data: aiAssistantRepo.SaveGlobalAiConfigInput) =>
+    aiAssistantRepo.saveGlobalAiConfig(data)
+  )
   ipcMain.handle('ai:getSkillTemplates', () => aiAssistantRepo.getAiSkillTemplates())
   ipcMain.handle('ai:updateSkillTemplate', (_, key: string, updates: Record<string, unknown>) =>
     aiAssistantRepo.updateAiSkillTemplate(key, updates)
@@ -234,8 +237,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ai:setDraftStatus', (_, id: number, status: aiAssistantRepo.AiDraftStatus) =>
     aiAssistantRepo.setAiDraftStatus(id, status)
   )
+  ipcMain.handle('ai:getResolvedGlobalConfig', () =>
+    aiAssistantRepo.getResolvedGlobalAiConfig()
+  )
   ipcMain.handle('ai:getResolvedConfigForBook', (_, bookId: number) =>
     aiAssistantRepo.getResolvedAiConfigForBook(bookId)
+  )
+  ipcMain.handle('ai:getResolvedWorkspaceConfig', () =>
+    aiAssistantRepo.getResolvedGlobalAiConfig()
   )
   ipcMain.on('ai:streamComplete', (event, requestId: string, request: AiBridgeCompleteRequest) => {
     if (request.provider === 'zhengdao_official') {
@@ -542,24 +551,19 @@ export function registerIpcHandlers(): void {
       options?: {
         probe?: boolean
         config?: {
-          accountId?: number | null
           api_key?: string
           api_endpoint?: string
           model?: string
         }
       }
     ) => {
-      const accountConfig =
-        options?.config?.accountId != null
-          ? aiAssistantRepo.getAiAccountRuntimeConfig(options.config.accountId)
-          : null
-    if (provider === 'gemini_cli') return getGeminiCliService().getStatus(Boolean(options?.probe))
+      if (provider === 'gemini_cli') return getGeminiCliService().getStatus(Boolean(options?.probe))
       return probeProviderStatus(
         {
           provider,
-          apiKey: options?.config?.api_key || accountConfig?.ai_api_key || '',
-          apiEndpoint: options?.config?.api_endpoint || accountConfig?.ai_api_endpoint || '',
-          model: options?.config?.model || accountConfig?.ai_model || ''
+          apiKey: options?.config?.api_key || '',
+          apiEndpoint: options?.config?.api_endpoint || '',
+          model: options?.config?.model || ''
         },
         Boolean(options?.probe)
       )
