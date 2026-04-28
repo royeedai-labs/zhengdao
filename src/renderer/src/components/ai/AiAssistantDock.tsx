@@ -26,6 +26,7 @@ import {
 } from '@/utils/ai/assistant-workflow'
 import { stripHtmlToText } from '@/utils/html-to-text'
 import { getActiveEditor } from '@/components/editor/active-editor'
+import { applyProfessionalTemplate, getProfessionalTemplate } from '../../../../shared/professional-templates'
 import { buildConversationListItems, pickConversationAfterDelete } from './conversation-list'
 import {
   resolveAssistantIntent,
@@ -711,6 +712,96 @@ export function AiAssistantPanel() {
             status: 'pending'
           })
           break
+        }
+        // GP-05 v2: 5 个 academic / professional 题材专属 kind 的副作用。
+        // 引用 / Reference / 政策对照统一落到 wiki_entries (复用 settings_wiki)
+        // 用 category 区分；apply_format_template 用 DI-05 公文模板包装章节
+        // 正文。create_section_outline 因为 chapters 表当前没有 outline 字段
+        // 暂不支持，等 DI-02 引用管理 / DI-07 Canon Pack v2 给章节加上 outline
+        // 列后再补。
+        case 'create_citation': {
+          const authors = Array.isArray(payload.authors)
+            ? (payload.authors as unknown[]).map(String).filter(Boolean).join('，')
+            : String(payload.authors || '')
+          const formatted = String(
+            payload.formatted ||
+              `${authors}. ${String(payload.title || '')}. ${String(payload.source || '')}, ${String(payload.year || '')}.`
+          ).trim()
+          await createWikiEntry({
+            book_id: bookId,
+            category: 'citation',
+            title: String(payload.title || draft.title || 'AI 引用'),
+            content: JSON.stringify(
+              {
+                formatted,
+                authors,
+                year: payload.year ?? '',
+                source: payload.source ?? '',
+                doi: payload.doi ?? '',
+                format: payload.format ?? 'GBT7714'
+              },
+              null,
+              2
+            )
+          })
+          break
+        }
+        case 'create_reference': {
+          await createWikiEntry({
+            book_id: bookId,
+            category: 'reference',
+            title: String(payload.title || draft.title || 'AI 文献'),
+            content: String(payload.content || JSON.stringify(payload, null, 2))
+          })
+          break
+        }
+        case 'create_policy_anchor': {
+          await createWikiEntry({
+            book_id: bookId,
+            category: 'policy',
+            title: String(payload.title || payload.policyName || draft.title || 'AI 政策依据'),
+            content: JSON.stringify(
+              {
+                policyNumber: payload.policyNumber ?? '',
+                issuer: payload.issuer ?? '',
+                date: payload.policyDate ?? payload.date ?? '',
+                excerpt: payload.excerpt ?? payload.content ?? ''
+              },
+              null,
+              2
+            )
+          })
+          break
+        }
+        case 'apply_format_template': {
+          if (!currentChapter) throw new Error('请先打开目标章节')
+          const templateId = String(payload.templateName || payload.templateId || '')
+          if (!templateId || !getProfessionalTemplate(templateId)) {
+            throw new Error('未指定有效的公文模板（如 red-header-notice / request 等）')
+          }
+          const original = stripHtmlToText(currentChapter.content || '')
+          const rawContentToWrap = String(payload.contentToWrap || original).trim()
+          if (!rawContentToWrap) throw new Error('章节内容为空，无法套用公文模板')
+          const fields = (payload.fields as Record<string, string>) ?? {}
+          const wrapped = applyProfessionalTemplate(templateId, rawContentToWrap, fields)
+          await window.api.createSnapshot({
+            chapter_id: currentChapter.id,
+            content: currentChapter.content ?? '',
+            word_count: stripHtmlToText(currentChapter.content || '').replace(/\s/g, '').length
+          })
+          const wrappedHtml = wrapped
+            .split('\n\n')
+            .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+            .join('')
+          await updateChapterContent(
+            currentChapter.id,
+            wrappedHtml,
+            stripHtmlToText(wrappedHtml).replace(/\s/g, '').length
+          )
+          break
+        }
+        case 'create_section_outline': {
+          throw new Error('章节大纲草稿暂不支持，等待 DI-02 引用管理 / DI-07 Canon Pack v2 上线后启用。')
         }
         default:
           throw new Error('暂不支持应用该草稿')
