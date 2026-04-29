@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Bot } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useCharacterStore } from '@/stores/character-store'
@@ -10,27 +9,14 @@ import { useUIStore, type AiChapterDraft, type InlineAiDraft } from '@/stores/ui
 import { useWikiStore } from '@/stores/wiki-store'
 import { aiPromptStream, getResolvedGlobalAiConfig, isAiConfigReady, type AiCallerConfig } from '@/utils/ai'
 import {
-  applyAssistantContextSelection,
-  attachSelectionMetaToDrafts,
-  buildAssistantContext,
-  composeAssistantChatPrompt,
-  composeSkillPrompt,
-  resolveAssistantContextPolicy,
-  type AiAssistantContext,
   type AiSkillOverride,
   type AiSkillTemplate,
   type AiWorkProfile
 } from '@/utils/ai/assistant-workflow'
-import { stripHtmlToText } from '@/utils/html-to-text'
-import { buildConversationListItems, pickConversationAfterDelete } from './conversation-list'
-import { buildChapterEditorQuickActions, isBlankChapterContent } from './chapter-quick-actions'
-import {
-  resolveAssistantIntent,
-  resolveAssistantSkillSelection
-} from './conversation-mode'
+import { pickConversationAfterDelete } from './conversation-list'
+import { buildChapterEditorQuickActions } from './chapter-quick-actions'
 import { buildDraftPreviewModel } from './draft-preview'
 import { DEFAULT_CONTINUE_INPUT, toAiChapterDraft, toInlineAiDraft } from './inline-draft'
-import { translateAiAssistantLauncherPosition } from './panel-layout'
 import {
   appendAssistantStreamToken,
   completeAssistantStreamMessage,
@@ -39,7 +25,6 @@ import {
   getAssistantStreamEmptyError,
   replaceAssistantStreamContent
 } from './streaming-message'
-import { resolveAssistantContext } from '@/utils/ai/assistant-context'
 import { BookshelfCreationAssistantPanel } from './book-creation/BookshelfCreationAssistantPanel'
 import {
   draftTitle,
@@ -49,6 +34,7 @@ import {
   withLocalRagChip
 } from './ai-assistant-helpers'
 import { applyAiDraft } from './assistant-draft-application'
+import { useAiAssistantContext } from './useAiAssistantContext'
 import { useAiAssistantData } from './useAiAssistantData'
 import { useAiAssistantRequest } from './useAiAssistantRequest'
 import { AssistantPanelComposer } from './panel-parts/AssistantPanelComposer'
@@ -132,82 +118,34 @@ export function AiAssistantPanel() {
   const activeRequestAbortRef = useRef<AbortController | null>(null)
   const sendCommandRef = useRef<(text: string) => void>(() => {})
 
-  const assistantIntent = useMemo(
-    () =>
-      resolveAssistantIntent({
-        skills,
-        userInput: input,
-        selectedText: aiAssistantSelectionChapterId === currentChapter?.id ? aiAssistantSelectionText : '',
-        hasCurrentChapter: Boolean(currentChapter),
-        hasVolumes: volumes.length > 0
-      }),
-    [aiAssistantSelectionChapterId, aiAssistantSelectionText, currentChapter, input, skills, volumes.length]
-  )
-  const selectedSkill = useMemo(() => {
-    return resolveAssistantSkillSelection(skills, overrides, assistantIntent.skillKey)
-  }, [skills, overrides, assistantIntent.skillKey])
-  const contextPolicy = useMemo(
-    () => resolveAssistantContextPolicy(selectedSkill, profile),
-    [profile, selectedSkill]
-  )
-  const conversationItems = useMemo(
-    () => buildConversationListItems(conversations, conversationId),
-    [conversations, conversationId]
-  )
-  const baseContext = useMemo<AiAssistantContext>(() => {
-    const chapterPlain = currentChapter?.content ? stripHtmlToText(currentChapter.content) : ''
-    return buildAssistantContext({
-      policy: contextPolicy,
-      currentChapter: currentChapter
-        ? { id: currentChapter.id, title: currentChapter.title, plainText: chapterPlain, summary: currentChapter.summary }
-        : null,
-      selectedText: aiAssistantSelectionChapterId === currentChapter?.id ? aiAssistantSelectionText : '',
-      characters: characters.map((character) => ({
-        id: character.id,
-        name: character.name,
-        description: character.description
-      })),
-      foreshadowings: foreshadowings.map((item) => ({
-        id: item.id,
-        text: item.text,
-        status: item.status
-      })),
-      plotNodes: plotNodes.map((node) => ({
-        id: node.id,
-        title: node.title,
-        description: node.description,
-        chapter_number: node.chapter_number
-      }))
-    })
-  }, [
-    aiAssistantSelectionChapterId,
-    aiAssistantSelectionText,
-    characters,
+  const {
+    assistantIntent,
+    contextPolicy,
+    baseContext,
+    contextDefaultsKey,
+    context,
+    resolvedPanelContext,
+    conversationItems,
+    hasCurrentSelection,
+    currentChapterIsBlank
+  } = useAiAssistantContext({
+    bookId,
     currentChapter,
+    characters,
     foreshadowings,
     plotNodes,
-    contextPolicy
-  ])
-  const contextDefaultsKey = useMemo(
-    () => baseContext.chips.map((chip) => `${chip.id}:${chip.enabled ? '1' : '0'}`).join('|'),
-    [baseContext]
-  )
-  const context = useMemo(
-    () => applyAssistantContextSelection(baseContext, enabledContextChipIds),
-    [baseContext, enabledContextChipIds]
-  )
-  const resolvedPanelContext = useMemo(
-    () =>
-      resolveAssistantContext({
-        currentBookId: bookId,
-        currentChapterTitle: currentChapter?.title,
-        hasSelection: aiAssistantSelectionChapterId === currentChapter?.id && Boolean(aiAssistantSelectionText.trim()),
-        activeModal
-      }),
-    [activeModal, aiAssistantSelectionChapterId, aiAssistantSelectionText, bookId, currentChapter?.id, currentChapter?.title]
-  )
-  const hasCurrentSelection = aiAssistantSelectionChapterId === currentChapter?.id && Boolean(aiAssistantSelectionText.trim())
-  const currentChapterIsBlank = Boolean(currentChapter && isBlankChapterContent(currentChapter.content))
+    conversations,
+    conversationId,
+    skills,
+    overrides,
+    profile,
+    input,
+    enabledContextChipIds,
+    aiAssistantSelectionChapterId,
+    aiAssistantSelectionText,
+    volumes,
+    activeModal
+  })
 
   const { refreshConversation, refreshConfig } = useAiAssistantData({
     bookId,
@@ -474,115 +412,6 @@ export function AiAssistantPanel() {
   )
 }
 
-export default function AiAssistantDock() {
-  const bookId = useBookStore((s) => s.currentBookId)
-  const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
-  const aiAssistantOpen = useUIStore((s) => s.aiAssistantOpen)
-  const aiAssistantLauncherPosition = useUIStore((s) => s.aiAssistantLauncherPosition)
-  const setAiAssistantLauncherPosition = useUIStore((s) => s.setAiAssistantLauncherPosition)
-  const openAiAssistant = useUIStore((s) => s.openAiAssistant)
-  const launcherPositionRef = useRef(aiAssistantLauncherPosition)
-  const launcherClickSuppressedRef = useRef(false)
-  const interactionCleanupRef = useRef<(() => void) | null>(null)
-
-  useEffect(() => {
-    launcherPositionRef.current = aiAssistantLauncherPosition
-  }, [aiAssistantLauncherPosition])
-
-  useEffect(() => {
-    const handleWindowResize = () => {
-      setAiAssistantLauncherPosition(launcherPositionRef.current)
-    }
-
-    window.addEventListener('resize', handleWindowResize)
-    return () => window.removeEventListener('resize', handleWindowResize)
-  }, [setAiAssistantLauncherPosition])
-
-  useEffect(() => {
-    return () => {
-      interactionCleanupRef.current?.()
-    }
-  }, [])
-
-  if (!bookId) {
-    if (!aiAssistantOpen) return null
-    return (
-      <div className="fixed bottom-0 right-0 top-12 z-40 w-[min(920px,calc(100vw-24px))] border-l border-[var(--border-primary)] bg-[var(--bg-secondary)] shadow-2xl">
-        <AiAssistantPanel />
-      </div>
-    )
-  }
-
-  if (rightPanelOpen) return null
-
-  const handleLauncherDragStart = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return
-    event.preventDefault()
-    const startX = event.clientX
-    const startY = event.clientY
-    const startPosition = launcherPositionRef.current
-    const previousUserSelect = document.body.style.userSelect
-    let moved = false
-
-    const handleMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX
-      const deltaY = moveEvent.clientY - startY
-      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
-        moved = true
-      }
-      setAiAssistantLauncherPosition(
-        translateAiAssistantLauncherPosition(
-          startPosition,
-          deltaX,
-          deltaY,
-          window.innerWidth,
-          window.innerHeight
-        )
-      )
-    }
-
-    const cleanup = () => {
-      document.body.style.userSelect = previousUserSelect
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', cleanup)
-      interactionCleanupRef.current = null
-      if (moved) {
-        launcherClickSuppressedRef.current = true
-        window.setTimeout(() => {
-          launcherClickSuppressedRef.current = false
-        }, 0)
-      }
-    }
-
-    interactionCleanupRef.current?.()
-    interactionCleanupRef.current = cleanup
-    document.body.style.userSelect = 'none'
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', cleanup)
-  }
-
-  return (
-    <button
-      type="button"
-      onMouseDown={handleLauncherDragStart}
-      onClick={(event) => {
-        if (launcherClickSuppressedRef.current) {
-          event.preventDefault()
-          launcherClickSuppressedRef.current = false
-          return
-        }
-        openAiAssistant()
-      }}
-      className="fixed z-40 flex h-12 w-12 cursor-grab items-center justify-center rounded-full border border-[var(--accent-border)] bg-[var(--accent-primary)] text-[var(--accent-contrast)] shadow-xl shadow-[0_10px_24px_rgba(63,111,159,0.22)] transition hover:bg-[var(--accent-secondary)] active:cursor-grabbing"
-      style={{
-        left: aiAssistantLauncherPosition.x,
-        top: aiAssistantLauncherPosition.y,
-        touchAction: 'none'
-      }}
-      title="拖动或打开 AI 创作助手"
-      aria-label="拖动或打开 AI 创作助手"
-    >
-      <Bot size={22} />
-    </button>
-  )
-}
+// SPLIT-006 phase 6 — AiAssistantDock launcher lives in its own file
+// so this entry stays focused on AiAssistantPanel + the export contract.
+export { default } from './AiAssistantDockLauncher'
