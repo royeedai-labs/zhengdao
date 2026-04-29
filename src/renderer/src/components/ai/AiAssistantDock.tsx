@@ -49,6 +49,7 @@ import {
   withLocalRagChip
 } from './ai-assistant-helpers'
 import { applyAiDraft } from './assistant-draft-application'
+import { useAiAssistantRequest } from './useAiAssistantRequest'
 import { AssistantPanelComposer } from './panel-parts/AssistantPanelComposer'
 import { AssistantPanelHeader } from './panel-parts/AssistantPanelHeader'
 import { ConversationListDropdown } from './panel-parts/ConversationListDropdown'
@@ -360,220 +361,32 @@ export function AiAssistantPanel() {
     }
   }, [aiAssistantCommand, bookId, consumeAiAssistantCommand, conversationId, loading, skills.length])
 
-  const validateSkillBeforeSend = (skill: AiSkillTemplate | null): string | null => {
-    if (!skill) return null
-    if (skill.key === 'polish_text' && !(aiAssistantSelectionChapterId === currentChapter?.id && aiAssistantSelectionText.trim())) {
-      return '请先在编辑器中选中要润色的正文，再使用“润色改写”。'
-    }
-    if (skill.key === 'continue_writing' && !currentChapter) {
-      return '请先打开目标章节，再使用“续写正文”。'
-    }
-    if (skill.key === 'review_chapter' && !currentChapter) {
-      return '请先打开目标章节，再使用“审核本章”。'
-    }
-    return null
-  }
+  const { send } = useAiAssistantRequest({
+    input,
+    loading,
+    conversationId,
+    bookId,
+    context,
+    profile,
+    skills,
+    overrides,
+    assistantIntent,
+    currentChapter,
+    volumes,
+    aiAssistantSelectionChapterId,
+    aiAssistantSelectionText,
+    aiAssistantSelectionFrom,
+    aiAssistantSelectionTo,
+    setMessages,
+    setError,
+    setLoading,
+    setInput,
+    setInlineAiDraft,
+    setAiChapterDraft,
+    activeRequestAbortRef,
+    refreshConversation
+  })
 
-  const send = async (explicitSkill?: AiSkillTemplate, explicitInput?: string) => {
-    const text = (explicitInput ?? input).trim()
-    if (!text || loading || !conversationId || !bookId) return
-    const requestIntent =
-      explicitSkill
-        ? assistantIntent
-        : resolveAssistantIntent({
-            skills,
-            userInput: text,
-            selectedText: aiAssistantSelectionChapterId === currentChapter?.id ? aiAssistantSelectionText : '',
-            hasCurrentChapter: Boolean(currentChapter),
-            hasVolumes: volumes.length > 0
-          })
-    const skill = explicitSkill || resolveAssistantSkillSelection(skills, overrides, requestIntent.skillKey)
-    const skillPreflightError = validateSkillBeforeSend(skill)
-    if (skillPreflightError) {
-      setError(skillPreflightError)
-      return
-    }
-    setError(null)
-    setLoading(true)
-    setInput('')
-
-    try {
-      const config = await getResolvedGlobalAiConfig()
-      const aiConfig = config ? ({ ...(config as AiCallerConfig), bookId, ragMode: 'auto' as const }) : null
-      if (!isAiConfigReady(aiConfig)) {
-        setError('请先在应用设置 / AI 与模型中完成全局 AI 配置，或完成 Gemini CLI / Ollama 设置')
-        setLoading(false)
-        return
-      }
-
-      const requestAbortController = new AbortController()
-      activeRequestAbortRef.current = requestAbortController
-      const requestContext = aiConfig.ai_provider === 'zhengdao_official' ? withLocalRagChip(context) : context
-
-      const prompt = skill
-        ? composeSkillPrompt({ skill, profile, context: requestContext, userInput: text })
-        : composeAssistantChatPrompt({ profile, context: requestContext, skills, userInput: text })
-      const userMessage = (await window.api.aiAddMessage(conversationId, 'user', text, {
-        skill_key: skill?.key ?? null,
-        mode: skill ? 'skill' : 'chat',
-        intent_reason: requestIntent.reason,
-        intent_confidence: requestIntent.confidence,
-        context_chips: requestContext.chips
-      })) as AiMessage
-      const pendingMessageId = -Date.now()
-      const streamingLabel =
-        aiConfig.ai_provider === 'gemini_cli'
-          ? 'Gemini 3 Pro 正在生成...'
-          : aiConfig.ai_provider === 'zhengdao_official'
-            ? '证道官方 AI 正在结合本地片段生成...'
-          : 'AI 正在生成...'
-      const pendingMessage = createPendingAssistantStreamMessage(pendingMessageId, streamingLabel)
-      setMessages((current) => [...current, userMessage, pendingMessage])
-
-      let streamedContent = ''
-      let streamError = ''
-      const streamChunkQueue = createAssistantStreamChunkQueue((token) => {
-        setMessages((current) => appendAssistantStreamToken(current, pendingMessageId, token))
-      })
-      await aiPromptStream(
-        aiConfig,
-        prompt.systemPrompt,
-        prompt.userPrompt,
-        {
-          onToken: (token) => {
-            streamedContent += token
-            streamChunkQueue.push(token)
-          },
-          onComplete: (fullText) => {
-            streamedContent = fullText || streamedContent
-          },
-          onError: (message) => {
-            streamError = message
-          }
-        },
-        1400,
-        0.72,
-        { signal: requestAbortController.signal }
-      )
-      await streamChunkQueue.drain()
-
-      const stopped = requestAbortController.signal.aborted
-
-      if (stopped) {
-        if (!streamedContent.trim()) {
-          setMessages((current) => current.filter((message) => message.id !== pendingMessageId))
-          useToastStore.getState().addToast('info', '已停止生成')
-          return
-        }
-
-        const assistantMessage = (await window.api.aiAddMessage(conversationId, 'assistant', streamedContent, {
-          skill_key: skill?.key ?? null,
-          mode: skill ? 'skill' : 'chat',
-          stopped: true
-        })) as { id: number }
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === pendingMessageId
-              ? {
-                  id: assistantMessage.id,
-                  role: 'assistant',
-                  content: streamedContent,
-                  metadata: { stopped: true }
-                }
-              : message
-          )
-        )
-        useToastStore.getState().addToast('info', '已停止生成，已保留当前内容')
-        await refreshConversation(conversationId)
-        return
-      }
-
-      if (streamError) {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === pendingMessageId
-              ? { ...message, streaming: false, content: message.content || '生成失败' }
-              : message
-          )
-        )
-        setError(streamError)
-        return
-      }
-      const emptyStreamError = getAssistantStreamEmptyError(streamedContent)
-      if (emptyStreamError) {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === pendingMessageId
-              ? { ...message, streaming: false, content: '生成失败' }
-              : message
-          )
-        )
-        setError(emptyStreamError)
-        return
-      }
-
-      const assistantMessage = (await window.api.aiAddMessage(conversationId, 'assistant', streamedContent, {
-        skill_key: skill?.key ?? null,
-        mode: skill ? 'skill' : 'chat',
-        intent_reason: requestIntent.reason,
-        intent_confidence: requestIntent.confidence
-      })) as { id: number }
-      setMessages((current) =>
-        completeAssistantStreamMessage(current, pendingMessageId, assistantMessage.id, streamedContent).map((message) =>
-          message.id === assistantMessage.id
-            ? {
-                ...message,
-                metadata: {
-                  skill_key: skill?.key ?? null,
-                  mode: skill ? 'skill' : 'chat',
-                  intent_reason: requestIntent.reason,
-                  intent_confidence: requestIntent.confidence
-                }
-              }
-            : message
-        )
-      )
-      if (skill) {
-        const parsed = normalizeAssistantDrafts(skill, streamedContent)
-        const boundDrafts = attachSelectionMetaToDrafts(parsed.drafts, {
-          chapterId: aiAssistantSelectionChapterId,
-          text: aiAssistantSelectionText,
-          from: aiAssistantSelectionFrom,
-          to: aiAssistantSelectionTo
-        })
-        for (const draft of boundDrafts) {
-          const payload =
-            draft.kind === 'insert_text' || draft.kind === 'create_chapter'
-              ? {
-                  ...draft,
-                  retry_input: text
-                }
-              : draft
-          const createdDraft = (await window.api.aiCreateDraft({
-            book_id: bookId,
-            conversation_id: conversationId,
-            message_id: assistantMessage.id,
-            kind: payload.kind,
-            title: draftTitle(payload),
-            payload,
-            target_ref: currentChapter ? `chapter:${currentChapter.id}` : ''
-          })) as AiDraftRow
-          const inlineDraft = toInlineAiDraft(createdDraft, currentChapter?.id, text)
-          if (inlineDraft) setInlineAiDraft(inlineDraft)
-          const chapterDraft = toAiChapterDraft(createdDraft, text)
-          if (chapterDraft) setAiChapterDraft(chapterDraft)
-        }
-        if (parsed.errors.length > 0) {
-          setError(parsed.errors.join('；'))
-        }
-      }
-      await refreshConversation(conversationId)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'AI 请求失败')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
     sendCommandRef.current = (text) => {
