@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.7.2 - 2026-04-29
+
+### Release
+
+- 发布桌面端 AI 技能反馈提交能力
+
+### Added
+
+- 新增桌面端 AI 技能反馈提交流程，支持用户对技能执行结果提交评分、原因和文字反馈。
+- 新增技能反馈共享契约、IPC 通道和主进程转发逻辑，把桌面端反馈提交到官方 AI 技能反馈接口。
+
+### Changed
+
+- AI 助手消息流、风格学习、格式模板、引用构建、对话改写和世界一致性等技能入口增加反馈表单展示。
+- 技能反馈表单补齐提交中、成功、失败和不可用状态，避免用户在无技能执行记录时误提交。
+- 发布模板不再生成会被 GitHub Release notes 同步脚本拒绝的占位 changelog 段落。
+
+### Fixed
+
+- 修复 Windows release workflow 中路径安全测试只匹配 POSIX 分隔符，导致客户端发布在 `npm test` 阶段失败的问题。
+
+### Docs
+
+- Release notes 继续从本版本中文 `CHANGELOG.md` 同步到 GitHub Release，保留安装包、自动更新元数据、验证状态和回滚提示。
+
 ## v1.7.1 - 2026-04-29
 
 ### Release
