@@ -1,0 +1,245 @@
+# LB-06 v2 — multi-platform signed + notarized release.
+#
+# This is the v2 release workflow. The legacy `release.yml` still ships
+# unsigned builds (good for nightly debug); this workflow ships signed +
+# notarized macOS, OV-signed Windows, and Linux AppImage. It activates the
+# moment OPS uploads the Apple Developer + Windows code-signing secrets.
+#
+# Required GitHub Actions secrets (all optional; the workflow degrades
+# gracefully when missing):
+#   MAC_CSC_LINK                  - base64-encoded .p12 for macOS code-sign
+#   MAC_CSC_KEY_PASSWORD          - .p12 password
+#   APPLE_ID                      - Apple ID (email) for notarization
+#   APPLE_APP_SPECIFIC_PASSWORD   - app-specific password
+#   APPLE_TEAM_ID                 - Apple Developer Team ID
+#   WIN_CSC_LINK                  - base64-encoded .pfx for Windows code-sign
+#   WIN_CSC_KEY_PASSWORD          - .pfx password
+#
+# Without secrets the workflow still runs (skips signing/notarize steps,
+# emits a workflow warning, and uploads unsigned artifacts as build evidence
+# rather than publishing a release).
+name: release-multiplatform
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag, e.g. v1.7.0 (used as commit ref + GH release name)'
+        required: true
+        type: string
+      publish:
+        description: 'Publish to GitHub Releases when true; otherwise upload artifacts only'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: build-macos (signed + notarized)
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_OWNER: ${{ github.repository_owner }}
+      GH_REPO: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install -g npm@10.9.8
+      - run: npm ci --ignore-scripts
+      - run: npm rebuild electron
+      - run: npm rebuild better-sqlite3
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/release/rebuild-electron-native.mjs arm64
+      - run: node scripts/release/verify-electron-native.mjs
+
+      - name: Detect Apple signing creds
+        id: detect
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$MAC_CSC_LINK" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Apple Developer secrets detected — signed + notarized build path"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple Developer secrets missing — falling back to unsigned build (artifact won't notarize). Configure MAC_CSC_LINK / APPLE_ID / APPLE_TEAM_ID secrets to enable signing."
+          fi
+
+      - name: Build (signed + notarized)
+        if: steps.detect.outputs.signed == 'true'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PUBLISH_FLAG: ${{ inputs.publish && 'always' || 'never' }}
+        run: |
+          npx electron-builder --config electron-builder.config.ts --mac dmg zip --publish "$PUBLISH_FLAG"
+
+      - name: Build (unsigned fallback)
+        if: steps.detect.outputs.signed != 'true'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npx electron-builder --config electron-builder.config.ts --mac dmg zip --publish never
+
+      - name: Upload macOS artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zhengdao-macos-${{ inputs.release_tag }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/latest-mac.yml
+          if-no-files-found: warn
+
+  build-windows:
+    name: build-windows (OV signed)
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_OWNER: ${{ github.repository_owner }}
+      GH_REPO: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install -g npm@10.9.8
+      - run: npm ci --ignore-scripts
+      - run: npm rebuild electron
+      - run: npm rebuild better-sqlite3
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/release/rebuild-electron-native.mjs x64
+      - run: node scripts/release/verify-electron-native.mjs
+
+      - name: Detect Windows signing creds
+        id: detect
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+        run: |
+          if [ -n "$WIN_CSC_LINK" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::WIN_CSC_LINK not set — Windows build will be unsigned and SmartScreen-flagged. Upload an OV cert .pfx to enable signing."
+          fi
+
+      - name: Build (signed)
+        if: steps.detect.outputs.signed == 'true'
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          PUBLISH_FLAG: ${{ inputs.publish && 'always' || 'never' }}
+        shell: bash
+        run: |
+          npx electron-builder --config electron-builder.config.ts --win nsis --x64 --publish "$PUBLISH_FLAG"
+
+      - name: Build (unsigned fallback)
+        if: steps.detect.outputs.signed != 'true'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        shell: bash
+        run: |
+          npx electron-builder --config electron-builder.config.ts --win nsis --x64 --publish never
+
+      - name: Upload Windows artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zhengdao-windows-${{ inputs.release_tag }}
+          path: |
+            dist/*.exe
+            dist/latest.yml
+          if-no-files-found: warn
+
+  build-linux:
+    name: build-linux (AppImage)
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_OWNER: ${{ github.repository_owner }}
+      GH_REPO: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2 \
+            libxshmfence1 libgbm1 fakeroot rpm
+
+      - run: npm install -g npm@10.9.8
+      - run: npm ci --ignore-scripts
+      - run: npm rebuild electron
+      - run: npm rebuild better-sqlite3
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/release/rebuild-electron-native.mjs x64
+      - run: node scripts/release/verify-electron-native.mjs
+
+      - name: Build AppImage
+        env:
+          PUBLISH_FLAG: ${{ inputs.publish && 'always' || 'never' }}
+        run: |
+          npx electron-builder --config electron-builder.config.ts --linux AppImage --x64 --publish "$PUBLISH_FLAG"
+
+      - name: Upload Linux artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zhengdao-linux-${{ inputs.release_tag }}
+          path: |
+            dist/*.AppImage
+            dist/latest-linux.yml
+          if-no-files-found: warn
+
+  publish-release-notes:
+    name: publish-release-notes
+    runs-on: ubuntu-latest
+    needs: [build-macos, build-windows, build-linux]
+    if: ${{ inputs.publish }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_REF_NAME: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: node scripts/release/update-github-release-notes.mjs

@@ -3,6 +3,16 @@ import type { Configuration } from 'electron-builder'
 const ghOwner = process.env.GH_OWNER?.trim()
 const ghRepo = process.env.GH_REPO?.trim()
 
+// LB-06 v2: macOS hardened runtime + notarize is gated behind the presence of
+// CSC_LINK / MAC_CSC_LINK. When the workflow has no Apple Developer secrets
+// configured (typical local dev or CI fallback), we keep the legacy unsigned
+// build path so we do not regress against existing release.yml. Once OPS
+// uploads MAC_CSC_LINK + APPLE_ID + APPLE_TEAM_ID to GitHub Actions secrets
+// the new release-multiplatform.yml flips this to true automatically.
+const hasAppleCodeSign =
+  !!(process.env.CSC_LINK?.trim() || process.env.MAC_CSC_LINK?.trim())
+const hasAppleNotarize = hasAppleCodeSign && !!process.env.APPLE_TEAM_ID?.trim()
+
 const config: Configuration = {
   appId: 'com.zhengdao.app',
   productName: '证道',
@@ -45,7 +55,22 @@ const config: Configuration = {
     artifactName: 'zhengdao-${version}-${arch}.${ext}',
     target: ['dmg', 'zip'],
     category: 'public.app-category.productivity',
-    darkModeSupport: true
+    darkModeSupport: true,
+    ...(hasAppleCodeSign
+      ? {
+          hardenedRuntime: true,
+          gatekeeperAssess: false,
+          entitlements: 'resources/entitlements.mac.plist',
+          entitlementsInherit: 'resources/entitlements.mac.plist'
+        }
+      : {}),
+    ...(hasAppleNotarize
+      ? {
+          notarize: {
+            teamId: process.env.APPLE_TEAM_ID!.trim()
+          }
+        }
+      : {})
   },
   win: {
     icon: 'resources/icon.ico',
