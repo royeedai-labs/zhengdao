@@ -49,6 +49,7 @@ import {
   withLocalRagChip
 } from './ai-assistant-helpers'
 import { applyAiDraft } from './assistant-draft-application'
+import { useAiAssistantData } from './useAiAssistantData'
 import { useAiAssistantRequest } from './useAiAssistantRequest'
 import { AssistantPanelComposer } from './panel-parts/AssistantPanelComposer'
 import { AssistantPanelHeader } from './panel-parts/AssistantPanelHeader'
@@ -208,111 +209,21 @@ export function AiAssistantPanel() {
   const hasCurrentSelection = aiAssistantSelectionChapterId === currentChapter?.id && Boolean(aiAssistantSelectionText.trim())
   const currentChapterIsBlank = Boolean(currentChapter && isBlankChapterContent(currentChapter.content))
 
-  const refreshConversation = useCallback(async (targetConversationId?: number | null) => {
-    if (!bookId) return
-    const conversation = targetConversationId
-      ? ({ id: targetConversationId } as { id: number })
-      : ((await window.api.aiGetOrCreateConversation(bookId)) as { id: number })
-    const [conversationRows, messageRows, draftRows] = await Promise.all([
-      window.api.aiGetConversations(bookId),
-      window.api.aiGetMessages(conversation.id),
-      window.api.aiGetDrafts(bookId, 'pending', conversation.id)
-    ])
-    const allDrafts = draftRows as AiDraftRow[]
-    const inlineDraft = allDrafts.reduce<InlineAiDraft | null>(
-      (found, draft) => found ?? toInlineAiDraft(draft, currentChapter?.id),
-      null
-    )
-    const chapterDraft = allDrafts.reduce<AiChapterDraft | null>(
-      (found, draft) => found ?? toAiChapterDraft(draft),
-      null
-    )
-    const hiddenDraftIds = new Set(
-      [inlineDraft?.id, chapterDraft?.id].filter((id): id is number => typeof id === 'number')
-    )
-    setMessages(messageRows as AiMessage[])
-    setConversations(conversationRows as AiConversationRow[])
-    setDrafts(allDrafts.filter((draft) => !hiddenDraftIds.has(draft.id)))
-    if (inlineDraft) {
-      setInlineAiDraft(inlineDraft)
-    } else {
-      clearInlineAiDraft()
-    }
-    if (chapterDraft) {
-      const currentDraft = useUIStore.getState().aiChapterDraft
-      if (currentDraft?.id !== chapterDraft.id) setAiChapterDraft(chapterDraft)
-    } else {
-      clearAiChapterDraft()
-    }
-    setConversationId(conversation.id)
-  }, [bookId, clearAiChapterDraft, clearInlineAiDraft, currentChapter?.id, setAiChapterDraft, setInlineAiDraft])
-
-  const refreshConfig = useCallback(async () => {
-    if (!bookId) return
-    const [skillRows, overrideRows, profileRow] = await Promise.all([
-      window.api.aiGetSkillTemplates(),
-      window.api.aiGetSkillOverrides(bookId),
-      window.api.aiGetWorkProfile(bookId)
-    ])
-    setSkills(skillRows as AiSkillTemplate[])
-    setOverrides(overrideRows as AiSkillOverride[])
-    setProfile(profileRow as AiWorkProfile)
-  }, [bookId])
-
-  useEffect(() => {
-    if (!bookId) return
-    let cancelled = false
-
-    const loadAssistantState = async () => {
-      const [skillRows, overrideRows, profileRow] = await Promise.all([
-        window.api.aiGetSkillTemplates(),
-        window.api.aiGetSkillOverrides(bookId),
-        window.api.aiGetWorkProfile(bookId)
-      ])
-      const conversation = (await window.api.aiGetOrCreateConversation(bookId)) as { id: number }
-      const [conversationRows, messageRows, draftRows] = await Promise.all([
-        window.api.aiGetConversations(bookId),
-        window.api.aiGetMessages(conversation.id),
-        window.api.aiGetDrafts(bookId, 'pending', conversation.id)
-      ])
-      if (cancelled) return
-      const allDrafts = draftRows as AiDraftRow[]
-      const inlineDraft = allDrafts.reduce<InlineAiDraft | null>(
-        (found, draft) => found ?? toInlineAiDraft(draft, currentChapter?.id),
-        null
-      )
-      const chapterDraft = allDrafts.reduce<AiChapterDraft | null>(
-        (found, draft) => found ?? toAiChapterDraft(draft),
-        null
-      )
-      const hiddenDraftIds = new Set(
-        [inlineDraft?.id, chapterDraft?.id].filter((id): id is number => typeof id === 'number')
-      )
-      setSkills(skillRows as AiSkillTemplate[])
-      setOverrides(overrideRows as AiSkillOverride[])
-      setProfile(profileRow as AiWorkProfile)
-      setConversations(conversationRows as AiConversationRow[])
-      setMessages(messageRows as AiMessage[])
-      setDrafts(allDrafts.filter((draft) => !hiddenDraftIds.has(draft.id)))
-      if (inlineDraft) {
-        setInlineAiDraft(inlineDraft)
-      } else {
-        clearInlineAiDraft()
-      }
-      if (chapterDraft) {
-        const currentDraft = useUIStore.getState().aiChapterDraft
-        if (currentDraft?.id !== chapterDraft.id) setAiChapterDraft(chapterDraft)
-      } else {
-        clearAiChapterDraft()
-      }
-      setConversationId(conversation.id)
-    }
-
-    void loadAssistantState()
-    return () => {
-      cancelled = true
-    }
-  }, [bookId, clearAiChapterDraft, clearInlineAiDraft, currentChapter?.id, setAiChapterDraft, setInlineAiDraft])
+  const { refreshConversation, refreshConfig } = useAiAssistantData({
+    bookId,
+    currentChapterId: currentChapter?.id,
+    setSkills,
+    setOverrides,
+    setProfile,
+    setConversations,
+    setMessages,
+    setDrafts,
+    setConversationId,
+    setInlineAiDraft,
+    clearInlineAiDraft,
+    setAiChapterDraft,
+    clearAiChapterDraft
+  })
 
   useEffect(() => {
     if (!bookId) return
