@@ -42,6 +42,7 @@ describe('release-utils', () => {
     )
 
     expect(updated).toContain('## v1.0.1 - 2026-04-20')
+    expect(updated).not.toMatch(/Fill in|TODO/)
     expect(updated.indexOf('## v1.0.1 - 2026-04-20')).toBeLessThan(
       updated.indexOf('## v1.0.0 - 2026-04-20')
     )

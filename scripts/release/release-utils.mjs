@@ -82,18 +82,6 @@ export function buildChangelogEntry({ version, summary, date }) {
     '### Release',
     '',
     `- ${releaseSummary}`,
-    '',
-    '### Changed',
-    '',
-    '- Fill in notable user-facing changes before publishing if more detail is needed.',
-    '',
-    '### Fixed',
-    '',
-    '- Fill in important fixes before publishing if applicable.',
-    '',
-    '### Docs',
-    '',
-    '- Update documentation references if this release changed installation or workflow details.',
     ''
   ].join('\n')
 }
