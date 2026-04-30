@@ -344,6 +344,7 @@ export function AiAssistantPanel() {
             onOpenCitationsManager={() => openModal('citationsManager')}
             onOpenTeamManagement={() => openModal('teamManagement')}
             onOpenAiSettings={() => openModal('aiSettings')}
+            onOpenCanonPack={() => openModal('canonPack')}
             onClose={closeAiAssistant}
           />
 

@@ -4,6 +4,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   MessagesSquare,
+  Network,
   Settings2,
   ShieldCheck,
   Trash2,
@@ -38,6 +39,7 @@ export interface AssistantPanelHeaderProps {
   onOpenCitationsManager: () => void
   onOpenTeamManagement: () => void
   onOpenAiSettings: () => void
+  onOpenCanonPack: () => void
   onClose: () => void
 }
 
@@ -99,6 +101,14 @@ export function AssistantPanelHeader(props: AssistantPanelHeaderProps): JSX.Elem
           className="rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--accent-secondary)]"
         >
           <ShieldCheck size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onOpenCanonPack()}
+          title="Canon Pack 视图 (关系图谱 / 时间线 / 组织架构)"
+          className="rounded p-1.5 text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--accent-secondary)]"
+        >
+          <Network size={16} />
         </button>
         {props.profileGenre === 'academic' && (
           <button

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Building2, Plus, Save, Trash2 } from 'lucide-react'
+import { Building2, ExternalLink, Plus, Save, Trash2 } from 'lucide-react'
 import { useToastStore } from '@/stores/toast-store'
+import { useUIStore } from '@/stores/ui-store'
 
 /**
  * DI-07 v3.4 — OrganizationsEditor.
@@ -52,6 +53,13 @@ export default function OrganizationsEditor({ bookId }: Props) {
   const [rows, setRows] = useState<OrgDraft[]>([])
   const [loading, setLoading] = useState(true)
   const addToast = useToastStore((s) => s.addToast)
+  const closeModal = useUIStore((s) => s.closeModal)
+  const openModal = useUIStore((s) => s.openModal)
+
+  function viewGraph() {
+    closeModal()
+    openModal('canonPack', { initialTab: 'orgchart' })
+  }
 
   useEffect(() => {
     void load()
@@ -136,9 +144,18 @@ export default function OrganizationsEditor({ bookId }: Props) {
             {rows.length}
           </span>
         </div>
-        <button type="button" onClick={addBlankRow} className="primary-btn !text-xs">
-          <Plus size={12} /> 新增组织
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={viewGraph}
+            className="rounded border border-[var(--border-primary)] px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--accent-secondary)]"
+          >
+            <ExternalLink size={11} className="mr-1 inline" />查看图
+          </button>
+          <button type="button" onClick={addBlankRow} className="primary-btn !text-xs">
+            <Plus size={12} /> 新增组织
+          </button>
+        </div>
       </div>
       {loading ? (
         <p className="text-xs text-[var(--text-muted)]">加载中…</p>

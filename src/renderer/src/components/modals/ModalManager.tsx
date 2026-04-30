@@ -35,6 +35,7 @@ import ReferencesBuildModal from './ReferencesBuildModal'
 import TeamManagementModal from './TeamManagementModal'
 import ForeshadowBoardModal from './ForeshadowBoardModal'
 import QuickNotesModal from './QuickNotesModal'
+import CanonPackModal from './CanonPackModal'
 
 function renderModal(type: ModalType) {
   switch (type) {
@@ -73,6 +74,7 @@ function renderModal(type: ModalType) {
     case 'citationPicker': return <CitationPickerModal />
     case 'referencesBuild': return <ReferencesBuildModal />
     case 'teamManagement': return <TeamManagementModal />
+    case 'canonPack': return <CanonPackModal />
     default: return null
   }
 }

@@ -217,7 +217,7 @@ export type ModalType =
   | 'citationPicker'
   | 'referencesBuild'
   | 'teamManagement'
-  | 'teamManagement'
+  | 'canonPack'
 
 export interface GenrePreset {
   id: string
