@@ -1,12 +1,54 @@
 import { clip, nonEmpty } from './helpers'
-import type { AiCanonPack, AiWorkProfile } from './types'
+import type {
+  AiCanonPack,
+  AiCanonPackEvent,
+  AiCanonPackOrganization,
+  AiCanonPackRelation,
+  AiWorkProfile
+} from './types'
 
 /**
- * SPLIT-008 — buildDesktopCanonPack: shape the local data the renderer
- * has (book + work profile + selection + characters + foreshadowings +
- * plot nodes + local citations) into the JSON contract that the backend
- * Skill execution layer + DI-07 v1 lock panel both consume.
+ * SPLIT-008 / DI-07 v3.3 — buildDesktopCanonPack.
+ *
+ * Shape the local data the renderer has (book + work profile + selection
+ * + characters + foreshadowings + plot nodes + local citations + DI-07 v3
+ * relations / events / organizations) into the JSON contract the backend
+ * Skill execution layer + DI-07 v1 lock panel + CG-A3 visual views all
+ * consume. v0.2 keeps the v0.1 fields untouched and only adds three
+ * optional asset bundles.
  */
+
+const RELATIONS_CAP = 100
+const EVENTS_CAP = 50
+const ORGS_CAP = 30
+
+export interface DesktopRelationInput {
+  fromId: number
+  toId: number
+  kind: string
+  label?: string
+  chapterRange?: [number, number]
+  dynamic?: boolean
+}
+
+export interface DesktopEventInput {
+  id: number
+  title: string
+  description?: string
+  chapterNumber?: number | null
+  eventType?: 'plot' | 'character' | 'world' | 'foreshadow'
+  importance?: 'low' | 'normal' | 'high'
+  relatedCharacterIds?: number[]
+}
+
+export interface DesktopOrganizationInput {
+  id: number
+  name: string
+  description?: string
+  parentId?: number | null
+  orgType?: 'group' | 'faction' | 'company' | 'department'
+  memberIds?: number[]
+}
 
 export function buildDesktopCanonPack(input: {
   bookId: number
@@ -16,6 +58,9 @@ export function buildDesktopCanonPack(input: {
   characters?: Array<{ id: number; name: string; description?: string }>
   foreshadowings?: Array<{ id: number; text: string; status: string }>
   plotNodes?: Array<{ id: number; title: string; description?: string; chapter_number?: number }>
+  relations?: DesktopRelationInput[]
+  events?: DesktopEventInput[]
+  organizations?: DesktopOrganizationInput[]
   localCitations?: Array<{
     ref: string
     sourceId: string
@@ -26,8 +71,41 @@ export function buildDesktopCanonPack(input: {
   generatedAt?: string
 }): AiCanonPack {
   const profile = input.profile
+  const relations = input.relations
+    ? input.relations.slice(0, RELATIONS_CAP).map<AiCanonPackRelation>((relation) => ({
+        fromId: String(relation.fromId),
+        toId: String(relation.toId),
+        kind: relation.kind,
+        label: nonEmpty(relation.label) ? relation.label : undefined,
+        chapterRange: relation.chapterRange,
+        dynamic: relation.dynamic
+      }))
+    : undefined
+  const events = input.events
+    ? input.events.slice(0, EVENTS_CAP).map<AiCanonPackEvent>((event) => ({
+        id: String(event.id),
+        title: event.title,
+        description: nonEmpty(event.description) ? event.description : undefined,
+        chapterNumber: typeof event.chapterNumber === 'number' ? event.chapterNumber : undefined,
+        eventType: event.eventType ?? 'plot',
+        importance: event.importance ?? 'normal',
+        relatedCharacterIds: event.relatedCharacterIds?.map((id) => String(id))
+      }))
+    : undefined
+  const organizations = input.organizations
+    ? input.organizations.slice(0, ORGS_CAP).map<AiCanonPackOrganization>((org) => ({
+        id: String(org.id),
+        name: org.name,
+        description: nonEmpty(org.description) ? org.description : undefined,
+        parentId:
+          typeof org.parentId === 'number' && org.parentId !== null ? String(org.parentId) : undefined,
+        orgType: org.orgType ?? 'group',
+        memberIds: org.memberIds?.map((id) => String(id))
+      }))
+    : undefined
+
   return {
-    version: 'canon-pack.v0.1',
+    version: 'canon-pack.v0.2',
     bookId: input.bookId,
     style: {
       styleGuide: profile?.style_guide || undefined,
@@ -62,7 +140,10 @@ export function buildDesktopCanonPack(input: {
         title: node.title,
         description: nonEmpty(node.description) ? node.description : undefined,
         chapterNumber: node.chapter_number
-      }))
+      })),
+      relations,
+      events,
+      organizations
     },
     retrieval: {
       mode: (input.localCitations || []).length > 0 ? 'local_keyword' : 'off',

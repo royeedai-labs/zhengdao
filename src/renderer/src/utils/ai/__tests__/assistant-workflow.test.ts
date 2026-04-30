@@ -145,7 +145,7 @@ describe('buildDesktopCanonPack', () => {
       localCitations: [{ ref: 'L1', sourceId: '7', title: '第七章 宴会', excerpt: '黑色戒指发烫。' }]
     })
 
-    expect(pack.version).toBe('canon-pack.v0.1')
+    expect(pack.version).toBe('canon-pack.v0.2')
     expect(pack.provenance).toEqual({
       source: 'desktop-local',
       generatedAt: '2026-04-27T00:00:00.000Z',

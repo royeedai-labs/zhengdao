@@ -99,8 +99,48 @@ export type AiAssistantContext = {
   blocks?: AiContextBlock[]
 }
 
+/**
+ * DI-07 v3.3 — Canon Pack contract version bump to v0.2.
+ *
+ * v0.2 adds three optional asset bundles so CG-A3 visual views and the
+ * world-consistency Skill can reason over relationships, timeline events
+ * and organization hierarchy. The fields are optional so v0.1 backend
+ * Skills (which only inspected `canonPackLocks` on the work profile)
+ * still parse a v0.2 pack without changes — they simply ignore unknown
+ * keys.
+ */
+export type AiCanonPackVersion = 'canon-pack.v0.1' | 'canon-pack.v0.2'
+
+export interface AiCanonPackRelation {
+  fromId: string
+  toId: string
+  kind: string
+  label?: string
+  chapterRange?: [number, number]
+  dynamic?: boolean
+}
+
+export interface AiCanonPackEvent {
+  id: string
+  title: string
+  description?: string
+  chapterNumber?: number
+  eventType: 'plot' | 'character' | 'world' | 'foreshadow'
+  importance: 'low' | 'normal' | 'high'
+  relatedCharacterIds?: string[]
+}
+
+export interface AiCanonPackOrganization {
+  id: string
+  name: string
+  description?: string
+  parentId?: string
+  orgType: 'group' | 'faction' | 'company' | 'department'
+  memberIds?: string[]
+}
+
 export type AiCanonPack = {
-  version: 'canon-pack.v0.1'
+  version: AiCanonPackVersion
   bookId: number
   style: {
     styleGuide?: string
@@ -121,6 +161,12 @@ export type AiCanonPack = {
     characters: Array<{ id: string; name: string; description?: string }>
     foreshadowings: Array<{ id: string; text: string; status: string }>
     plotNodes: Array<{ id: string; title: string; description?: string; chapterNumber?: number }>
+    /** DI-07 v3.3 — optional in v0.2; absent in v0.1 packs. */
+    relations?: AiCanonPackRelation[]
+    /** DI-07 v3.3 — optional in v0.2; absent in v0.1 packs. */
+    events?: AiCanonPackEvent[]
+    /** DI-07 v3.3 — optional in v0.2; absent in v0.1 packs. */
+    organizations?: AiCanonPackOrganization[]
   }
   retrieval: {
     mode: 'local_keyword' | 'off'
