@@ -22,6 +22,9 @@ import * as annotationRepo from '../database/annotation-repo'
 import * as trashRepo from '../database/trash-repo'
 import * as templateRepo from '../database/template-repo'
 import * as shortcutRepo from '../database/shortcut-repo'
+import * as canonEventRepo from '../database/canon-event-repo'
+import * as canonOrgRepo from '../database/canon-organization-repo'
+import * as canonCharOrgRepo from '../database/canon-character-org-repo'
 import { searchRepo } from './state'
 
 /**
@@ -248,4 +251,46 @@ export function registerDatabaseIpc(): void {
     annotationRepo.updateAnnotation(id, content)
   )
   ipcMain.handle('db:deleteAnnotation', (_, id: number) => annotationRepo.deleteAnnotation(id))
+
+  // DI-07 v3.2 — Canon Pack v3 events / organizations / character-orgs.
+  // Read paths feed AiSettingsModal editors (T4) + CG-A3 visual views.
+  ipcMain.handle('db:getCanonEvents', (_, bookId: number) => canonEventRepo.listByBookId(bookId))
+  ipcMain.handle('db:getCanonEvent', (_, id: number) => canonEventRepo.getById(id))
+  ipcMain.handle('db:createCanonEvent', (_, input: canonEventRepo.CanonEventInput) =>
+    canonEventRepo.createEvent(input)
+  )
+  ipcMain.handle(
+    'db:updateCanonEvent',
+    (_, id: number, patch: canonEventRepo.CanonEventPatch) => canonEventRepo.updateEvent(id, patch)
+  )
+  ipcMain.handle('db:deleteCanonEvent', (_, id: number) => canonEventRepo.deleteEvent(id))
+
+  ipcMain.handle('db:getCanonOrgs', (_, bookId: number) => canonOrgRepo.listByBookId(bookId))
+  ipcMain.handle('db:getCanonOrg', (_, id: number) => canonOrgRepo.getById(id))
+  ipcMain.handle('db:getCanonOrgTree', (_, bookId: number) => canonOrgRepo.getTree(bookId))
+  ipcMain.handle('db:createCanonOrg', (_, input: canonOrgRepo.CanonOrganizationInput) =>
+    canonOrgRepo.createOrganization(input)
+  )
+  ipcMain.handle(
+    'db:updateCanonOrg',
+    (_, id: number, patch: canonOrgRepo.CanonOrganizationPatch) =>
+      canonOrgRepo.updateOrganization(id, patch)
+  )
+  ipcMain.handle('db:deleteCanonOrg', (_, id: number) => canonOrgRepo.deleteOrganization(id))
+
+  ipcMain.handle('db:getCanonMembershipsByCharacter', (_, characterId: number) =>
+    canonCharOrgRepo.listByCharacter(characterId)
+  )
+  ipcMain.handle('db:getCanonMembershipsByOrg', (_, orgId: number) =>
+    canonCharOrgRepo.listByOrg(orgId)
+  )
+  ipcMain.handle(
+    'db:linkCharacterOrg',
+    (_, input: canonCharOrgRepo.CharacterOrgMembershipInput) => canonCharOrgRepo.link(input)
+  )
+  ipcMain.handle('db:unlinkCharacterOrg', (_, id: number) => canonCharOrgRepo.unlink(id))
+  ipcMain.handle(
+    'db:unlinkCharacterOrgPair',
+    (_, characterId: number, orgId: number) => canonCharOrgRepo.unlinkByPair(characterId, orgId)
+  )
 }

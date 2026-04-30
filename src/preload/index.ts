@@ -122,6 +122,32 @@ const api = {
   updateWikiEntry: (id: number, data: Record<string, unknown>) => ipcRenderer.invoke('db:updateWikiEntry', id, data),
   deleteWikiEntry: (id: number) => ipcRenderer.invoke('db:deleteWikiEntry', id),
 
+  // DI-07 v3.2 — Canon Pack v3 events / organizations / character-org memberships
+  getCanonEvents: (bookId: number) => ipcRenderer.invoke('db:getCanonEvents', bookId),
+  getCanonEvent: (id: number) => ipcRenderer.invoke('db:getCanonEvent', id),
+  createCanonEvent: (input: Record<string, unknown>) =>
+    ipcRenderer.invoke('db:createCanonEvent', input),
+  updateCanonEvent: (id: number, patch: Record<string, unknown>) =>
+    ipcRenderer.invoke('db:updateCanonEvent', id, patch),
+  deleteCanonEvent: (id: number) => ipcRenderer.invoke('db:deleteCanonEvent', id),
+
+  getCanonOrgs: (bookId: number) => ipcRenderer.invoke('db:getCanonOrgs', bookId),
+  getCanonOrg: (id: number) => ipcRenderer.invoke('db:getCanonOrg', id),
+  getCanonOrgTree: (bookId: number) => ipcRenderer.invoke('db:getCanonOrgTree', bookId),
+  createCanonOrg: (input: Record<string, unknown>) => ipcRenderer.invoke('db:createCanonOrg', input),
+  updateCanonOrg: (id: number, patch: Record<string, unknown>) =>
+    ipcRenderer.invoke('db:updateCanonOrg', id, patch),
+  deleteCanonOrg: (id: number) => ipcRenderer.invoke('db:deleteCanonOrg', id),
+
+  getCanonMembershipsByCharacter: (characterId: number) =>
+    ipcRenderer.invoke('db:getCanonMembershipsByCharacter', characterId),
+  getCanonMembershipsByOrg: (orgId: number) => ipcRenderer.invoke('db:getCanonMembershipsByOrg', orgId),
+  linkCharacterOrg: (input: Record<string, unknown>) =>
+    ipcRenderer.invoke('db:linkCharacterOrg', input),
+  unlinkCharacterOrg: (id: number) => ipcRenderer.invoke('db:unlinkCharacterOrg', id),
+  unlinkCharacterOrgPair: (characterId: number, orgId: number) =>
+    ipcRenderer.invoke('db:unlinkCharacterOrgPair', characterId, orgId),
+
   // DI-06 v2 — 团队协作 (走 official auth token 调 /v1/teams/*)
   teamListMine: () => ipcRenderer.invoke('team:listMine'),
   teamCreate: (body: { name: string; plan?: string; seatLimit?: number }) =>
