@@ -13,6 +13,9 @@ import { useUIStore } from '@/stores/ui-store'
 import type { AiSkillOverride, AiSkillTemplate, AiWorkProfile } from '@/utils/ai/assistant-workflow'
 import StyleLearningSection from '../ai/StyleLearningSection'
 import CanonLocksSection from '../ai/CanonLocksSection'
+import RelationsEditor from '../ai/RelationsEditor'
+import EventsEditor from '../ai/EventsEditor'
+import OrganizationsEditor from '../ai/OrganizationsEditor'
 
 type Tab = 'profile' | 'skills'
 
@@ -213,6 +216,9 @@ export default function AiSettingsModal() {
               <TextArea label="章节节奏要求" value={profile.rhythm_rules} onChange={(value) => setProfile((current) => ({ ...current, rhythm_rules: value }))} />
               <StyleLearningSection bookId={bookId} profile={profile} onSaved={refresh} />
               <CanonLocksSection bookId={bookId} profile={profile} onSaved={refresh} />
+              <RelationsEditor bookId={bookId} />
+              <EventsEditor bookId={bookId} />
+              <OrganizationsEditor bookId={bookId} />
               <div className="flex justify-end">
                 <button type="button" onClick={() => void saveProfile()} className="primary-btn">
                   <Save size={14} /> 保存作品上下文
