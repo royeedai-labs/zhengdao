@@ -392,6 +392,36 @@ export function createSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_director_run_links_book ON director_run_links(book_id, updated_at);
 
+    CREATE TABLE IF NOT EXISTS ai_story_fact_proposals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book_id INTEGER NOT NULL,
+      source_type TEXT NOT NULL DEFAULT '',
+      source_ref TEXT NOT NULL DEFAULT '',
+      fact_kind TEXT NOT NULL
+        CHECK(fact_kind IN ('character_status','character_motivation','character_secret','timeline','setting','clue','relationship')),
+      subject TEXT NOT NULL DEFAULT '',
+      fact_key TEXT NOT NULL DEFAULT '',
+      value TEXT NOT NULL DEFAULT '',
+      evidence TEXT NOT NULL DEFAULT '',
+      confidence REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','rejected')),
+      chapter_number INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      UNIQUE(book_id, source_type, source_ref, fact_kind, subject, fact_key, value),
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_story_fact_proposals_book_status ON ai_story_fact_proposals(book_id, status, updated_at);
+
+    CREATE TABLE IF NOT EXISTS ai_story_bible_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book_id INTEGER NOT NULL,
+      compact_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_story_bible_snapshots_book ON ai_story_bible_snapshots(book_id, created_at);
+
     CREATE TABLE IF NOT EXISTS director_run_chapter_cache (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       director_run_link_id INTEGER NOT NULL,

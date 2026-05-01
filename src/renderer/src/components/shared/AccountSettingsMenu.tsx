@@ -6,6 +6,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  MessageSquareText,
   RefreshCw,
   Settings,
   UserRound
@@ -78,6 +79,15 @@ export default function AccountSettingsMenu({
     await logout()
     setOpen(false)
     useToastStore.getState().addToast('success', '已退出证道账号')
+  }
+
+  const handleCommunityFeedback = async () => {
+    setOpen(false)
+    try {
+      await window.api.authOpenCommunityFeedbackPage()
+    } catch (error) {
+      useToastStore.getState().addToast('error', error instanceof Error ? error.message : '无法打开官方社区')
+    }
   }
 
   const menuItemClass =
@@ -177,6 +187,14 @@ export default function AccountSettingsMenu({
             )}
             <button role="menuitem" type="button" onClick={() => openSettingsTab()} className={menuItemClass}>
               <Settings size={14} /> 应用设置
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => void handleCommunityFeedback()}
+              className={menuItemClass}
+            >
+              <MessageSquareText size={14} /> 社区反馈
             </button>
             <button role="menuitem" type="button" onClick={() => openSettingsTab('updates')} className={menuItemClass}>
               <Info size={14} /> 更新与关于

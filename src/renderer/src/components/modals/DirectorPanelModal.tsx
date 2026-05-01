@@ -27,6 +27,7 @@ import type {
   DirectorRunLink,
   DirectorStepName
 } from '../../../../shared/director'
+import type { StoryBibleSnapshot } from '../../../../shared/story-bible'
 
 const STEP_OPTIONS: DirectorStepName[] = [
   'world',
@@ -34,6 +35,7 @@ const STEP_OPTIONS: DirectorStepName[] = [
   'outline',
   'volume_strategy',
   'rhythm_breakdown',
+  'planning_audit',
   'chapter_draft'
 ]
 
@@ -54,6 +56,7 @@ async function buildDirectorCanonContext(bookId: number): Promise<DirectorCanonC
         asset_rules?: string
       }
     | null
+  const storyBible = (await window.api.aiGetStoryBible(bookId).catch(() => null)) as StoryBibleSnapshot | null
   const volumes = useChapterStore.getState().volumes
   const characters = useCharacterStore.getState().characters
   const plotNodes = usePlotStore.getState().plotNodes
@@ -62,6 +65,7 @@ async function buildDirectorCanonContext(bookId: number): Promise<DirectorCanonC
 
   return {
     bookTitle: book?.title,
+    storyBible: storyBible || undefined,
     workProfile: {
       styleGuide: profile?.style_guide || '',
       genreRules: profile?.genre_rules || '',
@@ -103,13 +107,13 @@ export default function DirectorPanelModal() {
   const addToast = useToastStore((s) => s.addToast)
   const [seed, setSeed] = useState('')
   const [genre, setGenre] = useState<Genre>('webnovel')
-  const [maxChapters, setMaxChapters] = useState(5)
+  const [targetChapterCount, setTargetChapterCount] = useState('')
   const [runs, setRuns] = useState<DirectorRunLink[]>([])
   const [activeRunId, setActiveRunId] = useState('')
   const [remoteRun, setRemoteRun] = useState<DirectorRemoteRun | null>(null)
   const [chapters, setChapters] = useState<DirectorChapterCache[]>([])
   const [events, setEvents] = useState<DirectorEvent[]>([])
-  const [regenerateStep, setRegenerateStep] = useState<DirectorStepName>('chapter_draft')
+  const [regenerateStep, setRegenerateStep] = useState<DirectorStepName>('planning_audit')
   const [loading, setLoading] = useState(false)
   const cleanupRef = useRef<null | (() => Promise<void>)>(null)
 
@@ -171,11 +175,16 @@ export default function DirectorPanelModal() {
     setLoading(true)
     try {
       const canonContext = await buildDirectorCanonContext(bookId)
+      const target = Number(targetChapterCount)
       const result = await window.api.director.startRun({
         bookId,
         seed: trimmed,
         genre,
-        options: { maxChapters, canonContext }
+        options: {
+          mode: 'plan_only',
+          ...(Number.isFinite(target) && target > 0 ? { targetChapterCount: Math.round(target) } : {}),
+          canonContext
+        }
       }) as { runId: string }
       setActiveRunId(result.runId)
       setEvents([])
@@ -273,14 +282,14 @@ export default function DirectorPanelModal() {
                 </select>
               </label>
               <label className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                Chapters
+                Planning size
                 <input
                   type="number"
                   min={1}
-                  max={20}
-                  value={maxChapters}
-                  onChange={(e) => setMaxChapters(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                  value={targetChapterCount}
+                  onChange={(e) => setTargetChapterCount(e.target.value)}
                   className="field mt-1 w-full text-xs"
+                  placeholder="按篇幅推导"
                 />
               </label>
             </div>
@@ -357,8 +366,97 @@ export default function DirectorPanelModal() {
 
             <section className="grid min-h-0 grid-cols-[minmax(0,1fr)_320px] overflow-hidden">
               <div className="overflow-y-auto p-4">
-                <h3 className="mb-3 text-sm font-bold text-[var(--text-primary)]">章节草稿</h3>
-                {chapters.length === 0 ? (
+                <h3 className="mb-3 text-sm font-bold text-[var(--text-primary)]">
+                  {remoteRun?.planningPack ? '整本规划' : '章节草稿'}
+                </h3>
+                {remoteRun?.planningPack ? (
+                  <div className="space-y-3">
+                    <article className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold text-[var(--text-primary)]">
+                            {remoteRun.planningPack.promise.premise}
+                          </div>
+                          <div className="mt-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                            {remoteRun.planningPack.qualityReport.status} · {remoteRun.planningPack.rhythmProfile.rhythmType}
+                          </div>
+                        </div>
+                      </div>
+                      <dl className="grid gap-2 text-xs text-[var(--text-secondary)] md:grid-cols-2">
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Reader promise</dt>
+                          <dd>{remoteRun.planningPack.promise.readerExpectation}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Central question</dt>
+                          <dd>{remoteRun.planningPack.promise.centralQuestion}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Benefit rule</dt>
+                          <dd>{remoteRun.planningPack.rhythmProfile.readerBenefitPrinciple}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Audit rule</dt>
+                          <dd>{remoteRun.planningPack.qualityReport.dynamicStandard}</dd>
+                        </div>
+                      </dl>
+                    </article>
+
+                    {remoteRun.planningPack.qualityReport.issues.length > 0 && (
+                      <article className="rounded-lg border border-[var(--warning-primary)] bg-[var(--warning-surface)] p-3">
+                        <h4 className="mb-2 text-xs font-bold text-[var(--text-primary)]">审校问题</h4>
+                        <ol className="space-y-2 text-xs text-[var(--text-secondary)]">
+                          {remoteRun.planningPack.qualityReport.issues.map((issue, index) => (
+                            <li key={`${issue.scope}-${index}`}>
+                              <span className="font-semibold text-[var(--text-primary)]">{issue.scope}</span>
+                              <span> · {issue.message}</span>
+                              <div className="mt-1 text-[var(--text-muted)]">{issue.recommendation}</div>
+                            </li>
+                          ))}
+                        </ol>
+                      </article>
+                    )}
+
+                    <div className="space-y-2">
+                      {remoteRun.planningPack.chapters.map((chapter) => (
+                        <article key={chapter.chapterIndex} className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3">
+                          <div className="text-sm font-bold text-[var(--text-primary)]">
+                            {chapter.chapterIndex}. {chapter.title}
+                          </div>
+                          <p className="mt-2 text-xs leading-6 text-[var(--text-secondary)]">{chapter.purpose}</p>
+                          <dl className="mt-2 grid gap-2 text-xs text-[var(--text-secondary)] md:grid-cols-2">
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Reader benefit</dt>
+                              <dd>{chapter.readerBenefit}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Hook / payoff</dt>
+                              <dd>{chapter.payoffOrHook}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Obstacle / cost</dt>
+                              <dd>{chapter.obstacle} / {chapter.cost}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Scene anchors</dt>
+                              <dd>{chapter.sceneAnchors?.smell} · {chapter.sceneAnchors?.sound} · {chapter.sceneAnchors?.eraProp}</dd>
+                            </div>
+                          </dl>
+                          {chapter.clueFragments?.length > 0 && (
+                            <div className="mt-2 rounded border border-[var(--border-secondary)] p-2 text-[11px] text-[var(--text-secondary)]">
+                              <div className="mb-1 font-semibold text-[var(--text-primary)]">线索三分</div>
+                              {chapter.clueFragments.map((fragment, index) => (
+                                <div key={`${chapter.chapterIndex}-clue-${index}`}>
+                                  {index + 1}. {fragment.fragment} · {fragment.source}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                ) : chapters.length === 0 ? (
                   <div className="rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] p-4 text-center text-xs text-[var(--text-muted)]">
                     暂无章节草稿
                   </div>

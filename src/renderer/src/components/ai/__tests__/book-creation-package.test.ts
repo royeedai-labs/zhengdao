@@ -1,7 +1,11 @@
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { validateBookCreationPackage, type AiBookCreationPackage } from '../../../../../shared/ai-book-creation'
+import {
+  getAiBookCreationRequirements,
+  validateBookCreationPackage,
+  type AiBookCreationPackage
+} from '../../../../../shared/ai-book-creation'
 import {
   buildFallbackBookCreationPackage,
   mergeBookCreationPackageWithFallback
@@ -30,9 +34,9 @@ describe('book creation package fallback', () => {
         relationType: 'ally'
       })
     ])
-    expect(fallback.volumes[0].chapters).toHaveLength(3)
-    expect(fallback.plotNodes).toHaveLength(3)
-    expect(fallback.foreshadowings).toHaveLength(1)
+    expect(fallback.volumes[0].chapters).toHaveLength(10)
+    expect(fallback.plotNodes).toHaveLength(10)
+    expect(fallback.foreshadowings).toHaveLength(2)
     expect(fallback.volumes[0].chapters.every((chapter) => chapter.content === '')).toBe(true)
     expect(validateBookCreationPackage(fallback, { minCharacters: 2 })).toEqual({
       ok: true,
@@ -71,6 +75,51 @@ describe('book creation package fallback', () => {
     expect(repaired.wikiEntries.length).toBeGreaterThanOrEqual(2)
     expect(repaired.foreshadowings).toHaveLength(1)
     expect(repaired.volumes[0].chapters.every((chapter) => chapter.content === '')).toBe(true)
+  })
+
+  it('repairs an underbuilt model package to explicit two-volume eight-chapter requirements', () => {
+    const brief = {
+      seedIdea: '写一部急诊科医生的日常',
+      chapterPlan: '2 卷 8 章',
+      characterPlan: '超 10 个人物，2 个主角'
+    }
+    const fallback = buildFallbackBookCreationPackage(brief)
+    const requirements = getAiBookCreationRequirements(brief)
+    const modelPackage: AiBookCreationPackage = {
+      book: { title: '急诊夜班' },
+      volumes: [{
+        title: '第一卷',
+        chapters: [
+          { title: '第一章', summary: '围绕要 2 卷 8 章展开。', content: '正文' },
+          { title: '第二章', summary: '超 10 个人物 2 个主角。', content: '' },
+          { title: '第三章', summary: '推进线索。', content: '' }
+        ]
+      }],
+      characters: [{ name: '主角', description: '超 10 个人物，2 个主角' }],
+      wikiEntries: [],
+      plotNodes: [{ chapterNumber: 1, title: '开篇', score: 1 }],
+      foreshadowings: []
+    }
+
+    const repaired = mergeBookCreationPackageWithFallback(modelPackage, fallback)
+
+    expect(repaired.volumes).toHaveLength(2)
+    expect(repaired.volumes.map((volume) => volume.chapters.length)).toEqual([4, 4])
+    expect(repaired.volumes.flatMap((volume) => volume.chapters)).toHaveLength(8)
+    expect(repaired.volumes[0].chapters[0].summary).not.toMatch(/2 卷|8 章|超 10|沟通|需求/)
+    expect(repaired.characters).toHaveLength(11)
+    expect(repaired.characters.map((character) => character.name)).not.toContain('超 10 个人物')
+    expect(repaired.characters[0].customFields?.role).toContain('主角')
+    expect(repaired.characters[1].customFields?.role).toContain('主角')
+    expect(repaired.characters.every((character) => character.customFields?.personality)).toBe(true)
+    expect(repaired.plotNodes.map((node) => node.chapterNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(validateBookCreationPackage(repaired, {
+      minCharacters: requirements.minCharacters,
+      minChapters: requirements.totalChapters,
+      minWikiEntries: requirements.minWikiEntries,
+      minPlotNodes: requirements.minPlotNodes,
+      minForeshadowings: requirements.minForeshadowings
+    })).toEqual({ ok: true, errors: [] })
   })
 
   it('builds a valid fallback package from only a one-line seed idea', () => {

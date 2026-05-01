@@ -75,6 +75,36 @@ describe('runMigrations', () => {
     }
   })
 
+  it('creates Story Bible fact proposal and snapshot tables', () => {
+    const db = new BetterSqlite3(':memory:') as Database.Database
+
+    try {
+      createSchema(db)
+
+      expect(() => runMigrations(db)).not.toThrow()
+
+      const tableRows = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('ai_story_fact_proposals', 'ai_story_bible_snapshots') ORDER BY name"
+        )
+        .all() as { name: string }[]
+
+      expect(tableRows.map((row) => row.name)).toEqual([
+        'ai_story_bible_snapshots',
+        'ai_story_fact_proposals'
+      ])
+
+      const proposalColumns = db.prepare('PRAGMA table_info(ai_story_fact_proposals)').all() as {
+        name: string
+      }[]
+      expect(proposalColumns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(['fact_kind', 'subject', 'fact_key', 'confidence', 'status'])
+      )
+    } finally {
+      db.close()
+    }
+  })
+
   it('creates Pro beta cache tables for director, visual assets, read-only MCP links, and collaboration mirrors', () => {
     const db = new BetterSqlite3(':memory:') as Database.Database
 

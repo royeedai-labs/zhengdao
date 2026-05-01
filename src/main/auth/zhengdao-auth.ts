@@ -72,6 +72,10 @@ export class ZhengdaoAuth {
     await shell.openExternal(`${WEBSITE_URL}/app/account`)
   }
 
+  async openCommunityFeedbackPage(): Promise<void> {
+    await shell.openExternal(`${WEBSITE_URL}/community/new?category=feedback`)
+  }
+
   async handleCallback(url: string): Promise<ZhengdaoUser> {
     const parsed = new URL(url)
     const state = parsed.searchParams.get('state')

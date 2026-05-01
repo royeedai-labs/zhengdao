@@ -4,6 +4,8 @@ import {
   detectDesktopShellPlatform,
   getDesktopWindowChrome,
   getTitlebarSafeArea,
+  getWindowsTitlebarOverlay,
+  normalizeTitlebarOverlayColors,
   shouldStripNativeMenu
 } from '../window-shell'
 
@@ -29,8 +31,8 @@ describe('window-shell', () => {
     expect(getDesktopWindowChrome('win32')).toMatchObject({
       titleBarStyle: 'hidden',
       titleBarOverlay: {
-        color: '#141414',
-        symbolColor: '#d4d4d8',
+        color: '#ffffff',
+        symbolColor: '#526173',
         height: 48
       }
     })
@@ -58,5 +60,31 @@ describe('window-shell', () => {
       'darwin'
     )
     expect(detectDesktopShellPlatform('Mozilla/5.0 (X11; Linux x86_64)')).toBe('linux')
+  })
+
+  it('can initialize and sanitize Windows title bar overlay colors', () => {
+    expect(getDesktopWindowChrome('win32', { prefersDarkTitlebar: true })).toMatchObject({
+      titleBarOverlay: {
+        color: '#171d25',
+        symbolColor: '#a8b5c4',
+        height: 48
+      }
+    })
+
+    expect(
+      getWindowsTitlebarOverlay(false, {
+        color: ' #eef3f8 ',
+        symbolColor: 'not-a-color'
+      })
+    ).toMatchObject({
+      color: '#eef3f8',
+      symbolColor: '#526173',
+      height: 48
+    })
+
+    expect(normalizeTitlebarOverlayColors({ color: 'rgb(23, 29, 37)', symbolColor: '#a8b5c4' })).toEqual({
+      color: 'rgb(23, 29, 37)',
+      symbolColor: '#a8b5c4'
+    })
   })
 })

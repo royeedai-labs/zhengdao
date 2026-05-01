@@ -16,6 +16,7 @@ export function registerAuthIpc(): void {
   ipcMain.handle('auth:getAccessToken', async () => zhengdaoAuth.getAccessToken())
   ipcMain.handle('auth:openUpgradePage', async () => zhengdaoAuth.openUpgradePage())
   ipcMain.handle('auth:openAccountPage', async () => zhengdaoAuth.openAccountPage())
+  ipcMain.handle('auth:openCommunityFeedbackPage', async () => zhengdaoAuth.openCommunityFeedbackPage())
 }
 
 export async function handleZhengdaoAuthCallbackUrl(url: string): Promise<void> {

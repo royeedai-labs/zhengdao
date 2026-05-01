@@ -16,7 +16,7 @@ import {
 } from '../streaming-message'
 import {
   CREATION_BRIEF_FIELDS,
-  getMinimumCharacterCount,
+  getAiBookCreationRequirements,
   hasCreationBriefInput,
   normalizeCreationBrief,
   stripBookCreationChapterContent,
@@ -118,6 +118,7 @@ export function BookshelfCreationAssistantPanel(): JSX.Element {
   const nextLocalMessageIdRef = useRef(-1)
   const sendCommandRef = useRef<(text: string) => void>(() => {})
   const normalizedBrief = useMemo(() => normalizeCreationBrief(brief), [brief])
+  const creationRequirements = useMemo(() => getAiBookCreationRequirements(brief), [brief])
   const pendingSeedIdea = input.trim()
   const effectiveBrief = useMemo(
     () =>
@@ -127,10 +128,15 @@ export function BookshelfCreationAssistantPanel(): JSX.Element {
       }),
     [brief, pendingSeedIdea]
   )
-  const minimumCharacters = useMemo(() => getMinimumCharacterCount(brief), [brief])
   const packageValidation = useMemo(
-    () => validateBookCreationPackage(packageDraft, { minCharacters: minimumCharacters }),
-    [minimumCharacters, packageDraft]
+    () => validateBookCreationPackage(packageDraft, {
+      minCharacters: creationRequirements.minCharacters,
+      minChapters: creationRequirements.totalChapters,
+      minWikiEntries: creationRequirements.minWikiEntries,
+      minPlotNodes: creationRequirements.minPlotNodes,
+      minForeshadowings: creationRequirements.minForeshadowings
+    }),
+    [creationRequirements, packageDraft]
   )
   const canGeneratePackage = hasCreationBriefInput(effectiveBrief) && !loading
   const canCreate = packageValidation.ok && !creating
@@ -388,7 +394,7 @@ export function BookshelfCreationAssistantPanel(): JSX.Element {
             streamError = message
           }
         },
-        3200,
+        4600,
         0.72
       )
       await queue.drain()
@@ -408,7 +414,14 @@ export function BookshelfCreationAssistantPanel(): JSX.Element {
       const pkg = stripBookCreationChapterContent(
         mergeBookCreationPackageWithFallback(aiPackage, buildFallbackBookCreationPackage(briefForPackage))
       )
-      const validation = validateBookCreationPackage(pkg, { minCharacters: getMinimumCharacterCount(briefForPackage) })
+      const requirementsForPackage = getAiBookCreationRequirements(briefForPackage)
+      const validation = validateBookCreationPackage(pkg, {
+        minCharacters: requirementsForPackage.minCharacters,
+        minChapters: requirementsForPackage.totalChapters,
+        minWikiEntries: requirementsForPackage.minWikiEntries,
+        minPlotNodes: requirementsForPackage.minPlotNodes,
+        minForeshadowings: requirementsForPackage.minForeshadowings
+      })
       if (!validation.ok) {
         setError(validation.errors.join('；') || 'AI 返回的起书方案格式无效，请重试。')
         setMessages((current) =>
@@ -807,6 +820,70 @@ export function BookshelfCreationAssistantPanel(): JSX.Element {
                   <div>剧情 {packageDraft.plotNodes.length}</div>
                   <div>伏笔 {packageDraft.foreshadowings.length}</div>
                   <div className="col-span-2">正文不会直接写入</div>
+                </div>
+                <div className="space-y-2 border-t border-[var(--warning-border)] pt-2">
+                  <div className="text-[11px] font-bold text-[var(--text-primary)]">分卷章节</div>
+                  {packageDraft.volumes.slice(0, 6).map((volume, volumeIndex) => (
+                    <div key={`preview-volume-${volumeIndex}`} className="space-y-1">
+                      <div className="text-[11px] font-semibold text-[var(--text-secondary)]">{volume.title}</div>
+                      {volume.chapters.slice(0, 12).map((chapter, chapterIndex) => (
+                        <div key={`preview-chapter-${volumeIndex}-${chapterIndex}`} className="rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2">
+                          <div className="text-[11px] font-semibold text-[var(--text-primary)]">{chapter.title}</div>
+                          <div className="mt-1 line-clamp-3 text-[10px] leading-relaxed text-[var(--text-muted)]">
+                            {chapter.summary || '摘要待补齐'}
+                          </div>
+                        </div>
+                      ))}
+                      {volume.chapters.length > 12 && (
+                        <div className="text-[10px] text-[var(--text-muted)]">另 {volume.chapters.length - 12} 章</div>
+                      )}
+                    </div>
+                  ))}
+                  {packageDraft.volumes.length > 6 && (
+                    <div className="text-[10px] text-[var(--text-muted)]">另 {packageDraft.volumes.length - 6} 卷</div>
+                  )}
+                </div>
+                <div className="space-y-1 border-t border-[var(--warning-border)] pt-2">
+                  <div className="text-[11px] font-bold text-[var(--text-primary)]">人物</div>
+                  {packageDraft.characters.slice(0, 12).map((character, index) => (
+                    <div key={`preview-character-${character.name}-${index}`} className="rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2">
+                      <div className="text-[11px] font-semibold text-[var(--text-primary)]">
+                        {character.name}
+                        {character.customFields?.role ? ` · ${character.customFields.role}` : ''}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[var(--text-muted)]">
+                        {character.customFields?.personality || character.description || '人设待补齐'}
+                      </div>
+                    </div>
+                  ))}
+                  {packageDraft.characters.length > 12 && (
+                    <div className="text-[10px] text-[var(--text-muted)]">另 {packageDraft.characters.length - 12} 人物</div>
+                  )}
+                </div>
+                <div className="space-y-1 border-t border-[var(--warning-border)] pt-2">
+                  <div className="text-[11px] font-bold text-[var(--text-primary)]">设定 / 剧情 / 伏笔</div>
+                  {packageDraft.wikiEntries.slice(0, 4).map((entry, index) => (
+                    <div key={`preview-wiki-${entry.category}-${entry.title}-${index}`} className="text-[10px] leading-relaxed text-[var(--text-secondary)]">
+                      <span className="font-semibold text-[var(--text-primary)]">{entry.category} · {entry.title}：</span>
+                      {entry.content}
+                    </div>
+                  ))}
+                  {packageDraft.plotNodes.slice(0, 10).map((node, index) => (
+                    <div key={`preview-plot-${node.chapterNumber}-${index}`} className="text-[10px] leading-relaxed text-[var(--text-secondary)]">
+                      <span className="font-semibold text-[var(--text-primary)]">Ch.{node.chapterNumber} {node.title}：</span>
+                      {node.description}
+                    </div>
+                  ))}
+                  {packageDraft.plotNodes.length > 10 && (
+                    <div className="text-[10px] text-[var(--text-muted)]">另 {packageDraft.plotNodes.length - 10} 个剧情节点</div>
+                  )}
+                  {packageDraft.foreshadowings.slice(0, 4).map((item, index) => (
+                    <div key={`preview-foreshadow-${index}`} className="text-[10px] leading-relaxed text-[var(--text-secondary)]">
+                      <span className="font-semibold text-[var(--text-primary)]">伏笔：</span>
+                      {item.text}
+                      {item.expectedChapter ? `（第 ${item.expectedChapter} 章回收）` : ''}
+                    </div>
+                  ))}
                 </div>
                 {packageValidation.errors.length > 0 && (
                   <div className="text-[var(--danger-primary)]">

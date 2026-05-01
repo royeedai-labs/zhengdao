@@ -15,6 +15,7 @@ import {
   type AiSkillOverride,
   type AiWorkProfile
 } from '../assistant-workflow'
+import { scanNarrativeQuality } from '../workflow/quality-filter'
 
 const baseSkill: AiSkillTemplate = {
   id: 1,
@@ -185,7 +186,7 @@ describe('resolveAssistantContextPolicy', () => {
 })
 
 describe('composeSkillPrompt', () => {
-  it('combines the work profile, skill prompt, context chips, and user input', () => {
+  it('combines the work profile, story bible, quality rules, context chips, and user input', () => {
     const prompt = composeSkillPrompt({
       skill: baseSkill,
       profile,
@@ -193,15 +194,51 @@ describe('composeSkillPrompt', () => {
         contextText: '当前章节：主角来到宴会。',
         chips: [{ id: 'chapter:7', kind: 'chapter', label: '第七章 宴会', enabled: true }]
       },
-      userInput: '续写 800 字'
+      userInput: '续写 800 字',
+      storyBible: {
+        version: 'story-bible.v1',
+        bookId: 10,
+        generatedAt: '2026-05-02T00:00:00.000Z',
+        characters: [{ id: 1, name: '林凡', status: 'active', motivation: '保护妹妹' }],
+        timeline: [{ id: 1, title: '十年前火灾', description: '旧案起点', chapterNumber: null }],
+        settings: [{ id: 1, title: '刑期', content: '七年' }],
+        foreshadowings: [],
+        plotNodes: [],
+        pendingFacts: []
+      }
     })
 
     expect(prompt.systemPrompt).toContain('你是网文助手。')
     expect(prompt.systemPrompt).toContain('短句，强节奏。')
     expect(prompt.systemPrompt).toContain('不要改写已经确认的主线设定。')
+    expect(prompt.systemPrompt).toContain('全局故事圣经')
+    expect(prompt.systemPrompt).toContain('"name": "林凡"')
+    expect(prompt.systemPrompt).toContain('十年前火灾')
+    expect(prompt.systemPrompt).toContain('线索获取不得机械降神')
     expect(prompt.userPrompt).toContain('请续写：续写 800 字')
     expect(prompt.userPrompt).toContain('当前章节：主角来到宴会。')
     expect(prompt.userPrompt).toContain('第七章 宴会')
+  })
+})
+
+describe('scanNarrativeQuality', () => {
+  it('flags repeated openings and generic action phrases before draft acceptance', () => {
+    const issues = scanNarrativeQuality(
+      [
+        '林凡推开门，闻到纸灰味。',
+        '他停在门口，听见楼下铁门响。',
+        '她把旧照片塞进袖口，脸色一变。',
+        '王叔沉默了几秒，指尖摩挲着钥匙齿。',
+      ].join('\n\n')
+    )
+
+    expect(issues.map((issue) => issue.patternId)).toEqual(
+      expect.arrayContaining([
+        'forbidden-action.脸色一变',
+        'forbidden-action.沉默了几秒',
+        'paragraph.subject-opening-run'
+      ])
+    )
   })
 })
 

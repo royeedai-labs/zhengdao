@@ -30,58 +30,78 @@ import { createBookFromAiPackage } from '../ai-book-creation-repo'
 
 function completeBrief(): AssistantCreationBrief {
   return {
-    title: '长夜证道',
-    genreTheme: '都市修真，主题是代价与选择',
-    targetLength: '100 万字',
-    chapterPlan: '300 章，每章约 3000 字',
-    characterPlan: '主角、反派、3 个关键配角',
-    styleAudiencePlatform: '男频爽文，起点向',
-    worldbuilding: '现代都市中隐藏修真门派',
-    boundaries: '不写血腥虐杀',
-    otherRequirements: '无',
+    title: '急诊夜班',
+    seedIdea: '急诊科医生的日常，每天日常加很多紧急情况医学处理',
+    genreTheme: '现实医疗，核心冲突是专业判断、患者信任和医院流程压力',
+    targetLength: '8 章试写',
+    chapterPlan: '2 卷 8 章',
+    characterPlan: '超 10 个人物，2 个主角',
+    styleAudiencePlatform: '现实质感，强情节但不过度夸张',
+    worldbuilding: '三甲医院急诊科',
+    boundaries: '不写血腥猎奇',
+    otherRequirements: '前 3 章爽点和悬念要合理',
     confirmed: true
   }
 }
 
 function packageDraft(): AiBookCreationPackage {
+  const chapters = Array.from({ length: 8 }, (_, index) => ({
+    title: `第${index + 1}章 急诊事件${index + 1}`,
+    content: index === 0 ? '这段不应直接进入正文。' : '',
+    summary: `第${index + 1}章围绕急诊事件推进，完成一次专业判断、关系变化或悬念升级。`
+  }))
+  const customFields = (index: number) => ({
+    role: index < 2 ? `第${index + 1}主角` : '功能角色',
+    personality: index < 2 ? '冷静果断，重视患者结果' : '立场明确，能制造信息差',
+    goal: index < 2 ? '守住急诊判断并推进核心事件' : '推动医疗事件升级或提供关键线索',
+    specialty: index < 2 ? '急诊判断与现场协调' : '专业资源、人脉或现实压力',
+    arc: `第${index + 1}名人物在前八章完成一次立场或关系变化。`
+  })
   return {
-    book: { title: '长夜证道', author: '测试作者' },
+    book: { title: '急诊夜班', author: '测试作者' },
     workProfile: {
       productGenre: 'webnovel',
-      styleGuide: '冷静克制，冲突推进明确',
-      contentBoundaries: '不写血腥虐杀'
+      styleGuide: '现实质感，专业判断清楚，冲突推进明确',
+      contentBoundaries: '不写血腥猎奇'
     },
     volumes: [
       {
-        title: '第一卷',
-        chapters: [
-          { title: '第一章 风雪夜归人', content: '他在风雪里推开门。', summary: '主角登场。' },
-          { title: '第二章 旧地铃声', content: '', summary: '线索推进。' },
-          { title: '第三章 隐门初现', content: '', summary: '第一次反转。' }
-        ]
+        title: '第一卷 开篇入局',
+        chapters: chapters.slice(0, 4)
+      },
+      {
+        title: '第二卷 升级反转',
+        chapters: chapters.slice(4)
       }
     ],
-    characters: [
-      { name: '陆明', faction: 'protagonist', status: 'active', description: '主角' },
-      { name: '沈青', faction: 'ally', status: 'active', description: '关键盟友' },
-      { name: '玄衡', faction: 'antagonist', status: 'active', description: '反派' },
-      { name: '周伯', faction: 'neutral', status: 'active', description: '旧事知情人' },
-      { name: '林月', faction: 'ally', status: 'active', description: '关键配角' }
-    ],
+    characters: Array.from({ length: 11 }, (_, index) => ({
+      name: index === 0 ? '许知远' : index === 1 ? '林夏' : `急诊人物${index + 1}`,
+      faction: index < 2 ? 'protagonist' : index === 2 ? 'antagonist' : 'neutral',
+      status: 'active',
+      description: `第${index + 1}名人物承担急诊主线中的专业、关系或现实压力功能。`,
+      customFields: customFields(index)
+    })),
     relations: [
-      { sourceName: '陆明', targetName: '沈青', relationType: 'ally', label: '共同追查隐门旧案' },
-      { sourceName: '陆明', targetName: '玄衡', relationType: 'enemy', label: '围绕灵脉争夺正面对抗' }
+      { sourceName: '许知远', targetName: '林夏', relationType: 'ally', label: '双主角互补推进急诊主线' },
+      { sourceName: '许知远', targetName: '急诊人物3', relationType: 'rival', label: '围绕处置判断形成阶段性冲突' }
     ],
     wikiEntries: [
-      { category: '世界观', title: '隐门', content: '隐藏在都市中的修行组织。' },
-      { category: '规则', title: '灵脉', content: '灵脉觉醒会引发旧势力争夺。' }
+      { category: '世界观', title: '三甲医院急诊科', content: '急诊科以分诊、抢救、观察和转科流程推动故事节奏。' },
+      { category: '行业规则', title: '分诊优先级', content: '患者危急程度决定处置顺序，也是冲突来源之一。' },
+      { category: '主线冲突', title: '专业判断与信任', content: '主角需要在证据不完整时做出负责判断。' },
+      { category: '节奏规则', title: '压力与兑现', content: '压力节点必须服务后续反击或医学处置兑现。' }
     ],
-    plotNodes: [
-      { chapterNumber: 1, title: '归来', score: 2, nodeType: 'main', description: '主角回到旧地。' },
-      { chapterNumber: 2, title: '旧铃线索', score: 2, nodeType: 'main', description: '铜铃指向隐门旧案。' },
-      { chapterNumber: 3, title: '隐门反转', score: 3, nodeType: 'main', description: '旧地不是普通故居。' }
-    ],
-    foreshadowings: [{ text: '门口的旧铜铃无人自响', expectedChapter: 12, expectedWordCount: null }]
+    plotNodes: Array.from({ length: 8 }, (_, index) => ({
+      chapterNumber: index + 1,
+      title: `急诊节点${index + 1}`,
+      score: [1, 2, 3, -1, 1, -2, 2, 4][index],
+      nodeType: 'main' as const,
+      description: `第${index + 1}章提供专业判断、线索落地、压力升级或阶段兑现。`
+    })),
+    foreshadowings: [
+      { text: '第一章分诊台上的异常病历第三章回收', expectedChapter: 3, expectedWordCount: null },
+      { text: '第六章患者家属的一句话第八章回收', expectedChapter: 8, expectedWordCount: null }
+    ]
   }
 }
 
@@ -102,27 +122,46 @@ describe('AI book creation repository', () => {
     const result = createBookFromAiPackage({
       brief: completeBrief(),
       package: packageDraft(),
-      messages: [{ role: 'user', content: '我要写一部都市修真。' }]
+      messages: [{ role: 'user', content: '我要写一部急诊科医生日常。' }]
     }) as { book: { id: number; title: string; cover_path: string; cover_url: string }; firstChapterId: number; conversationId: number }
 
-    expect(result.book.title).toBe('长夜证道')
+    expect(result.book.title).toBe('急诊夜班')
     expect(result.book.cover_path.endsWith('auto-cover.svg')).toBe(true)
     expect(result.book.cover_url).toMatch(/^zhengdao-cover:\/\/book\//)
     expect(result.firstChapterId).toBeGreaterThan(0)
     expect(result.conversationId).toBeGreaterThan(0)
-    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM chapters').get()).toEqual({ count: 3 })
-    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM characters').get()).toEqual({ count: 5 })
+    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM volumes').get()).toEqual({ count: 2 })
+    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM chapters').get()).toEqual({ count: 8 })
+    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM characters').get()).toEqual({ count: 11 })
     expect(state.db!.prepare('SELECT COUNT(*) AS count FROM character_relations').get()).toEqual({ count: 2 })
-    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM settings_wiki').get()).toEqual({ count: 2 })
-    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM plot_nodes').get()).toEqual({ count: 3 })
-    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM foreshadowings').get()).toEqual({ count: 1 })
+    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM settings_wiki').get()).toEqual({ count: 4 })
+    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM plot_nodes').get()).toEqual({ count: 8 })
+    expect(state.db!.prepare('SELECT COUNT(*) AS count FROM foreshadowings').get()).toEqual({ count: 2 })
     expect(state.db!.prepare('SELECT COUNT(*) AS count FROM ai_messages').get()).toEqual({ count: 1 })
+    expect(
+      state.db!.prepare('SELECT genre, character_fields, faction_labels, status_labels FROM project_config WHERE book_id = ?').get(result.book.id)
+    ).toMatchObject({
+      genre: 'AI 起书'
+    })
+    expect(
+      JSON.parse((state.db!.prepare('SELECT character_fields FROM project_config WHERE book_id = ?').get(result.book.id) as { character_fields: string }).character_fields)
+        .map((field: { key: string }) => field.key)
+    ).toEqual(['role', 'personality', 'goal', 'specialty', 'arc'])
+    expect(
+      JSON.parse((state.db!.prepare("SELECT custom_fields FROM characters WHERE name = '许知远'").get() as { custom_fields: string }).custom_fields)
+    ).toMatchObject({
+      role: '第1主角',
+      personality: '冷静果断，重视患者结果'
+    })
+    expect(
+      state.db!.prepare('SELECT chapter_number FROM plot_nodes ORDER BY chapter_number').all()
+    ).toEqual(Array.from({ length: 8 }, (_, index) => ({ chapter_number: index + 1 })))
     expect(
       state.db!.prepare('SELECT content, word_count, summary FROM chapters WHERE id = ?').get(result.firstChapterId)
     ).toEqual({
       content: '',
       word_count: 0,
-      summary: '主角登场。'
+      summary: '第1章围绕急诊事件推进，完成一次专业判断、关系变化或悬念升级。'
     })
   })
 

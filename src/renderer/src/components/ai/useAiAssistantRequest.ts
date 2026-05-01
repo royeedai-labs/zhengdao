@@ -30,6 +30,7 @@ import {
 } from './streaming-message'
 import { toAiChapterDraft, toInlineAiDraft } from './inline-draft'
 import { draftTitle, normalizeAssistantDrafts, withLocalRagChip } from './ai-assistant-helpers'
+import { scanNarrativeQuality } from '@/utils/ai/workflow/quality-filter'
 
 /**
  * SPLIT-006 phase 4 — AI request orchestration hook.
@@ -188,19 +189,22 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
       deps.activeRequestAbortRef.current = requestAbortController
       const requestContext =
         aiConfig.ai_provider === 'zhengdao_official' ? withLocalRagChip(deps.context) : deps.context
+      const storyBible = await window.api.aiGetStoryBible(deps.bookId).catch(() => null)
 
       const prompt = skill
         ? composeSkillPrompt({
             skill,
             profile: deps.profile,
             context: requestContext,
-            userInput: text
+            userInput: text,
+            storyBible
           })
         : composeAssistantChatPrompt({
             profile: deps.profile,
             context: requestContext,
             skills: deps.skills,
-            userInput: text
+            userInput: text,
+            storyBible
           })
       const userMessage = (await window.api.aiAddMessage(deps.conversationId, 'user', text, {
         skill_key: skill?.key ?? null,
@@ -306,6 +310,7 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
         return
       }
 
+      const qualityIssues = scanNarrativeQuality(streamedContent)
       const assistantMessage = (await window.api.aiAddMessage(
         deps.conversationId,
         'assistant',
@@ -314,9 +319,17 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
           skill_key: skill?.key ?? null,
           mode: skill ? 'skill' : 'chat',
           intent_reason: requestIntent.reason,
-          intent_confidence: requestIntent.confidence
+          intent_confidence: requestIntent.confidence,
+          quality_issues: qualityIssues
         }
       )) as { id: number }
+      await window.api.aiCaptureStoryFacts({
+        bookId: deps.bookId,
+        sourceType: 'assistant_message',
+        sourceRef: String(assistantMessage.id),
+        text: streamedContent,
+        chapterNumber: null
+      }).catch(() => null)
       deps.setMessages((current) =>
         completeAssistantStreamMessage(
           current,
@@ -331,7 +344,8 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
                   skill_key: skill?.key ?? null,
                   mode: skill ? 'skill' : 'chat',
                   intent_reason: requestIntent.reason,
-                  intent_confidence: requestIntent.confidence
+                  intent_confidence: requestIntent.confidence,
+                  quality_issues: qualityIssues
                 }
               }
             : message

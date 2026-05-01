@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ModalType } from '@/types'
 import { isThemeId, resolveThemeMode, type ThemeId } from '@/utils/themes'
+import { syncCurrentTitlebarOverlay } from '@/utils/window-shell'
 import {
   clampWorkspacePanelWidth,
   clampWorkspaceLayoutPanelSizes,
@@ -75,6 +76,7 @@ function applyThemeToDocument(theme: ThemeId): void {
   document.documentElement.dataset.theme = resolved
   document.documentElement.dataset.themeMode = theme
   document.documentElement.style.colorScheme = resolved === 'light' ? 'light' : 'dark'
+  syncCurrentTitlebarOverlay()
 }
 
 const initialTheme = readStoredTheme() as ThemeId

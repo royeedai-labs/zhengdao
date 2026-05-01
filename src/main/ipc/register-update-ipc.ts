@@ -7,6 +7,8 @@ import {
   getUpdateState,
   installDownloadedUpdate
 } from '../updater/service'
+import { applyWindowsTitlebarOverlay } from '../window-shell'
+import type { DesktopTitlebarOverlayColors } from '../../shared/window-shell'
 
 /**
  * SPLIT-007 — app:* + window:* IPC handlers.
@@ -43,6 +45,10 @@ export function registerUpdateIpc(): void {
     if (win.isMaximized()) win.unmaximize()
     else win.maximize()
     return win.isMaximized()
+  })
+  ipcMain.handle('window:setTitleBarOverlay', (event, colors: Partial<DesktopTitlebarOverlayColors>) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return win ? applyWindowsTitlebarOverlay(win, process.platform, colors) : false
   })
 
   // Auto-updater state machine

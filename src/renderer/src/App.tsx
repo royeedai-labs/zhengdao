@@ -10,6 +10,7 @@ import UpdateBootstrap from '@/components/shared/UpdateBootstrap'
 import ModalManager from '@/components/modals/ModalManager'
 import { useSettingsStore } from '@/stores/settings-store'
 import { resolveThemeMode } from '@/utils/themes'
+import { syncCurrentTitlebarOverlay } from '@/utils/window-shell'
 import { APP_DISPLAY_NAME } from '../../shared/window-shell'
 
 export default function App(): JSX.Element {
@@ -34,6 +35,7 @@ export default function App(): JSX.Element {
     document.documentElement.dataset.theme = resolved
     document.documentElement.dataset.themeMode = theme
     document.documentElement.style.colorScheme = resolved === 'light' ? 'light' : 'dark'
+    syncCurrentTitlebarOverlay()
   }, [theme])
 
   useEffect(() => {

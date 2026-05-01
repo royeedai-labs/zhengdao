@@ -1,10 +1,12 @@
 import { ipcMain } from 'electron'
 import * as aiAssistantRepo from '../database/ai-assistant-repo'
+import * as storyBibleRepo from '../database/story-bible-repo'
 import { completeOfficialAi, getOfficialAiProfiles, streamOfficialAi } from '../ai/official-ai-service'
 import { executeOfficialSkill, submitOfficialSkillFeedback } from '../ai/skill-execute-service'
 import { getProviderStatus as probeProviderStatus } from '../ai/provider-status'
 import type { AiBridgeCompleteRequest } from '../../shared/ai'
 import type { SkillFeedbackPayload } from '../../shared/skill-feedback'
+import type { CaptureStoryFactsInput, StoryFactProposalStatus } from '../../shared/story-bible'
 import { activeGeminiStreamSessions, getGeminiCliService, hasProUser, zhengdaoAuth } from './state'
 import { launchGeminiCliSetup } from './gemini-cli-setup'
 
@@ -87,6 +89,23 @@ export function registerAiIpc(): void {
   ipcMain.handle('ai:createDraft', (_, data) => aiAssistantRepo.createAiDraft(data))
   ipcMain.handle('ai:setDraftStatus', (_, id: number, status: aiAssistantRepo.AiDraftStatus) =>
     aiAssistantRepo.setAiDraftStatus(id, status)
+  )
+
+  // Story Bible fact proposals + compact generation context.
+  ipcMain.handle('ai:getStoryBible', (_, bookId: number) => storyBibleRepo.buildStoryBible(bookId))
+  ipcMain.handle(
+    'ai:listStoryFactProposals',
+    (_, bookId: number, status?: StoryFactProposalStatus | 'all') =>
+      storyBibleRepo.listStoryFactProposals(bookId, status || 'pending')
+  )
+  ipcMain.handle('ai:captureStoryFacts', (_, input: CaptureStoryFactsInput) =>
+    storyBibleRepo.captureStoryFacts(input)
+  )
+  ipcMain.handle('ai:acceptStoryFactProposals', (_, ids: number[]) =>
+    storyBibleRepo.acceptStoryFactProposals(ids)
+  )
+  ipcMain.handle('ai:rejectStoryFactProposals', (_, ids: number[]) =>
+    storyBibleRepo.rejectStoryFactProposals(ids)
   )
 
   // Resolved-config view (resolves global + work profile + overrides)

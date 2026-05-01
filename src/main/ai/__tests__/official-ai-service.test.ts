@@ -35,6 +35,20 @@ function sseResponse(payload: string): Response {
   } as Response
 }
 
+function chunkedSseResponse(chunks: string[]): Response {
+  return {
+    ok: true,
+    body: new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(new TextEncoder().encode(chunk))
+        }
+        controller.close()
+      }
+    })
+  } as Response
+}
+
 describe('official AI service', () => {
   beforeEach(() => {
     fetchMock.mockReset()
@@ -72,5 +86,28 @@ describe('official AI service', () => {
       maxOutputTokens: 6000,
       stream: true
     })
+  })
+
+  it('streams CRLF-separated official AI events', async () => {
+    fetchMock.mockResolvedValue(chunkedSseResponse([
+      'event: delta\r\n',
+      'data: {"text":"甲"}\r\n\r\n',
+      'event: done\r\n',
+      'data: {}\r\n\r\n'
+    ]))
+    const onToken = vi.fn()
+    const onComplete = vi.fn()
+    const onError = vi.fn()
+
+    const session = streamOfficialAi(request(1000), 'token', {
+      onToken,
+      onComplete,
+      onError
+    })
+    await session.done
+
+    expect(onToken).toHaveBeenCalledWith('甲')
+    expect(onComplete).toHaveBeenCalledWith('甲')
+    expect(onError).not.toHaveBeenCalled()
   })
 })

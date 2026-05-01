@@ -8,6 +8,8 @@ import type { SkillFeedbackPayload, SkillFeedbackSubmitResult } from '../shared/
 import type { TeamInvitationRole } from '../shared/team-collaboration'
 import type { VisualGenerateInput } from '../shared/visual'
 import type { Genre } from '../shared/genre'
+import type { DesktopTitlebarOverlayColors } from '../shared/window-shell'
+import type { CaptureStoryFactsInput, StoryFactProposalStatus } from '../shared/story-bible'
 
 let aiStreamRequestSeq = 0
 
@@ -254,6 +256,7 @@ const api = {
   authGetAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
   authOpenUpgradePage: () => ipcRenderer.invoke('auth:openUpgradePage'),
   authOpenAccountPage: () => ipcRenderer.invoke('auth:openAccountPage'),
+  authOpenCommunityFeedbackPage: () => ipcRenderer.invoke('auth:openCommunityFeedbackPage'),
   onAuthUpdated: (handler: (user: unknown) => void) => {
     const listener = (_event: IpcRendererEvent, user: unknown) => handler(user)
     ipcRenderer.on('auth:updated', listener)
@@ -363,6 +366,12 @@ const api = {
   aiCreateDraft: (data: Record<string, unknown>) => ipcRenderer.invoke('ai:createDraft', data),
   aiSetDraftStatus: (id: number, status: 'pending' | 'applied' | 'dismissed') =>
     ipcRenderer.invoke('ai:setDraftStatus', id, status),
+  aiGetStoryBible: (bookId: number) => ipcRenderer.invoke('ai:getStoryBible', bookId),
+  aiListStoryFactProposals: (bookId: number, status?: StoryFactProposalStatus | 'all') =>
+    ipcRenderer.invoke('ai:listStoryFactProposals', bookId, status),
+  aiCaptureStoryFacts: (input: CaptureStoryFactsInput) => ipcRenderer.invoke('ai:captureStoryFacts', input),
+  aiAcceptStoryFactProposals: (ids: number[]) => ipcRenderer.invoke('ai:acceptStoryFactProposals', ids),
+  aiRejectStoryFactProposals: (ids: number[]) => ipcRenderer.invoke('ai:rejectStoryFactProposals', ids),
   aiGetResolvedGlobalConfig: () => ipcRenderer.invoke('ai:getResolvedGlobalConfig'),
   aiGetResolvedConfigForBook: (bookId: number) => ipcRenderer.invoke('ai:getResolvedConfigForBook', bookId),
   aiGetResolvedWorkspaceConfig: () => ipcRenderer.invoke('ai:getResolvedWorkspaceConfig'),
@@ -440,6 +449,8 @@ const api = {
   isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized') as Promise<boolean>,
   toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize') as Promise<boolean>,
+  setTitleBarOverlay: (colors: Partial<DesktopTitlebarOverlayColors>) =>
+    ipcRenderer.invoke('window:setTitleBarOverlay', colors) as Promise<boolean>,
 
   // Export
   showSaveDialog: (options: Record<string, unknown>) => ipcRenderer.invoke('dialog:showSave', options),

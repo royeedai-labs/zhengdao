@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useCharacterStore } from '@/stores/character-store'
@@ -26,7 +26,9 @@ import { AssistantPanelHeader } from './panel-parts/AssistantPanelHeader'
 import { ConversationListDropdown } from './panel-parts/ConversationListDropdown'
 import { DraftListPanel } from './panel-parts/DraftListPanel'
 import { MessageStreamArea } from './panel-parts/MessageStreamArea'
+import { StoryFactProposalPanel } from './panel-parts/StoryFactProposalPanel'
 import { resolveSeededAssistantSkill } from './conversation-mode'
+import type { StoryFactProposal } from '../../../../shared/story-bible'
 
 type AiMessage = {
   id: number
@@ -64,6 +66,7 @@ export function AiAssistantPanel() {
   const updateChapterContent = useChapterStore((s) => s.updateChapterContent)
   const updateChapterSummary = useChapterStore((s) => s.updateChapterSummary)
   const characters = useCharacterStore((s) => s.characters)
+  const loadCharacters = useCharacterStore((s) => s.loadCharacters)
   const createCharacter = useCharacterStore((s) => s.createCharacter)
   const foreshadowings = useForeshadowStore((s) => s.foreshadowings)
   const createForeshadowing = useForeshadowStore((s) => s.createForeshadowing)
@@ -88,6 +91,8 @@ export function AiAssistantPanel() {
   const [conversations, setConversations] = useState<AiConversationRow[]>([])
   const [messages, setMessages] = useState<AiMessage[]>([])
   const [drafts, setDrafts] = useState<AiDraftRow[]>([])
+  const [storyFacts, setStoryFacts] = useState<StoryFactProposal[]>([])
+  const [storyFactBusyIds, setStoryFactBusyIds] = useState<number[]>([])
   const [skills, setSkills] = useState<AiSkillTemplate[]>([])
   const [overrides, setOverrides] = useState<AiSkillOverride[]>([])
   const [profile, setProfile] = useState<AiWorkProfile | null>(null)
@@ -101,6 +106,15 @@ export function AiAssistantPanel() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeRequestAbortRef = useRef<AbortController | null>(null)
   const sendCommandRef = useRef<(text: string) => void>(() => {})
+
+  const refreshStoryFacts = useCallback(async () => {
+    if (!bookId) {
+      setStoryFacts([])
+      return
+    }
+    const proposals = (await window.api.aiListStoryFactProposals(bookId, 'pending')) as StoryFactProposal[]
+    setStoryFacts(proposals)
+  }, [bookId])
 
   const {
     assistantIntent,
@@ -160,6 +174,10 @@ export function AiAssistantPanel() {
       cancelled = true
     }
   }, [bookId])
+
+  useEffect(() => {
+    void refreshStoryFacts().catch(() => null)
+  }, [refreshStoryFacts, messages.length, loading])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -303,6 +321,22 @@ export function AiAssistantPanel() {
     })
   }
 
+  const decideStoryFact = async (id: number, action: 'accept' | 'reject') => {
+    if (!bookId) return
+    setStoryFactBusyIds((ids) => [...ids, id])
+    try {
+      if (action === 'accept') {
+        await window.api.aiAcceptStoryFactProposals([id])
+        await loadCharacters(bookId).catch(() => undefined)
+      } else {
+        await window.api.aiRejectStoryFactProposals([id])
+      }
+      await refreshStoryFacts()
+    } finally {
+      setStoryFactBusyIds((ids) => ids.filter((item) => item !== id))
+    }
+  }
+
   const quickActions =
     resolvedPanelContext.surface === 'chapter_editor'
       ? buildChapterEditorQuickActions({
@@ -379,6 +413,13 @@ export function AiAssistantPanel() {
               setInput(input)
             }}
           >
+            <StoryFactProposalPanel
+              proposals={storyFacts}
+              busyIds={storyFactBusyIds}
+              onAccept={(id) => void decideStoryFact(id, 'accept')}
+              onReject={(id) => void decideStoryFact(id, 'reject')}
+            />
+
             <DraftListPanel
               drafts={drafts}
               onApply={(draft) => void applyDraft(draft)}

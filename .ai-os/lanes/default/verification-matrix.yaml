@@ -34,11 +34,29 @@ impact_rules:
       - "npm run build"
       - "git diff --check"
       - "Windows real-device uninstall / overwrite install smoke or explicit manual blocker"
+  - when: "windows-titlebar-overlay-theme-fix"
+    run:
+      - "npm test -- src/shared/__tests__/window-shell.test.ts src/shared/__tests__/ipc-api.test.ts src/renderer/src/utils/__tests__/window-shell.test.ts"
+      - "npm run typecheck"
+      - "npm run build"
+      - "git diff --check"
+      - "Windows real-device title bar visual check or explicit manual blocker"
   - when: "macos-manual-installer-download"
     run:
       - "npm test -- src/shared/__tests__/update.test.ts src/renderer/src/utils/__tests__/update-prompt.test.ts src/renderer/src/components/modals/__tests__/AppSettingsModal.test.tsx"
       - "npm run typecheck"
       - "macOS packaged-app download/open DMG smoke or explicit manual blocker"
+  - when: "desktop-auth-callback-startup-fix"
+    run:
+      - "npm test -- src/main/__tests__/deep-link.test.ts"
+      - "npm run build"
+      - "git diff --check"
+  - when: "ai-story-bible-context-change"
+    run:
+      - "npm test -- src/main/database/__tests__/story-bible-repo.test.ts src/main/database/__tests__/migrations.test.ts src/renderer/src/utils/ai/__tests__/assistant-workflow.test.ts src/shared/__tests__/ipc-api.test.ts"
+      - "npm run typecheck"
+      - "npm run lint"
+      - "git diff --check"
 
 failure_modes:
   - id: FM-DEF-001
@@ -105,6 +123,22 @@ failure_modes:
     scenario: "Unsigned macOS public builds only open the GitHub Release page, leaving users to manually find the matching DMG"
     expected: "The macOS manual-update action downloads the current-version DMG for the running architecture into Downloads and opens it, while automatic install remains blocked"
     guard: "src/shared/__tests__/update.test.ts plus src/renderer/src/components/modals/__tests__/AppSettingsModal.test.tsx plus packaged-app smoke"
+  - id: FM-DEF-017
+    scenario: "Windows native caption button overlay stays black while the renderer title bar is using a light or themed surface"
+    expected: "Windows titleBarOverlay initializes from system light/dark preference and then follows the renderer top bar theme colors"
+    guard: "src/shared/__tests__/window-shell.test.ts plus src/renderer/src/utils/__tests__/window-shell.test.ts plus npm run build"
+  - id: FM-DEF-018
+    scenario: "Windows auth callback launches or reaches the desktop app before SQLite has been initialized"
+    expected: "Zhengdao auth callback URLs are queued until main-process startup has initialized the database, registered IPC, and created the main window"
+    guard: "src/main/__tests__/deep-link.test.ts plus npm run build"
+  - id: FM-DEF-019
+    scenario: "AI-generated facts are written directly into characters, timeline, or settings without user confirmation"
+    expected: "Assistant output creates pending Story Bible fact proposals; only explicit accept promotes them into canonical assets"
+    guard: "src/main/database/__tests__/story-bible-repo.test.ts"
+  - id: FM-DEF-020
+    scenario: "Story generation ignores compact canon and repeats brittle AI-style reveals or paragraph openings"
+    expected: "Prompts mount the compact Story Bible, quality rules flag generic actions/repeated openings, and Director planning blocks missing obstacle/cost or incomplete clue tri-split"
+    guard: "src/renderer/src/utils/ai/__tests__/assistant-workflow.test.ts plus agentx-backend/src/director/planning.test.ts"
 
 guards:
   - ".ai-os/lanes/default/evals/ai-os-v9-lane-normalization.md"

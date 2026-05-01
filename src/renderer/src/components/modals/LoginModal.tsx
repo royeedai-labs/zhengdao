@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, BadgeCheck, Cloud, Coins, LogIn, X, Loader2, RefreshCw, UserRound } from 'lucide-react'
+import {
+  ArrowUpRight,
+  BadgeCheck,
+  Cloud,
+  Coins,
+  LogIn,
+  X,
+  Loader2,
+  MessageSquareText,
+  RefreshCw,
+  UserRound
+} from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useBookStore } from '@/stores/book-store'
@@ -107,6 +118,10 @@ export function AccountSyncSettings() {
 
   const openAccountPage = async () => {
     await window.api.authOpenAccountPage()
+  }
+
+  const openCommunityFeedbackPage = async () => {
+    await window.api.authOpenCommunityFeedbackPage()
   }
 
   return (
@@ -268,6 +283,14 @@ export function AccountSyncSettings() {
             >
               <ArrowUpRight size={13} />
               账户中心
+            </button>
+            <button
+              type="button"
+              onClick={() => void openCommunityFeedbackPage()}
+              className="flex items-center gap-1 rounded border border-[var(--border-secondary)] px-4 py-1.5 text-xs text-[var(--text-primary)] transition hover:bg-[var(--bg-tertiary)]"
+            >
+              <MessageSquareText size={13} />
+              社区反馈
             </button>
             <button
               type="button"

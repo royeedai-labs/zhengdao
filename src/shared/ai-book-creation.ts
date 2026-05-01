@@ -88,6 +88,16 @@ export type AiBookCreationPackage = {
   }>
 }
 
+export type AiBookCreationRequirements = {
+  volumeCount: number
+  totalChapters: number
+  minCharacters: number
+  protagonistCount: number
+  minWikiEntries: number
+  minPlotNodes: number
+  minForeshadowings: number
+}
+
 export type AiBookCreationRelation = {
   sourceName?: string
   targetName?: string
@@ -119,6 +129,45 @@ export const AI_BOOK_CREATION_DEFAULT_MIN_CHARACTERS = 2
 export const AI_BOOK_CREATION_MIN_WIKI_ENTRIES = 2
 export const AI_BOOK_CREATION_MIN_PLOT_NODES = 3
 export const AI_BOOK_CREATION_MIN_FORESHADOWINGS = 1
+export const AI_BOOK_CREATION_MAX_AUTO_CHAPTERS = 60
+export const AI_BOOK_CREATION_MAX_AUTO_VOLUMES = 12
+
+export const AI_BOOK_CREATION_CHARACTER_FIELDS = [
+  { key: 'role', label: '角色功能', type: 'text' },
+  { key: 'personality', label: '性格标签', type: 'text' },
+  { key: 'goal', label: '目标动机', type: 'text' },
+  { key: 'specialty', label: '能力/资源', type: 'text' },
+  { key: 'arc', label: '成长弧光', type: 'text' }
+] as const
+
+export const AI_BOOK_CREATION_FACTION_LABELS = [
+  { value: 'protagonist', label: '主角', color: 'indigo' },
+  { value: 'ally', label: '盟友/同行', color: 'emerald' },
+  { value: 'rival', label: '竞争者', color: 'amber' },
+  { value: 'antagonist', label: '对手/阻力', color: 'red' },
+  { value: 'neutral', label: '中立/工具人', color: 'slate' }
+] as const
+
+export const AI_BOOK_CREATION_STATUS_LABELS = [
+  { value: 'active', label: '活跃' },
+  { value: 'hidden', label: '暗线' },
+  { value: 'conflicted', label: '摇摆/冲突中' },
+  { value: 'resolved', label: '阶段完成' }
+] as const
+
+export const AI_BOOK_CREATION_EMOTION_LABELS = [
+  { score: 5, label: '爆爽 / 高潮兑现' },
+  { score: 4, label: '大爽 / 反击成功' },
+  { score: 3, label: '爽点 / 优势确立' },
+  { score: 2, label: '小爽 / 线索落地' },
+  { score: 1, label: '期待 / 钩子铺垫' },
+  { score: 0, label: '平衡 / 过渡推进' },
+  { score: -1, label: '微压 / 小阻力' },
+  { score: -2, label: '压力 / 危机升级' },
+  { score: -3, label: '重压 / 判断受挫' },
+  { score: -4, label: '险局 / 代价显现' },
+  { score: -5, label: '毒点预警 / 极压' }
+] as const
 
 export type AiBookCreationValidationOptions = {
   minCharacters?: number
@@ -288,6 +337,8 @@ export function isCreationBriefConfirmed(brief: AssistantCreationBrief): boolean
 }
 
 const CHINESE_NUMBER_MAP: Record<string, number> = {
+  零: 0,
+  〇: 0,
   一: 1,
   二: 2,
   两: 2,
@@ -304,6 +355,11 @@ const CHINESE_NUMBER_MAP: Record<string, number> = {
 function parseChineseSmallNumber(value: string): number {
   if (!value) return 0
   if (/^\d+$/.test(value)) return Number(value)
+  if (value.includes('百')) {
+    const [highRaw, restRaw = ''] = value.split('百')
+    const high = highRaw ? parseChineseSmallNumber(highRaw) : 1
+    return high * 100 + parseChineseSmallNumber(restRaw)
+  }
   if (value === '十') return 10
   if (value.startsWith('十')) {
     return 10 + (CHINESE_NUMBER_MAP[value.slice(1)] || 0)
@@ -320,21 +376,94 @@ function parseChineseSmallNumber(value: string): number {
   return CHINESE_NUMBER_MAP[value] || 0
 }
 
+const COUNT_TOKEN = String.raw`(\d+|[零〇一二两三四五六七八九十百]{1,8})`
+const COUNT_QUALIFIER = String.raw`(超(?:过)?|大于|多于|至少|不少于|不低于|>=|>|＞)?`
+
+function applyCountQualifier(value: number, qualifier: string | undefined): number {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  if (qualifier && /超|大于|多于|>|＞/.test(qualifier)) return value + 1
+  return value
+}
+
+function parseCountMatch(value: string | undefined, qualifier?: string): number {
+  return applyCountQualifier(parseChineseSmallNumber(value || ''), qualifier)
+}
+
+function clampCount(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min
+  return Math.max(min, Math.min(max, Math.round(value)))
+}
+
+function getCreationPlanningText(brief: AssistantCreationBrief): string {
+  const normalized = normalizeCreationBrief(brief)
+  return [
+    normalized.seedIdea,
+    normalized.chapterPlan,
+    normalized.characterPlan,
+    normalized.otherRequirements
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join('；')
+}
+
+function extractMaxCount(text: string, pattern: RegExp): number {
+  let max = 0
+  pattern.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    const parsed = parseCountMatch(match[2], match[1])
+    if (parsed > max) max = parsed
+  }
+  return max
+}
+
+function extractVolumeCountFromText(text: string): number {
+  return extractMaxCount(text, new RegExp(`${COUNT_QUALIFIER}\\s*${COUNT_TOKEN}\\s*卷`, 'g'))
+}
+
+function extractTotalChapterCountFromText(text: string, volumeCount: number): number {
+  const volumeAndTotal = new RegExp(
+    `${COUNT_QUALIFIER}\\s*${COUNT_TOKEN}\\s*卷\\s*(?:共|总共|总计|一共)?\\s*${COUNT_QUALIFIER}\\s*${COUNT_TOKEN}\\s*章`,
+    'g'
+  )
+  volumeAndTotal.lastIndex = 0
+  let combinedMax = 0
+  let match: RegExpExecArray | null
+  while ((match = volumeAndTotal.exec(text)) !== null) {
+    const parsed = parseCountMatch(match[4], match[3])
+    if (parsed > combinedMax) combinedMax = parsed
+  }
+  if (combinedMax > 0) return combinedMax
+
+  const perVolume = extractMaxCount(text, new RegExp(`${COUNT_QUALIFIER}\\s*每\\s*卷\\s*${COUNT_TOKEN}\\s*章`, 'g'))
+  if (perVolume > 0 && volumeCount > 0) return perVolume * volumeCount
+
+  return extractMaxCount(text, new RegExp(`${COUNT_QUALIFIER}\\s*${COUNT_TOKEN}\\s*章`, 'g'))
+}
+
 function extractCharacterCountFromText(text: string): number {
   let count = 0
   const patterns = [
-    /(\d+|[一二两三四五六七八九十]{1,3})\s*(?:个|位|名)\s*(?:关键|主要|核心|重要)?\s*(?:人|人物|角色|主角|配角|反派|老人|小伙|女性|男性)?/g,
-    /(\d+|[一二两三四五六七八九十]{1,3})\s*(?:人|人物|角色|主角|配角|反派)/g
+    new RegExp(`${COUNT_QUALIFIER}\\s*${COUNT_TOKEN}\\s*(?:个|位|名)\\s*(?:关键|主要|核心|重要)?\\s*(?:人|人物|角色|主角|配角|反派|老人|小伙|女性|男性)?`, 'g'),
+    new RegExp(`${COUNT_QUALIFIER}\\s*${COUNT_TOKEN}\\s*(?:人|人物|角色|主角|配角|反派)`, 'g')
   ]
   for (const pattern of patterns) {
     pattern.lastIndex = 0
     let match: RegExpExecArray | null
     while ((match = pattern.exec(text)) !== null) {
-      const parsed = parseChineseSmallNumber(match[1] || '')
+      const parsed = parseCountMatch(match[2], match[1])
       if (parsed > count) count = parsed
     }
   }
   return count
+}
+
+function extractProtagonistCountFromText(text: string): number {
+  return extractMaxCount(
+    text,
+    new RegExp(`${COUNT_QUALIFIER}\\s*${COUNT_TOKEN}\\s*(?:个|位|名)?\\s*(?:主角|主人公|主线主角)`, 'g')
+  )
 }
 
 export function extractCharacterPlanItems(value: string | undefined): string[] {
@@ -363,15 +492,71 @@ export function extractCharacterPlanItems(value: string | undefined): string[] {
 export function getMinimumCharacterCount(briefInput?: AssistantCreationBrief | null): number {
   const brief = normalizeCreationBrief(briefInput || {})
   const characterPlan = String(brief.characterPlan || '').trim()
-  const explicitCount = extractCharacterCountFromText(characterPlan)
+  const planningText = getCreationPlanningText(brief)
+  const explicitCount = extractCharacterCountFromText(planningText)
   const itemCount = extractCharacterPlanItems(characterPlan).length
-  const groupCount = /群像|人物组|角色组/.test(characterPlan) ? 4 : 0
+  const groupCount = /群像|人物组|角色组/.test(planningText) ? 4 : 0
   return Math.max(
     AI_BOOK_CREATION_DEFAULT_MIN_CHARACTERS,
     explicitCount,
     itemCount,
     groupCount
   )
+}
+
+export function getAiBookCreationRequirements(
+  briefInput?: AssistantCreationBrief | null
+): AiBookCreationRequirements {
+  const brief = normalizeCreationBrief(briefInput || {})
+  const planningText = getCreationPlanningText(brief)
+  const volumeCount = clampCount(
+    extractVolumeCountFromText(planningText) || 1,
+    1,
+    AI_BOOK_CREATION_MAX_AUTO_VOLUMES
+  )
+  const totalChapters = clampCount(
+    extractTotalChapterCountFromText(planningText, volumeCount) || AI_BOOK_CREATION_MIN_CHAPTERS,
+    AI_BOOK_CREATION_MIN_CHAPTERS,
+    AI_BOOK_CREATION_MAX_AUTO_CHAPTERS
+  )
+  const minCharacters = getMinimumCharacterCount(brief)
+  const protagonistCount = clampCount(
+    extractProtagonistCountFromText(planningText) || 1,
+    1,
+    Math.max(1, minCharacters)
+  )
+
+  return {
+    volumeCount,
+    totalChapters,
+    minCharacters,
+    protagonistCount,
+    minWikiEntries: Math.max(
+      AI_BOOK_CREATION_MIN_WIKI_ENTRIES,
+      Math.min(4, Math.ceil(totalChapters / 2))
+    ),
+    minPlotNodes: Math.max(AI_BOOK_CREATION_MIN_PLOT_NODES, totalChapters),
+    minForeshadowings: Math.max(
+      AI_BOOK_CREATION_MIN_FORESHADOWINGS,
+      totalChapters >= 6 ? 2 : 1
+    )
+  }
+}
+
+export function distributeBookCreationChapters(totalChapters: number, volumeCount: number): number[] {
+  const safeTotal = clampCount(totalChapters, AI_BOOK_CREATION_MIN_CHAPTERS, AI_BOOK_CREATION_MAX_AUTO_CHAPTERS)
+  const safeVolumes = clampCount(volumeCount, 1, Math.min(AI_BOOK_CREATION_MAX_AUTO_VOLUMES, safeTotal))
+  const base = Math.floor(safeTotal / safeVolumes)
+  const remainder = safeTotal % safeVolumes
+  return Array.from({ length: safeVolumes }, (_, index) => base + (index < remainder ? 1 : 0))
+}
+
+export function isBookCreationRequirementEcho(value: unknown): boolean {
+  const text = cleanOptionalText(value)
+  if (!text) return false
+  return /(?:用户|沟通|聊天|字段|需求|要求|已确认需求|章节规则|人物规则)/.test(text) ||
+    /(?:要|共|总共|一共|规划|目标)?\s*(?:\d+|[零〇一二两三四五六七八九十百]{1,8})\s*卷\s*(?:\d+|[零〇一二两三四五六七八九十百]{1,8})?\s*章/.test(text) ||
+    /(?:超(?:过)?|至少|不少于|不低于)?\s*(?:\d+|[零〇一二两三四五六七八九十百]{1,8})\s*(?:个|位|名)?\s*(?:人|人物|角色|主角)/.test(text)
 }
 
 function relationEndpoint(
@@ -467,14 +652,35 @@ export function validateBookCreationPackage(
   const chapters = Array.isArray(pkg.volumes)
     ? pkg.volumes.flatMap((volume) => Array.isArray(volume.chapters) ? volume.chapters : [])
     : []
+  const chapterRange = Math.max(minChapters, chapters.length)
   if (chapters.length === 0) errors.push('缺少章节草稿')
   if (chapters.length > 0 && chapters.length < minChapters) {
     errors.push(`章节规划不足：至少需要 ${minChapters} 章`)
   }
+  chapters.forEach((chapter, index) => {
+    const summary = cleanText(chapter?.summary)
+    if (!summary) {
+      errors.push(`第 ${index + 1} 章缺少真实摘要`)
+    } else if (isBookCreationRequirementEcho(summary)) {
+      errors.push(`第 ${index + 1} 章摘要像是在复述起书需求`)
+    }
+  })
   if (!Array.isArray(pkg.characters) || pkg.characters.length === 0) {
     errors.push('缺少人物')
   } else if (pkg.characters.length < minCharacters) {
     errors.push(`人物不足：至少需要 ${minCharacters} 个`)
+  }
+  if (Array.isArray(pkg.characters) && minCharacters > AI_BOOK_CREATION_DEFAULT_MIN_CHARACTERS) {
+    pkg.characters.forEach((character, index) => {
+      if (!cleanText(character?.description)) errors.push(`第 ${index + 1} 个人物缺少人设备注`)
+      const fields = character?.customFields || {}
+      for (const requiredField of AI_BOOK_CREATION_CHARACTER_FIELDS) {
+        if (!cleanText(fields[requiredField.key])) {
+          errors.push(`第 ${index + 1} 个人物缺少${requiredField.label}`)
+          break
+        }
+      }
+    })
   }
   const characterNames = Array.isArray(pkg.characters)
     ? pkg.characters.map((character) => cleanText(character?.name)).filter(Boolean)
@@ -486,16 +692,49 @@ export function validateBookCreationPackage(
     errors.push('设定条目格式无效')
   } else if (pkg.wikiEntries.length < minWikiEntries) {
     errors.push(`设定条目不足：至少需要 ${minWikiEntries} 条`)
+  } else {
+    pkg.wikiEntries.forEach((entry, index) => {
+      if (!cleanText(entry?.title) || !cleanText(entry?.content)) {
+        errors.push(`第 ${index + 1} 条设定缺少可写作使用的标题或内容`)
+      }
+    })
   }
   if (!Array.isArray(pkg.plotNodes)) {
     errors.push('剧情节点格式无效')
   } else if (pkg.plotNodes.length < minPlotNodes) {
     errors.push(`剧情/爽点节点不足：至少需要 ${minPlotNodes} 个`)
+  } else {
+    const coveredChapters = new Set<number>()
+    pkg.plotNodes.forEach((node, index) => {
+      const chapterNumber = Number(node?.chapterNumber)
+      if (!Number.isFinite(chapterNumber) || chapterNumber < 1 || chapterNumber > chapterRange) {
+        errors.push(`第 ${index + 1} 个剧情节点章节号超出范围`)
+      } else {
+        coveredChapters.add(Math.round(chapterNumber))
+      }
+      if (!cleanText(node?.description)) {
+        errors.push(`第 ${index + 1} 个剧情节点缺少爽点/悬念说明`)
+      } else if (isBookCreationRequirementEcho(node.description)) {
+        errors.push(`第 ${index + 1} 个剧情节点像是在复述起书需求`)
+      }
+    })
+    if (minPlotNodes >= minChapters) {
+      const missing = Array.from({ length: minChapters }, (_, index) => index + 1)
+        .filter((chapterNumber) => !coveredChapters.has(chapterNumber))
+      if (missing.length > 0) errors.push(`剧情节点未覆盖章节：${missing.join('、')}`)
+    }
   }
   if (!Array.isArray(pkg.foreshadowings)) {
     errors.push('伏笔格式无效')
   } else if (pkg.foreshadowings.length < minForeshadowings) {
     errors.push(`伏笔不足：至少需要 ${minForeshadowings} 条`)
+  } else {
+    pkg.foreshadowings.forEach((item, index) => {
+      const expected = item?.expectedChapter == null ? null : Number(item.expectedChapter)
+      if (expected != null && (!Number.isFinite(expected) || expected < 1 || expected > chapterRange)) {
+        errors.push(`第 ${index + 1} 条伏笔预计回收章节超出范围`)
+      }
+    })
   }
   return { ok: errors.length === 0, errors }
 }

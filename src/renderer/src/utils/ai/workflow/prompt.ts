@@ -1,5 +1,7 @@
 import { nonEmpty, section } from './helpers'
 import type { AiAssistantContext, AiSkillTemplate, AiWorkProfile } from './types'
+import type { StoryBibleSnapshot } from '../../../../../shared/story-bible'
+import { narrativeQualityPromptRules } from './quality-filter'
 
 /**
  * SPLIT-008 — prompt assembly.
@@ -14,6 +16,7 @@ export function composeSkillPrompt(input: {
   profile?: AiWorkProfile | null
   context: AiAssistantContext
   userInput: string
+  storyBible?: StoryBibleSnapshot | null
 }): { systemPrompt: string; userPrompt: string } {
   const profile = input.profile
   const systemBlocks = [
@@ -23,6 +26,8 @@ export function composeSkillPrompt(input: {
     section('内容边界', profile?.content_boundaries),
     section('资产生成规则', profile?.asset_rules),
     section('章节节奏', profile?.rhythm_rules),
+    section('全局故事圣经', formatStoryBibleForPrompt(input.storyBible)),
+    section('生成质量约束', narrativeQualityPromptRules()),
     section('输出契约', input.skill.output_contract)
   ].filter(Boolean)
 
@@ -54,6 +59,7 @@ export function composeAssistantChatPrompt(input: {
   context: AiAssistantContext
   skills?: Array<Pick<AiSkillTemplate, 'name' | 'description'>>
   userInput: string
+  storyBible?: StoryBibleSnapshot | null
 }): { systemPrompt: string; userPrompt: string } {
   const profile = input.profile
   const skillList = (input.skills || [])
@@ -73,6 +79,8 @@ export function composeAssistantChatPrompt(input: {
     section('本作品文风', profile?.style_guide),
     section('题材规则', profile?.genre_rules),
     section('内容边界', profile?.content_boundaries),
+    section('全局故事圣经', formatStoryBibleForPrompt(input.storyBible)),
+    section('生成质量约束', narrativeQualityPromptRules()),
     section('可用能力卡', skillList)
   ].filter(Boolean)
 
@@ -90,4 +98,29 @@ export function composeAssistantChatPrompt(input: {
     systemPrompt: systemBlocks.join('\n\n'),
     userPrompt: userBlocks.filter(Boolean).join('\n\n')
   }
+}
+
+export function formatStoryBibleForPrompt(storyBible?: StoryBibleSnapshot | null): string {
+  if (!storyBible) return ''
+  const compact = {
+    characters: storyBible.characters.slice(0, 30).map((character) => ({
+      name: character.name,
+      status: character.status,
+      motivation: character.motivation,
+      secret: character.secret,
+      description: character.description
+    })),
+    timeline: storyBible.timeline.slice(0, 30),
+    coreSettings: storyBible.settings.slice(0, 30).map((item) => ({
+      title: item.title,
+      content: item.content
+    })),
+    foreshadowings: storyBible.foreshadowings.slice(0, 30),
+    plotNodes: storyBible.plotNodes.slice(0, 40),
+    pendingFacts: storyBible.pendingFacts.slice(0, 20)
+  }
+  return [
+    '以下是已确认资产与待确认事实层汇总。生成时必须保持关键姓名、数字、时间跨度、死亡/失踪/存活状态、死者身份、设定规则一致；如信息不足，只能写“不足以判断”，不得补造事实。',
+    JSON.stringify(compact, null, 2)
+  ].join('\n')
 }

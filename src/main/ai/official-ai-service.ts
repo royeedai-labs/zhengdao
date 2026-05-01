@@ -1,5 +1,6 @@
 import type { AiBridgeCompleteRequest, AiOfficialProfile, AiResponse, AiStreamCallbacks } from '../../shared/ai'
 import { formatLocalRagPrompt, retrieveLocalBookSnippets } from './local-rag-service'
+import { parseSseBlock, splitSseBlocks } from './sse-parser'
 
 const WEBSITE_URL = (process.env.ZHENGDAO_WEBSITE_URL || 'https://agent.xiangweihu.com').replace(/\/$/, '')
 const API_BASE = (process.env.ZHENGDAO_API_URL || `${WEBSITE_URL}/api/v1`).replace(/\/$/, '')
@@ -106,17 +107,6 @@ export async function completeOfficialAi(
   }
 }
 
-function parseSseBlock(block: string): { event: string; data: string } | null {
-  let event = 'message'
-  const dataLines: string[] = []
-  for (const line of block.split('\n')) {
-    if (line.startsWith('event:')) event = line.slice('event:'.length).trim()
-    if (line.startsWith('data:')) dataLines.push(line.slice('data:'.length).trim())
-  }
-  if (dataLines.length === 0) return null
-  return { event, data: dataLines.join('\n') }
-}
-
 export function streamOfficialAi(
   request: AiBridgeCompleteRequest,
   token: string | null,
@@ -156,8 +146,8 @@ export function streamOfficialAi(
         const { done: streamDone, value } = await reader.read()
         if (streamDone) break
         buffer += decoder.decode(value, { stream: true })
-        const blocks = buffer.split('\n\n')
-        buffer = blocks.pop() || ''
+        const { blocks, rest } = splitSseBlocks(buffer)
+        buffer = rest
         for (const block of blocks) {
           const parsed = parseSseBlock(block)
           if (!parsed) continue

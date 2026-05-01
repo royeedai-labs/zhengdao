@@ -1,7 +1,13 @@
-import { app, BrowserWindow, type BrowserWindowConstructorOptions } from 'electron'
+import { app, BrowserWindow, nativeTheme, type BrowserWindowConstructorOptions } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import { getDesktopWindowChrome, normalizeDesktopShellPlatform, shouldStripNativeMenu } from '../shared/window-shell'
+import {
+  getDesktopWindowChrome,
+  getWindowsTitlebarOverlay,
+  normalizeDesktopShellPlatform,
+  shouldStripNativeMenu,
+  type DesktopTitlebarOverlayColors
+} from '../shared/window-shell'
 
 export function resolveRuntimeIconPath(fileNames: string[] = ['icon.png']): string | undefined {
   const baseDirs = [
@@ -23,7 +29,9 @@ export function getMainWindowShellOptions(
   'backgroundColor' | 'title' | 'titleBarStyle' | 'titleBarOverlay' | 'trafficLightPosition' | 'icon'
 > {
   const normalizedPlatform = normalizeDesktopShellPlatform(platform)
-  const chrome = getDesktopWindowChrome(normalizedPlatform)
+  const chrome = getDesktopWindowChrome(normalizedPlatform, {
+    prefersDarkTitlebar: nativeTheme.shouldUseDarkColors
+  })
   const iconPath = resolveRuntimeIconPath()
 
   return {
@@ -52,4 +60,18 @@ export function applyDesktopWindowShell(window: BrowserWindow, platform: NodeJS.
   window.removeMenu()
   window.setMenuBarVisibility(false)
   window.setAutoHideMenuBar(true)
+}
+
+export function applyWindowsTitlebarOverlay(
+  window: BrowserWindow,
+  platform: NodeJS.Platform,
+  colors?: Partial<DesktopTitlebarOverlayColors>
+): boolean {
+  const normalizedPlatform = normalizeDesktopShellPlatform(platform)
+  if (normalizedPlatform !== 'win32') return false
+
+  window.setTitleBarOverlay(
+    getWindowsTitlebarOverlay(nativeTheme.shouldUseDarkColors, colors)
+  )
+  return true
 }

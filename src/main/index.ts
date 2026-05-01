@@ -5,6 +5,7 @@ import { initDatabase } from './database/connection'
 import { handleZhengdaoAuthCallbackUrl, registerIpcHandlers } from './ipc-handlers'
 import { attachUpdaterWindow, notifyUpdaterAppActivated } from './updater/service'
 import { registerBookCoverProtocol, registerBookCoverProtocolScheme } from './book-cover-protocol'
+import { createDeepLinkCoordinator } from './deep-link'
 import {
   createDesktopTray,
   markDesktopTrayQuitRequested,
@@ -26,12 +27,16 @@ let mainWindow: BrowserWindow | null = null
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 registerBookCoverProtocolScheme()
 
-function handleDeepLink(rawUrl: string): void {
-  if (!rawUrl.startsWith('zhengdao://auth/callback')) return
-  handleZhengdaoAuthCallbackUrl(rawUrl).catch((error) => {
+const deepLinkCoordinator = createDeepLinkCoordinator(
+  (rawUrl) => handleZhengdaoAuthCallbackUrl(rawUrl),
+  (error) => {
     console.error('[Main] Zhengdao auth callback failed:', error)
     dialog.showErrorBox('证道账号登录失败', error instanceof Error ? error.message : String(error))
-  })
+  }
+)
+
+function handleDeepLink(rawUrl: string): void {
+  deepLinkCoordinator.handle(rawUrl)
 }
 
 if (!gotSingleInstanceLock) {
@@ -105,7 +110,6 @@ app.whenReady().then(() => {
     app.setAsDefaultProtocolClient('zhengdao')
   }
   const initialDeepLink = process.argv.find((item) => item.startsWith('zhengdao://'))
-  if (initialDeepLink) handleDeepLink(initialDeepLink)
   if (process.platform === 'darwin') {
     app.setName('证道')
   }
@@ -119,6 +123,8 @@ app.whenReady().then(() => {
   registerBookCoverProtocol()
   registerIpcHandlers()
   createDesktopTray(createWindow(), process.platform)
+  if (initialDeepLink) handleDeepLink(initialDeepLink)
+  deepLinkCoordinator.markReady()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

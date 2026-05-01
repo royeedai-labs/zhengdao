@@ -1,7 +1,11 @@
 import { coerceGenre } from '../../shared/genre'
 import { generateAutoCoverForBook, mapBookCoverUrl } from '../book-cover-service'
 import {
-  getMinimumCharacterCount,
+  AI_BOOK_CREATION_CHARACTER_FIELDS,
+  AI_BOOK_CREATION_EMOTION_LABELS,
+  AI_BOOK_CREATION_FACTION_LABELS,
+  AI_BOOK_CREATION_STATUS_LABELS,
+  getAiBookCreationRequirements,
   normalizeCreationRelations,
   normalizeCreationBrief,
   stripBookCreationChapterContent,
@@ -10,25 +14,6 @@ import {
   type AssistantCreationBrief
 } from '../../shared/ai-book-creation'
 import { getDb } from './connection'
-
-type GenreTemplateRow = {
-  id: number
-  slug: string
-  character_fields: string
-  faction_labels: string
-  status_labels: string
-  emotion_labels: string
-}
-
-function parseArray(value: unknown): unknown[] {
-  if (typeof value !== 'string' || !value) return []
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
 
 function cleanText(value: unknown, fallback = ''): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
@@ -60,21 +45,6 @@ function clampScore(value: unknown): number {
   const score = Number(value)
   if (!Number.isFinite(score)) return 0
   return Math.max(-5, Math.min(5, Math.round(score)))
-}
-
-function pickDefaultGenreTemplate(): GenreTemplateRow | null {
-  const db = getDb()
-  const rawDefault = db.prepare("SELECT value FROM app_state WHERE key = 'system_default_genre_template_id'").get() as
-    | { value?: string }
-    | undefined
-  const defaultId = Number(rawDefault?.value)
-  if (Number.isFinite(defaultId) && defaultId > 0) {
-    const row = db.prepare('SELECT * FROM genre_templates WHERE id = ?').get(defaultId) as GenreTemplateRow | undefined
-    if (row) return row
-  }
-  return db
-    .prepare('SELECT * FROM genre_templates ORDER BY is_seed DESC, created_at ASC, id ASC LIMIT 1')
-    .get() as GenreTemplateRow | null
 }
 
 function readSystemDailyGoal(): number {
@@ -132,8 +102,13 @@ export function createBookFromAiPackage(input: {
   package: AiBookCreationPackage
   messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string; metadata?: unknown }>
 }) {
+  const requirements = getAiBookCreationRequirements(input.brief)
   const validation = validateBookCreationPackage(input.package, {
-    minCharacters: getMinimumCharacterCount(input.brief)
+    minCharacters: requirements.minCharacters,
+    minChapters: requirements.totalChapters,
+    minWikiEntries: requirements.minWikiEntries,
+    minPlotNodes: requirements.minPlotNodes,
+    minForeshadowings: requirements.minForeshadowings
   })
   if (!validation.ok) {
     throw new Error(validation.errors.join('；'))
@@ -143,7 +118,6 @@ export function createBookFromAiPackage(input: {
   const pkg = stripBookCreationChapterContent(input.package)
   const db = getDb()
   const tx = db.transaction(() => {
-    const template = pickDefaultGenreTemplate()
     const dailyGoal = readSystemDailyGoal()
     const bookResult = db
       .prepare('INSERT INTO books (title, author) VALUES (?, ?)')
@@ -153,16 +127,16 @@ export function createBookFromAiPackage(input: {
     db.prepare(
       `INSERT INTO project_config (
         book_id, genre, character_fields, faction_labels, status_labels, emotion_labels,
-        daily_goal, daily_goal_mode, sensitive_list,
-        editor_font, editor_font_size, editor_line_height, editor_width
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      daily_goal, daily_goal_mode, sensitive_list,
+      editor_font, editor_font_size, editor_line_height, editor_width
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       bookId,
-      template?.slug || 'urban',
-      JSON.stringify(parseArray(template?.character_fields)),
-      JSON.stringify(parseArray(template?.faction_labels)),
-      JSON.stringify(parseArray(template?.status_labels)),
-      JSON.stringify(parseArray(template?.emotion_labels)),
+      'AI 起书',
+      JSON.stringify(AI_BOOK_CREATION_CHARACTER_FIELDS),
+      JSON.stringify(AI_BOOK_CREATION_FACTION_LABELS),
+      JSON.stringify(AI_BOOK_CREATION_STATUS_LABELS),
+      JSON.stringify(AI_BOOK_CREATION_EMOTION_LABELS),
       dailyGoal,
       'follow_system',
       'default',

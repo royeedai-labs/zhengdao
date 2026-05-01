@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   CREATION_BRIEF_FIELDS,
+  distributeBookCreationChapters,
   extractCharacterPlanItems,
+  getAiBookCreationRequirements,
   getCreationBriefMissingFields,
   getMinimumCharacterCount,
   hasCreationBriefInput,
@@ -83,9 +85,9 @@ describe('AI book creation shared helpers', () => {
         { category: '规则', title: '行业', content: '职场规则' }
       ],
       plotNodes: [
-        { chapterNumber: 1, title: '开篇钩子', score: 1 },
-        { chapterNumber: 2, title: '线索推进', score: 2 },
-        { chapterNumber: 3, title: '反转爽点', score: 3 }
+        { chapterNumber: 1, title: '开篇钩子', score: 1, description: '建立主角处境和核心疑问。' },
+        { chapterNumber: 2, title: '线索推进', score: 2, description: '让主角获得可验证线索。' },
+        { chapterNumber: 3, title: '反转爽点', score: 3, description: '回收线索并升级主线矛盾。' }
       ],
       foreshadowings: [{ text: '第一章的小细节第三章回收。', expectedChapter: 3 }]
     }
@@ -102,6 +104,32 @@ describe('AI book creation shared helpers', () => {
     expect(getMinimumCharacterCount({ characterPlan: '主角、反派、3 个关键配角' })).toBe(5)
     expect(getMinimumCharacterCount({ characterPlan: '群像' })).toBe(4)
     expect(getMinimumCharacterCount({ characterPlan: '30岁男性主角' })).toBe(2)
+    expect(getMinimumCharacterCount({ seedIdea: '要 2 卷 8 章，超 10 个人物 2 个主角' })).toBe(11)
+  })
+
+  it('parses explicit AI book creation structure requirements', () => {
+    expect(getAiBookCreationRequirements({
+      seedIdea: '要 2 卷 8 章，超 10 个人物 2 个主角'
+    })).toMatchObject({
+      volumeCount: 2,
+      totalChapters: 8,
+      minCharacters: 11,
+      protagonistCount: 2,
+      minPlotNodes: 8,
+      minWikiEntries: 4,
+      minForeshadowings: 2
+    })
+
+    expect(getAiBookCreationRequirements({
+      chapterPlan: '两卷八章',
+      characterPlan: '十一人，二个主角'
+    })).toMatchObject({
+      volumeCount: 2,
+      totalChapters: 8,
+      minCharacters: 11,
+      protagonistCount: 2
+    })
+    expect(distributeBookCreationChapters(8, 2)).toEqual([4, 4])
   })
 
   it('normalizes AI book creation relations by character name and relation type aliases', () => {
@@ -140,9 +168,9 @@ describe('AI book creation shared helpers', () => {
         { category: '规则', title: '线索规则', content: '线索必须可回收' }
       ],
       plotNodes: [
-        { chapterNumber: 1, title: '开篇钩子', score: 1 },
-        { chapterNumber: 2, title: '线索推进', score: 2 },
-        { chapterNumber: 3, title: '反转爽点', score: 3 }
+        { chapterNumber: 1, title: '开篇钩子', score: 1, description: '建立主角处境。' },
+        { chapterNumber: 2, title: '线索推进', score: 2, description: '推动第一条线索。' },
+        { chapterNumber: 3, title: '反转爽点', score: 3, description: '完成第一次判断反转。' }
       ],
       foreshadowings: [{ text: '旧照片第三章回收。', expectedChapter: 3 }]
     }

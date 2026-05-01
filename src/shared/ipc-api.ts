@@ -159,6 +159,11 @@ export type IpcInvokeChannel =
   | 'ai:getDrafts'
   | 'ai:createDraft'
   | 'ai:setDraftStatus'
+  | 'ai:getStoryBible'
+  | 'ai:listStoryFactProposals'
+  | 'ai:captureStoryFacts'
+  | 'ai:acceptStoryFactProposals'
+  | 'ai:rejectStoryFactProposals'
   | 'ai:getResolvedGlobalConfig'
   | 'ai:getResolvedConfigForBook'
   | 'ai:getResolvedWorkspaceConfig'
@@ -203,6 +208,7 @@ export type IpcInvokeChannel =
   | 'auth:getAccessToken'
   | 'auth:openUpgradePage'
   | 'auth:openAccountPage'
+  | 'auth:openCommunityFeedbackPage'
 
   // team:* — DI-06 v2 team collaboration (registerTeamIpc)
   | 'team:listMine'
@@ -235,6 +241,7 @@ export type IpcInvokeChannel =
   | 'window:isFullScreen'
   | 'window:isMaximized'
   | 'window:toggleMaximize'
+  | 'window:setTitleBarOverlay'
 
   // sync:* + backup:* + data:* — cloud sync, local rotating backups, full export
   | 'sync:uploadBook'
@@ -324,6 +331,8 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'ai:getOrCreateConversation', 'ai:createConversation', 'ai:getConversations',
   'ai:updateConversationTitle', 'ai:clearConversation', 'ai:deleteConversation',
   'ai:getMessages', 'ai:addMessage', 'ai:getDrafts', 'ai:createDraft', 'ai:setDraftStatus',
+  'ai:getStoryBible', 'ai:listStoryFactProposals', 'ai:captureStoryFacts',
+  'ai:acceptStoryFactProposals', 'ai:rejectStoryFactProposals',
   'ai:getResolvedGlobalConfig', 'ai:getResolvedConfigForBook', 'ai:getResolvedWorkspaceConfig',
   'ai:complete', 'ai:getOfficialProfiles', 'ai:executeSkill', 'ai:submitSkillFeedback',
   'ai:getProviderStatus', 'ai:setupGeminiCli',
@@ -336,7 +345,7 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'mcp:linkCanon', 'mcp:unlinkCanon', 'mcp:listAudit', 'mcp:buildCanonContext',
   'mcp:rejectWriteRequest',
   'auth:login', 'auth:getUser', 'auth:logout', 'auth:getAccessToken',
-  'auth:openUpgradePage', 'auth:openAccountPage',
+  'auth:openUpgradePage', 'auth:openAccountPage', 'auth:openCommunityFeedbackPage',
   'team:listMine', 'team:create', 'team:listMembers', 'team:removeMember',
   'team:listInvitations', 'team:createInvitation', 'team:revokeInvitation',
   'team:acceptInvitation', 'team:listProjects', 'team:linkProject',
@@ -345,7 +354,7 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'app:getUpdateState', 'app:getAppVersion', 'app:checkForUpdates', 'app:downloadUpdate',
   'app:downloadManualInstallerUpdate', 'app:installDownloadedUpdate', 'app:reloadWindow',
   'window:notify', 'window:setFullScreen', 'window:isFullScreen',
-  'window:isMaximized', 'window:toggleMaximize',
+  'window:isMaximized', 'window:toggleMaximize', 'window:setTitleBarOverlay',
   'sync:uploadBook', 'sync:listCloudBooks', 'sync:downloadBook',
   'backup:configure', 'backup:now', 'backup:list', 'backup:restore', 'backup:restoreFrom',
   'data:exportFull', 'data:importFull',

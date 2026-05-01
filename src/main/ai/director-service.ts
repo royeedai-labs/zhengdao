@@ -18,6 +18,7 @@ import type {
   DirectorStartRunInput,
   DirectorStartRunResult
 } from '../../shared/director'
+import { parseSseBlock, splitSseBlocks } from './sse-parser'
 
 const WEBSITE_URL = (process.env.ZHENGDAO_WEBSITE_URL || 'https://agent.xiangweihu.com').replace(/\/$/, '')
 const API_BASE = (process.env.ZHENGDAO_API_URL || `${WEBSITE_URL}/api/v1`).replace(/\/$/, '')
@@ -183,16 +184,12 @@ export async function rejectDirectorChapter(runId: string, chapterId: string, to
 
 function parseSseEvents(buffer: string): { events: DirectorEvent[]; rest: string } {
   const events: DirectorEvent[] = []
-  const parts = buffer.split('\n\n')
-  const rest = parts.pop() || ''
-  for (const part of parts) {
-    const dataLines = part
-      .split('\n')
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).trim())
-    if (dataLines.length === 0) continue
+  const { blocks, rest } = splitSseBlocks(buffer)
+  for (const block of blocks) {
+    const parsed = parseSseBlock(block)
+    if (!parsed) continue
     try {
-      events.push(JSON.parse(dataLines.join('\n')) as DirectorEvent)
+      events.push(JSON.parse(parsed.data) as DirectorEvent)
     } catch {
       void 0
     }
