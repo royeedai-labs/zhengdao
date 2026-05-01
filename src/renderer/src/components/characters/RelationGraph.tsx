@@ -1,105 +1,96 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type WheelEvent as ReactWheelEvent
+} from 'react'
+import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { Character, CharacterRelation } from '@/types'
-import { relationColor } from '@/constants/relation-types'
+import { formatRelationLabel, relationColor } from '@/constants/relation-types'
+import {
+  layoutCharacterRelationGraph,
+  type CharacterGraphLayoutNode
+} from './relation-graph-layout'
 
-type SimNode = {
-  id: number
-  name: string
+type Viewport = {
+  scale: number
   x: number
   y: number
-  vx: number
-  vy: number
 }
 
-function simulateLayout(chars: Character[], relations: CharacterRelation[], width: number, height: number): SimNode[] {
-  const pad = 48
-  const w = Math.max(width, 200)
-  const h = Math.max(height, 200)
-  const nodes: SimNode[] = chars.map((c, i) => {
-    const angle = (2 * Math.PI * i) / Math.max(chars.length, 1)
-    const ring = Math.min(w, h) * 0.28
-    return {
-      id: c.id,
-      name: c.name,
-      x: w / 2 + Math.cos(angle) * ring + (Math.random() - 0.5) * 24,
-      y: h / 2 + Math.sin(angle) * ring + (Math.random() - 0.5) * 24,
-      vx: 0,
-      vy: 0
-    }
-  })
-  const byId = new Map(nodes.map((n) => [n.id, n]))
-  const edges = relations
-    .map((r) => {
-      const s = byId.get(r.source_id)
-      const t = byId.get(r.target_id)
-      return s && t ? { s, t, r } : null
-    })
-    .filter(Boolean) as { s: SimNode; t: SimNode; r: CharacterRelation }[]
-
-  const kRep = 640
-  const kAtt = 0.045
-  const ideal = Math.min(w, h) * 0.14
-  const damping = 0.88
-
-  for (let iter = 0; iter < 100; iter++) {
-    const fx = new Map<number, number>()
-    const fy = new Map<number, number>()
-    for (const n of nodes) {
-      fx.set(n.id, 0)
-      fy.set(n.id, 0)
-    }
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i]
-        const b = nodes[j]
-        let dx = b.x - a.x
-        let dy = b.y - a.y
-        const dist = Math.hypot(dx, dy) + 0.02
-        const f = kRep / (dist * dist)
-        dx /= dist
-        dy /= dist
-        fx.set(a.id, (fx.get(a.id) || 0) - dx * f)
-        fy.set(a.id, (fy.get(a.id) || 0) - dy * f)
-        fx.set(b.id, (fx.get(b.id) || 0) + dx * f)
-        fy.set(b.id, (fy.get(b.id) || 0) + dy * f)
-      }
-    }
-    for (const e of edges) {
-      let dx = e.t.x - e.s.x
-      let dy = e.t.y - e.s.y
-      const dist = Math.hypot(dx, dy) + 0.02
-      const force = kAtt * (dist - ideal)
-      dx /= dist
-      dy /= dist
-      fx.set(e.s.id, (fx.get(e.s.id) || 0) + dx * force)
-      fy.set(e.s.id, (fy.get(e.s.id) || 0) + dy * force)
-      fx.set(e.t.id, (fx.get(e.t.id) || 0) - dx * force)
-      fy.set(e.t.id, (fy.get(e.t.id) || 0) - dy * force)
-    }
-    for (const n of nodes) {
-      const gx = (w / 2 - n.x) * 0.03
-      const gy = (h / 2 - n.y) * 0.03
-      fx.set(n.id, (fx.get(n.id) || 0) + gx)
-      fy.set(n.id, (fy.get(n.id) || 0) + gy)
-    }
-    for (const n of nodes) {
-      n.vx = ((n.vx || 0) + (fx.get(n.id) || 0)) * damping
-      n.vy = ((n.vy || 0) + (fy.get(n.id) || 0)) * damping
-      n.x += n.vx
-      n.y += n.vy
-      n.x = Math.max(pad, Math.min(w - pad, n.x))
-      n.y = Math.max(pad, Math.min(h - pad, n.y))
-    }
-  }
-
-  return nodes
-}
+type DragState =
+  | { kind: 'node'; id: number; offX: number; offY: number }
+  | { kind: 'pan'; startX: number; startY: number; originX: number; originY: number }
 
 interface RelationGraphProps {
   characters: Character[]
   relations: CharacterRelation[]
   selectedId: number | null
   onSelectCharacter: (id: number | null) => void
+}
+
+const NODE_RADIUS = 30
+const MIN_ZOOM = 0.35
+const MAX_ZOOM = 2.5
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text
+  let result = text
+  while (result.length > 1 && ctx.measureText(`${result}…`).width > maxWidth) {
+    result = result.slice(0, -1)
+  }
+  return `${result}…`
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  const r = Math.min(radius, width / 2, height / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + width - r, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r)
+  ctx.lineTo(x + width, y + height - r)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
+  ctx.lineTo(x + r, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+function fitViewport(nodes: CharacterGraphLayoutNode[], size: { w: number; h: number }): Viewport {
+  if (nodes.length === 0) return { scale: 1, x: 0, y: 0 }
+  const xs = nodes.map((node) => node.x)
+  const ys = nodes.map((node) => node.y)
+  const minX = Math.min(...xs) - 96
+  const maxX = Math.max(...xs) + 96
+  const minY = Math.min(...ys) - 96
+  const maxY = Math.max(...ys) + 96
+  const boundsW = Math.max(1, maxX - minX)
+  const boundsH = Math.max(1, maxY - minY)
+  const scale = clamp(
+    Math.min((size.w - 48) / boundsW, (size.h - 48) / boundsH),
+    MIN_ZOOM,
+    1.15
+  )
+  return {
+    scale,
+    x: (size.w - boundsW * scale) / 2 - minX * scale,
+    y: (size.h - boundsH * scale) / 2 - minY * scale
+  }
 }
 
 export default function RelationGraph({
@@ -110,8 +101,10 @@ export default function RelationGraph({
 }: RelationGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const nodesRef = useRef<SimNode[]>([])
-  const dragRef = useRef<{ id: number; offX: number; offY: number } | null>(null)
+  const nodesRef = useRef<CharacterGraphLayoutNode[]>([])
+  const dragRef = useRef<DragState | null>(null)
+  const viewportRef = useRef<Viewport>({ scale: 1, x: 0, y: 0 })
+  const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 })
   const [size, setSize] = useState({ w: 640, h: 420 })
 
   useEffect(() => {
@@ -119,8 +112,8 @@ export default function RelationGraph({
     if (!el || typeof ResizeObserver === 'undefined') return
     const updateSize = (width: number, height: number) => {
       const next = {
-        w: Math.max(200, Math.floor(width) || 640),
-        h: Math.max(200, Math.floor(height) || 420)
+        w: Math.max(260, Math.floor(width) || 640),
+        h: Math.max(280, Math.floor(height) || 420)
       }
       setSize((prev) => (prev.w === next.w && prev.h === next.h ? prev : next))
     }
@@ -134,14 +127,49 @@ export default function RelationGraph({
     return () => ro.disconnect()
   }, [])
 
-  const layoutNodes = useMemo(
-    () => (characters.length === 0 ? [] : simulateLayout(characters, relations, size.w, size.h)),
-    [characters, relations, size.w, size.h]
+  const layout = useMemo(
+    () => layoutCharacterRelationGraph(characters, relations, size.w),
+    [characters, relations, size.w]
   )
 
+  const applyViewport = useCallback((next: Viewport) => {
+    viewportRef.current = next
+    setViewport(next)
+  }, [])
+
+  const resetView = useCallback(() => {
+    applyViewport(fitViewport(nodesRef.current, size))
+  }, [applyViewport, size])
+
   useEffect(() => {
-    nodesRef.current = layoutNodes
-  }, [layoutNodes])
+    nodesRef.current = layout.nodes
+    applyViewport(fitViewport(layout.nodes, size))
+  }, [applyViewport, layout.nodes, size])
+
+  const drawLabel = useCallback((
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    palette: { canvasBg: string; border: string; textSecondary: string }
+  ) => {
+    ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
+    const label = truncateText(ctx, text, 180)
+    const width = ctx.measureText(label).width + 16
+    const height = 22
+    roundRect(ctx, x - width / 2, y - height / 2, width, height, 7)
+    ctx.fillStyle = palette.canvasBg
+    ctx.globalAlpha = 0.92
+    ctx.fill()
+    ctx.globalAlpha = 1
+    ctx.strokeStyle = palette.border
+    ctx.lineWidth = 1
+    ctx.stroke()
+    ctx.fillStyle = palette.textSecondary
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(label, x, y + 0.5)
+  }, [])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -171,69 +199,94 @@ export default function RelationGraph({
     ctx.fillRect(0, 0, w, h)
 
     const nodes = nodesRef.current
-    const byId = new Map(nodes.map((n) => [n.id, n]))
+    const byId = new Map(nodes.map((node) => [node.id, node]))
+    const currentViewport = viewportRef.current
+    ctx.save()
+    ctx.translate(currentViewport.x, currentViewport.y)
+    ctx.scale(currentViewport.scale, currentViewport.scale)
 
     for (const rel of relations) {
       const a = byId.get(rel.source_id)
       const b = byId.get(rel.target_id)
       if (!a || !b) continue
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const dist = Math.hypot(dx, dy)
+      if (dist < 1) continue
+      const ux = dx / dist
+      const uy = dy / dist
+      const startX = a.x + ux * NODE_RADIUS
+      const startY = a.y + uy * NODE_RADIUS
+      const endX = b.x - ux * NODE_RADIUS
+      const endY = b.y - uy * NODE_RADIUS
+      const connected = selectedId == null || rel.source_id === selectedId || rel.target_id === selectedId
       const col = relationColor(rel.relation_type)
       ctx.beginPath()
       ctx.strokeStyle = col
-      ctx.lineWidth = 2
-      ctx.globalAlpha = 0.85
-      ctx.moveTo(a.x, a.y)
-      ctx.lineTo(b.x, b.y)
+      ctx.lineWidth = connected ? 2.2 : 1.4
+      ctx.globalAlpha = connected ? 0.9 : 0.28
+      ctx.moveTo(startX, startY)
+      ctx.lineTo(endX, endY)
       ctx.stroke()
+
+      ctx.beginPath()
+      ctx.fillStyle = col
+      const arrowSize = 8
+      ctx.moveTo(endX, endY)
+      ctx.lineTo(endX - ux * arrowSize - uy * 4.5, endY - uy * arrowSize + ux * 4.5)
+      ctx.lineTo(endX - ux * arrowSize + uy * 4.5, endY - uy * arrowSize - ux * 4.5)
+      ctx.closePath()
+      ctx.fill()
       ctx.globalAlpha = 1
-      const mx = (a.x + b.x) / 2
-      const my = (a.y + b.y) / 2
-      const text = rel.label?.trim() || ''
-      if (text) {
-        ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
-        ctx.fillStyle = palette.textSecondary
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'bottom'
-        ctx.strokeStyle = palette.canvasBg
-        ctx.lineWidth = 4
-        ctx.strokeText(text, mx, my - 4)
-        ctx.fillText(text, mx, my - 4)
-      }
+
+      const mx = (startX + endX) / 2
+      const my = (startY + endY) / 2
+      const label = formatRelationLabel(rel.relation_type, rel.label)
+      drawLabel(ctx, label, mx, my - 10, palette)
     }
 
-    const nr = 22
-    for (const n of nodes) {
-      const sel = n.id === selectedId
+    for (const node of nodes) {
+      const selected = node.id === selectedId
       ctx.beginPath()
-      ctx.arc(n.x, n.y, nr + (sel ? 4 : 0), 0, Math.PI * 2)
-      ctx.fillStyle = sel ? palette.accentSurface : palette.surface
-      ctx.strokeStyle = sel ? palette.accent : palette.border
-      ctx.lineWidth = sel ? 3 : 1.5
+      ctx.arc(node.x, node.y, NODE_RADIUS + (selected ? 5 : 0), 0, Math.PI * 2)
+      ctx.fillStyle = selected ? palette.accentSurface : palette.surface
+      ctx.strokeStyle = selected ? palette.accent : palette.border
+      ctx.lineWidth = selected ? 3 : 1.5
       ctx.fill()
       ctx.stroke()
+
       ctx.beginPath()
-      ctx.arc(n.x, n.y, nr, 0, Math.PI * 2)
+      ctx.arc(node.x, node.y, NODE_RADIUS - 7, 0, Math.PI * 2)
       ctx.fillStyle = palette.surface
       ctx.fill()
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
       ctx.fillStyle = palette.textPrimary
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      const label = n.name.length > 8 ? `${n.name.slice(0, 7)}…` : n.name
-      ctx.fillText(label, n.x, n.y)
+      ctx.fillText(truncateText(ctx, node.name, 58), node.x, node.y)
     }
-  }, [relations, selectedId, size.w, size.h])
+
+    ctx.restore()
+  }, [drawLabel, relations, selectedId, size.h, size.w])
 
   useEffect(() => {
+    viewportRef.current = viewport
     draw()
-  }, [draw, layoutNodes])
+  }, [draw, viewport])
 
-  const pickNode = (cx: number, cy: number): number | null => {
+  const toWorld = (screenX: number, screenY: number) => {
+    const currentViewport = viewportRef.current
+    return {
+      x: (screenX - currentViewport.x) / currentViewport.scale,
+      y: (screenY - currentViewport.y) / currentViewport.scale
+    }
+  }
+
+  const pickNode = (worldX: number, worldY: number): CharacterGraphLayoutNode | null => {
     const nodes = nodesRef.current
-    const hit = 26
     for (let i = nodes.length - 1; i >= 0; i--) {
-      const n = nodes[i]
-      if (Math.hypot(cx - n.x, cy - n.y) <= hit) return n.id
+      const node = nodes[i]!
+      if (Math.hypot(worldX - node.x, worldY - node.y) <= NODE_RADIUS + 8) return node
     }
     return null
   }
@@ -242,36 +295,81 @@ export default function RelationGraph({
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const id = pickNode(x, y)
-    if (id !== null) {
-      const n = nodesRef.current.find((o) => o.id === id)
-      if (n) dragRef.current = { id, offX: x - n.x, offY: y - n.y }
-      onSelectCharacter(id)
-    } else {
-      onSelectCharacter(null)
+    const screenX = e.clientX - rect.left
+    const screenY = e.clientY - rect.top
+    const world = toWorld(screenX, screenY)
+    const node = pickNode(world.x, world.y)
+    if (node) {
+      dragRef.current = {
+        kind: 'node',
+        id: node.id,
+        offX: world.x - node.x,
+        offY: world.y - node.y
+      }
+      onSelectCharacter(node.id)
+      return
     }
+    dragRef.current = {
+      kind: 'pan',
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: viewportRef.current.x,
+      originY: viewportRef.current.y
+    }
+    onSelectCharacter(null)
   }
 
   const onMouseMove = (e: ReactMouseEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current
     if (!drag) return
+    if (drag.kind === 'pan') {
+      applyViewport({
+        ...viewportRef.current,
+        x: drag.originX + e.clientX - drag.startX,
+        y: drag.originY + e.clientY - drag.startY
+      })
+      return
+    }
+
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const n = nodesRef.current.find((o) => o.id === drag.id)
-    if (n) {
-      n.x = Math.max(32, Math.min(size.w - 32, x - drag.offX))
-      n.y = Math.max(32, Math.min(size.h - 32, y - drag.offY))
-      draw()
-    }
+    const world = toWorld(e.clientX - rect.left, e.clientY - rect.top)
+    const node = nodesRef.current.find((item) => item.id === drag.id)
+    if (!node) return
+    node.x = clamp(world.x - drag.offX, 40, Math.max(layout.width - 40, 40))
+    node.y = clamp(world.y - drag.offY, 40, Math.max(layout.height - 40, 40))
+    draw()
   }
 
   const endDrag = () => {
     dragRef.current = null
+  }
+
+  const onWheel = (e: ReactWheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const screenX = e.clientX - rect.left
+    const screenY = e.clientY - rect.top
+    const world = toWorld(screenX, screenY)
+    const scale = clamp(viewportRef.current.scale * Math.exp(-e.deltaY * 0.001), MIN_ZOOM, MAX_ZOOM)
+    applyViewport({
+      scale,
+      x: screenX - world.x * scale,
+      y: screenY - world.y * scale
+    })
+  }
+
+  const zoomBy = (factor: number) => {
+    const center = toWorld(size.w / 2, size.h / 2)
+    const scale = clamp(viewportRef.current.scale * factor, MIN_ZOOM, MAX_ZOOM)
+    applyViewport({
+      scale,
+      x: size.w / 2 - center.x * scale,
+      y: size.h / 2 - center.y * scale
+    })
   }
 
   if (characters.length === 0) {
@@ -284,12 +382,39 @@ export default function RelationGraph({
     <div ref={containerRef} className="relative h-[420px] w-full overflow-hidden rounded-lg border border-[var(--border-primary)]">
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 block w-full h-full cursor-grab active:cursor-grabbing"
+        className="absolute inset-0 block h-full w-full cursor-grab active:cursor-grabbing"
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={endDrag}
         onMouseLeave={endDrag}
+        onWheel={onWheel}
       />
+      <div className="absolute right-2 top-2 flex overflow-hidden rounded border border-[var(--border-primary)] bg-[var(--bg-secondary)] shadow-sm">
+        <button
+          type="button"
+          title="放大"
+          onClick={() => zoomBy(1.18)}
+          className="border-r border-[var(--border-primary)] p-1.5 text-[var(--text-muted)] hover:text-[var(--accent-secondary)]"
+        >
+          <ZoomIn size={14} />
+        </button>
+        <button
+          type="button"
+          title="缩小"
+          onClick={() => zoomBy(0.84)}
+          className="border-r border-[var(--border-primary)] p-1.5 text-[var(--text-muted)] hover:text-[var(--accent-secondary)]"
+        >
+          <ZoomOut size={14} />
+        </button>
+        <button
+          type="button"
+          title="适应视图"
+          onClick={resetView}
+          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--accent-secondary)]"
+        >
+          <Maximize2 size={14} />
+        </button>
+      </div>
     </div>
   )
 }

@@ -5,21 +5,28 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type PointerEvent as ReactPointerEvent
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent
 } from 'react'
 import { Activity, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
+import { useChapterStore } from '@/stores/chapter-store'
 import { usePlotStore } from '@/stores/plot-store'
 import { useCharacterStore } from '@/stores/character-store'
 import type { PlotNode } from '@/types'
 import PoisonWarning from './PoisonWarning'
 import {
   PLOT_BASELINE_Y,
+  PLOT_VIEW_HEIGHT,
   chapterToTimelineX,
+  clampSandboxZoom,
   dragExceededThreshold,
+  getAdaptiveChapterPx,
+  getAdaptiveTimelineWidth,
   getPlotNodeLeft,
-  getTimelineWidth,
+  getSandboxOverviewZoom,
   projectPlotDrag,
   scoreToTimelineY
 } from './sandbox-layout'
@@ -31,6 +38,7 @@ type DragState = {
   startClientX: number
   startClientY: number
   startScrollLeft: number
+  startScrollTop: number
   startChapter: number
   startScore: number
   previewChapter: number
@@ -38,13 +46,27 @@ type DragState = {
   dragging: boolean
 }
 
+type ViewportPanState = {
+  startClientX: number
+  startClientY: number
+  startScrollLeft: number
+  startScrollTop: number
+}
+
 interface BottomPanelProps {
   embedded?: boolean
 }
 
 export default function BottomPanel({ embedded = false }: BottomPanelProps = {}) {
-  const { bottomPanelOpen, bottomPanelHeight, setBottomPanelHeight, setBottomPanelOpen, pushModal } = useUIStore()
+  const bottomPanelOpen = useUIStore((s) => s.bottomPanelOpen)
+  const bottomPanelHeight = useUIStore((s) => s.bottomPanelHeight)
+  const setBottomPanelHeight = useUIStore((s) => s.setBottomPanelHeight)
+  const setBottomPanelOpen = useUIStore((s) => s.setBottomPanelOpen)
+  const pushModal = useUIStore((s) => s.pushModal)
   const bookId = useBookStore((s) => s.currentBookId)
+  const chapterCount = useChapterStore((s) =>
+    s.volumes.reduce((count, volume) => count + (volume.chapters?.length ?? 0), 0)
+  )
   const plotNodes = usePlotStore((s) => s.plotNodes)
   const plotlines = usePlotStore((s) => s.plotlines)
   const plotNodeCharacterIds = usePlotStore((s) => s.plotNodeCharacterIds)
@@ -60,15 +82,42 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
   const resizeStateRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const previousNodesRef = useRef<Map<number, { chapter_number: number; score: number }>>(new Map())
   const dragStateRef = useRef<DragState | null>(null)
+  const sandboxZoomRef = useRef(1)
+  const viewportPanStateRef = useRef<ViewportPanState | null>(null)
+  const pendingNodeOpenRef = useRef<number | null>(null)
 
   const [hiddenPlotlineIds, setHiddenPlotlineIds] = useState<Set<number>>(new Set())
   const [managePlotlinesOpen, setManagePlotlinesOpen] = useState(false)
   const [dragState, setDragState] = useState<DragState | null>(null)
+  const [sandboxZoom, setSandboxZoom] = useState(1)
+  const [sandboxViewportWidth, setSandboxViewportWidth] = useState(0)
+  const [viewportPanning, setViewportPanning] = useState(false)
   const [dismissedPoisonKey, setDismissedPoisonKey] = useState<string | null>(null)
 
   useEffect(() => {
     dragStateRef.current = dragState
   }, [dragState])
+
+  useEffect(() => {
+    sandboxZoomRef.current = sandboxZoom
+  }, [sandboxZoom])
+
+  useEffect(() => {
+    const scrollEl = scrollRef.current
+    if (!scrollEl) return
+
+    const updateViewportWidth = () => setSandboxViewportWidth(scrollEl.clientWidth)
+    updateViewportWidth()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateViewportWidth)
+      return () => window.removeEventListener('resize', updateViewportWidth)
+    }
+
+    const observer = new ResizeObserver(updateViewportWidth)
+    observer.observe(scrollEl)
+    return () => observer.disconnect()
+  }, [bottomPanelOpen, embedded])
 
   const poisonStatus = checkPoisonWarning()
   const poisonWarningKey = poisonStatus.triggered ? `${poisonStatus.startCh}:${poisonStatus.endCh}` : null
@@ -108,25 +157,32 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
     () => renderedNodes.reduce((max, node) => Math.max(max, node.chapter_number), 1),
     [renderedNodes]
   )
-  const timelineEndChapter = Math.max(20, maxChapter + 6)
-  const timelineWidth = getTimelineWidth(timelineEndChapter)
+  const timelineEndChapter = Math.max(1, chapterCount, maxChapter)
+  const chapterPx = getAdaptiveChapterPx(timelineEndChapter, sandboxViewportWidth)
+  const timelineWidth = getAdaptiveTimelineWidth(timelineEndChapter, chapterPx)
+  const scaledTimelineWidth = timelineWidth * sandboxZoom
   const chapterMarkers = useMemo(() => {
     const markers = new Set<number>([1])
-    for (let chapter = 10; chapter <= timelineEndChapter; chapter += 10) markers.add(chapter)
+    if (timelineEndChapter <= 30) {
+      for (let chapter = 2; chapter <= timelineEndChapter; chapter++) markers.add(chapter)
+    } else {
+      for (let chapter = 10; chapter <= timelineEndChapter; chapter += 10) markers.add(chapter)
+      markers.add(timelineEndChapter)
+    }
     return [...markers].sort((a, b) => a - b)
   }, [timelineEndChapter])
 
   const generateEKGPath = useCallback(() => {
     if (visibleNodes.length === 0) return ''
     const sorted = [...visibleNodes].sort((a, b) => a.chapter_number - b.chapter_number || a.id - b.id)
-    const startX = chapterToTimelineX(sorted[0].chapter_number)
+    const startX = chapterToTimelineX(sorted[0].chapter_number, chapterPx)
     let path = `M ${startX} ${PLOT_BASELINE_Y} `
     sorted.forEach((node) => {
-      path += `L ${chapterToTimelineX(node.chapter_number)} ${scoreToTimelineY(node.score)} `
+      path += `L ${chapterToTimelineX(node.chapter_number, chapterPx)} ${scoreToTimelineY(node.score)} `
     })
-    path += `L ${chapterToTimelineX(sorted[sorted.length - 1].chapter_number)} ${PLOT_BASELINE_Y}`
+    path += `L ${chapterToTimelineX(sorted[sorted.length - 1].chapter_number, chapterPx)} ${PLOT_BASELINE_Y}`
     return path
-  }, [visibleNodes])
+  }, [chapterPx, visibleNodes])
 
   const usePlotlineColors = plotlines.length > 0
 
@@ -177,15 +233,126 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
     (chapter: number, behavior: ScrollBehavior = 'smooth') => {
       const scrollEl = scrollRef.current
       if (!scrollEl) return
-      const targetLeft = chapterToTimelineX(chapter) - scrollEl.clientWidth / 2
-      const maxScrollLeft = Math.max(0, timelineWidth - scrollEl.clientWidth)
+      const targetLeft = chapterToTimelineX(chapter, chapterPx) * sandboxZoom - scrollEl.clientWidth / 2
+      const maxScrollLeft = Math.max(0, timelineWidth * sandboxZoom - scrollEl.clientWidth)
       scrollEl.scrollTo({
         left: Math.max(0, Math.min(targetLeft, maxScrollLeft)),
         behavior
       })
     },
+    [chapterPx, sandboxZoom, timelineWidth]
+  )
+
+  const applySandboxZoom = useCallback((nextZoom: number, anchorClientX?: number, anchorClientY?: number) => {
+    const scrollEl = scrollRef.current
+    const currentZoom = clampSandboxZoom(sandboxZoomRef.current)
+    const zoom = clampSandboxZoom(nextZoom)
+    sandboxZoomRef.current = zoom
+
+    if (!scrollEl) {
+      setSandboxZoom(zoom)
+      return
+    }
+
+    const rect = scrollEl.getBoundingClientRect()
+    const anchorOffsetX = anchorClientX === undefined ? scrollEl.clientWidth / 2 : anchorClientX - rect.left
+    const anchorOffsetY = anchorClientY === undefined ? scrollEl.clientHeight / 2 : anchorClientY - rect.top
+    const contentX = (scrollEl.scrollLeft + anchorOffsetX) / currentZoom
+    const contentY = (scrollEl.scrollTop + anchorOffsetY) / currentZoom
+
+    setSandboxZoom(zoom)
+    window.requestAnimationFrame(() => {
+      scrollEl.scrollLeft = Math.max(0, contentX * zoom - anchorOffsetX)
+      scrollEl.scrollTop = Math.max(0, contentY * zoom - anchorOffsetY)
+    })
+  }, [])
+
+  const fitSandboxOverview = useCallback(
+    (behavior: ScrollBehavior = 'smooth') => {
+      const scrollEl = scrollRef.current
+      if (!scrollEl) return
+      const nextZoom = getSandboxOverviewZoom(timelineWidth, scrollEl.clientWidth, scrollEl.clientHeight)
+      sandboxZoomRef.current = nextZoom
+      setSandboxZoom(nextZoom)
+      window.requestAnimationFrame(() => {
+        scrollEl.scrollTo({ left: 0, top: 0, behavior })
+      })
+    },
     [timelineWidth]
   )
+
+  const handleSandboxWheel = useCallback(
+    (event: ReactWheelEvent<HTMLDivElement>) => {
+      if (plotNodes.length === 0 || Math.abs(event.deltaY) < 0.5) return
+      event.preventDefault()
+      const currentZoom = clampSandboxZoom(sandboxZoomRef.current)
+      const nextZoom = clampSandboxZoom(currentZoom * Math.exp(-event.deltaY * 0.0015))
+      if (nextZoom === currentZoom) return
+      applySandboxZoom(nextZoom, event.clientX, event.clientY)
+    },
+    [applySandboxZoom, plotNodes.length]
+  )
+
+  const handleSandboxDoubleClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (plotNodes.length === 0) return
+      if ((event.target as HTMLElement).closest('[data-plot-node]')) return
+      event.preventDefault()
+      fitSandboxOverview()
+    },
+    [fitSandboxOverview, plotNodes.length]
+  )
+
+  const startViewportPan = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0 || plotNodes.length === 0) return
+      if ((event.target as HTMLElement).closest('[data-plot-node], button, input, textarea, select, a')) return
+
+      const scrollEl = scrollRef.current
+      if (!scrollEl) return
+
+      event.preventDefault()
+      viewportPanStateRef.current = {
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startScrollLeft: scrollEl.scrollLeft,
+        startScrollTop: scrollEl.scrollTop
+      }
+      setViewportPanning(true)
+      document.body.style.cursor = 'grabbing'
+      document.body.style.userSelect = 'none'
+    },
+    [plotNodes.length]
+  )
+
+  const clearPendingNodeOpen = useCallback(() => {
+    if (pendingNodeOpenRef.current === null) return
+    window.clearTimeout(pendingNodeOpenRef.current)
+    pendingNodeOpenRef.current = null
+  }, [])
+
+  const openNodeAfterClick = useCallback(
+    (node: PlotNode) => {
+      clearPendingNodeOpen()
+      pendingNodeOpenRef.current = window.setTimeout(() => {
+        openModal('plotNode', { ...node })
+        pendingNodeOpenRef.current = null
+      }, 260)
+    },
+    [clearPendingNodeOpen, openModal]
+  )
+
+  const handleNodeDoubleClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      clearPendingNodeOpen()
+      fitSandboxOverview()
+    },
+    [clearPendingNodeOpen, fitSandboxOverview]
+  )
+
+  useEffect(() => () => clearPendingNodeOpen(), [clearPendingNodeOpen])
 
   useEffect(() => {
     const previousNodes = previousNodesRef.current
@@ -221,13 +388,16 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
     if (event.button !== 0) return
     event.preventDefault()
     event.stopPropagation()
+    clearPendingNodeOpen()
 
     const scrollLeft = scrollRef.current?.scrollLeft ?? 0
+    const scrollTop = scrollRef.current?.scrollTop ?? 0
     const nextDragState: DragState = {
       nodeId: node.id,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startScrollLeft: scrollLeft,
+      startScrollTop: scrollTop,
       startChapter: node.chapter_number,
       startScore: node.score,
       previewChapter: node.chapter_number,
@@ -249,9 +419,12 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
 
       const scrollEl = scrollRef.current
       const currentScrollLeft = scrollEl?.scrollLeft ?? current.startScrollLeft
-      const deltaX = event.clientX - current.startClientX + (currentScrollLeft - current.startScrollLeft)
-      const deltaY = event.clientY - current.startClientY
-      const projected = projectPlotDrag(current.startChapter, current.startScore, deltaX, deltaY)
+      const currentScrollTop = scrollEl?.scrollTop ?? current.startScrollTop
+      const currentZoom = clampSandboxZoom(sandboxZoomRef.current)
+      const deltaX =
+        (event.clientX - current.startClientX + (currentScrollLeft - current.startScrollLeft)) / currentZoom
+      const deltaY = (event.clientY - current.startClientY + (currentScrollTop - current.startScrollTop)) / currentZoom
+      const projected = projectPlotDrag(current.startChapter, current.startScore, deltaX, deltaY, chapterPx)
       const moved = dragExceededThreshold(deltaX, deltaY)
 
       setDragState((previous) =>
@@ -286,7 +459,7 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
       if (!node) return
 
       if (!current.dragging) {
-        openModal('plotNode', { ...node })
+        openNodeAfterClick(node)
         return
       }
 
@@ -309,7 +482,39 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [dragState?.nodeId, openModal, plotNodes, updatePlotNode])
+  }, [chapterPx, dragState?.nodeId, openNodeAfterClick, plotNodes, updatePlotNode])
+
+  useEffect(() => {
+    if (!viewportPanning) return
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const panState = viewportPanStateRef.current
+      const scrollEl = scrollRef.current
+      if (!panState || !scrollEl) return
+
+      scrollEl.scrollLeft = panState.startScrollLeft - (event.clientX - panState.startClientX)
+      scrollEl.scrollTop = panState.startScrollTop - (event.clientY - panState.startClientY)
+    }
+
+    const stopPanning = () => {
+      viewportPanStateRef.current = null
+      setViewportPanning(false)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', stopPanning)
+    window.addEventListener('pointercancel', stopPanning)
+
+    return () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', stopPanning)
+      window.removeEventListener('pointercancel', stopPanning)
+    }
+  }, [viewportPanning])
 
   useEffect(() => {
     const handleMove = (event: MouseEvent) => {
@@ -494,7 +699,16 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
         </div>
       )}
 
-      <div ref={scrollRef} className="relative flex-1 overflow-x-auto overflow-y-hidden bg-[var(--bg-primary)]">
+      <div
+        ref={scrollRef}
+        onWheel={handleSandboxWheel}
+        onPointerDown={startViewportPan}
+        onDoubleClick={handleSandboxDoubleClick}
+        className={`relative flex-1 overflow-auto bg-[var(--bg-primary)] ${
+          plotNodes.length === 0 ? '' : viewportPanning ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+        title={plotNodes.length === 0 ? undefined : '按住拖动画布，滚轮缩放，双击全览'}
+      >
         {plotNodes.length === 0 ? (
           <div className="flex h-full min-h-[260px] items-center justify-center p-6">
             <div className="max-w-sm rounded-2xl border border-dashed border-[var(--accent-border)] bg-[var(--accent-surface)] px-6 py-8 text-center">
@@ -513,135 +727,148 @@ export default function BottomPanel({ embedded = false }: BottomPanelProps = {})
             </div>
           </div>
         ) : (
-          <div className="relative h-full min-h-[260px]" style={{ width: `${timelineWidth}px` }}>
-            <div className="pointer-events-none absolute inset-0">
-              {chapterMarkers.map((chapter) => (
-                <div
-                  key={chapter}
-                  className="absolute top-0 h-full border-l border-[var(--border-primary)]"
-                  style={{ left: `${chapterToTimelineX(chapter)}px` }}
-                >
-                  <span className="absolute left-2 top-2 text-[10px] font-mono text-[var(--text-muted)]">
-                    Ch {chapter}
-                  </span>
-                </div>
-              ))}
-
-              <div
-                className="absolute left-0 w-full border-t border-dashed border-[var(--border-primary)]"
-                style={{ top: `${PLOT_BASELINE_Y}px` }}
-              />
-
-              <div className="absolute left-3 top-3 text-[10px] text-[var(--success-primary)]">+5 爽点</div>
-              <div
-                className="absolute left-3 -translate-y-1/2 text-[10px] text-[var(--warning-primary)]"
-                style={{ top: `${PLOT_BASELINE_Y}px` }}
-              >
-                0 平稳
-              </div>
-              <div className="absolute bottom-3 left-3 text-[10px] text-[var(--danger-primary)]">-5 毒点</div>
-            </div>
-
-            <svg className="pointer-events-none absolute inset-x-0 top-4 h-[260px] overflow-visible">
-              <path
-                d={generateEKGPath()}
-                fill="none"
-                stroke="url(#ekg-grad)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="drop-shadow-[0_0_8px_rgba(63,111,159,0.18)]"
-              />
-              <defs>
-                <linearGradient id="ekg-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--success-primary)" />
-                  <stop offset="50%" stopColor="var(--warning-primary)" />
-                  <stop offset="100%" stopColor="var(--danger-primary)" />
-                </linearGradient>
-              </defs>
-            </svg>
-
-            {renderedNodes.map((node) => {
-              const hidden = Boolean(node.plotline_id && hiddenPlotlineIds.has(node.plotline_id))
-              if (hidden) return null
-
-              const yPos = scoreToTimelineY(node.score)
-              const isHigh = node.score > 0
-              const style = nodeStyle(node)
-              const dotRing = 'dotClass' in style && style.dotClass ? style.dotClass : ''
-              const dotPos = isHigh ? '-bottom-1.5' : node.score < 0 ? '-top-1.5' : 'top-1/2 -mt-1.5'
-              const assocIds = plotNodeCharacterIds[node.id] ?? []
-              const assocChars = assocIds
-                .map((id) => characters.find((character) => character.id === id))
-                .filter(Boolean)
-              const draggingThisNode = dragState?.nodeId === node.id
-
-              return (
-                <div
-                  key={node.id}
-                  role="button"
-                  tabIndex={0}
-                  onPointerDown={(event) => startNodeInteraction(event, node)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      openModal('plotNode', { ...node })
-                    }
-                  }}
-                  className={`group absolute z-10 w-36 rounded-lg border bg-[var(--bg-secondary)] p-2 shadow-lg select-none touch-none transition-all duration-150 ${
-                    draggingThisNode
-                      ? 'scale-[1.01] shadow-2xl ring-1 ring-[var(--accent-border)] cursor-grabbing'
-                      : 'cursor-grab hover:-translate-y-0.5 hover:shadow-xl'
-                  } ${style.borderClass}`}
-                  style={{
-                    left: `${getPlotNodeLeft(node.chapter_number)}px`,
-                    top: `${yPos - (isHigh ? 60 : 0)}px`,
-                    ...style.borderStyle
-                  }}
-                >
-                  {draggingThisNode && (
-                    <div className="mb-1 rounded-md bg-[var(--accent-surface)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--accent-secondary)]">
-                      拖拽中 · Ch {node.chapter_number} · {node.score > 0 ? `+${node.score}` : node.score}
-                    </div>
-                  )}
-
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="rounded bg-[var(--bg-tertiary)] px-1 py-0.5 text-[9px] font-mono text-[var(--text-primary)]">
-                      Ch {node.chapter_number}
-                    </span>
-                    <span className={`text-[10px] font-bold ${style.scoreClass}`}>
-                      {node.score > 0 ? `+${node.score}` : node.score}
+          <div className="relative h-full" style={{ width: `${scaledTimelineWidth}px`, minHeight: PLOT_VIEW_HEIGHT }}>
+            <div
+              className="relative h-full"
+              style={{
+                width: `${timelineWidth}px`,
+                minHeight: PLOT_VIEW_HEIGHT,
+                transform: `scale(${sandboxZoom})`,
+                transformOrigin: '0 0',
+                willChange: 'transform'
+              }}
+            >
+              <div className="pointer-events-none absolute inset-0">
+                {chapterMarkers.map((chapter) => (
+                  <div
+                    key={chapter}
+                    className="absolute top-0 h-full border-l border-[var(--border-primary)]"
+                    style={{ left: `${chapterToTimelineX(chapter, chapterPx)}px` }}
+                  >
+                    <span className="absolute left-2 top-2 text-[10px] font-mono text-[var(--text-muted)]">
+                      Ch {chapter}
                     </span>
                   </div>
+                ))}
 
-                  <div className="mb-0.5 truncate text-xs font-bold text-[var(--text-primary)]">{node.title}</div>
+                <div
+                  className="absolute left-0 w-full border-t border-dashed border-[var(--border-primary)]"
+                  style={{ top: `${PLOT_BASELINE_Y}px` }}
+                />
 
-                  {assocChars.length > 0 && (
-                    <div className="mb-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      {assocChars.slice(0, 5).map((character) => (
-                        <span
-                          key={character!.id}
-                          title={character!.name}
-                          className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-primary)] bg-[var(--bg-tertiary)] text-[8px] font-medium text-[var(--text-primary)]"
-                        >
-                          {character!.name.slice(0, 1)}
-                        </span>
-                      ))}
-                      {assocChars.length > 5 && (
-                        <span className="text-[8px] text-[var(--text-muted)]">+{assocChars.length - 5}</span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="line-clamp-1 text-[9px] text-[var(--text-muted)]">{node.description}</div>
-
-                  <div
-                    className={`absolute left-1/2 -ml-1.5 h-3 w-3 rounded-full border-2 border-[var(--bg-secondary)] ${dotRing} ${dotPos}`}
-                    style={Object.keys(style.dotStyle).length ? style.dotStyle : undefined}
-                  />
+                <div className="absolute left-3 top-3 text-[10px] text-[var(--success-primary)]">+5 爽点</div>
+                <div
+                  className="absolute left-3 -translate-y-1/2 text-[10px] text-[var(--warning-primary)]"
+                  style={{ top: `${PLOT_BASELINE_Y}px` }}
+                >
+                  0 平稳
                 </div>
-              )
-            })}
+                <div className="absolute bottom-3 left-3 text-[10px] text-[var(--danger-primary)]">-5 毒点</div>
+              </div>
+
+              <svg className="pointer-events-none absolute inset-x-0 top-4 h-[260px] overflow-visible">
+                <path
+                  d={generateEKGPath()}
+                  fill="none"
+                  stroke="url(#ekg-grad)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="drop-shadow-[0_0_8px_rgba(63,111,159,0.18)]"
+                />
+                <defs>
+                  <linearGradient id="ekg-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--success-primary)" />
+                    <stop offset="50%" stopColor="var(--warning-primary)" />
+                    <stop offset="100%" stopColor="var(--danger-primary)" />
+                  </linearGradient>
+                </defs>
+              </svg>
+
+              {renderedNodes.map((node) => {
+                const hidden = Boolean(node.plotline_id && hiddenPlotlineIds.has(node.plotline_id))
+                if (hidden) return null
+
+                const yPos = scoreToTimelineY(node.score)
+                const isHigh = node.score > 0
+                const style = nodeStyle(node)
+                const dotRing = 'dotClass' in style && style.dotClass ? style.dotClass : ''
+                const dotPos = isHigh ? '-bottom-1.5' : node.score < 0 ? '-top-1.5' : 'top-1/2 -mt-1.5'
+                const assocIds = plotNodeCharacterIds[node.id] ?? []
+                const assocChars = assocIds
+                  .map((id) => characters.find((character) => character.id === id))
+                  .filter(Boolean)
+                const draggingThisNode = dragState?.nodeId === node.id
+
+                return (
+                  <div
+                    key={node.id}
+                    data-plot-node="true"
+                    role="button"
+                    tabIndex={0}
+                    onPointerDown={(event) => startNodeInteraction(event, node)}
+                    onDoubleClick={handleNodeDoubleClick}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        openModal('plotNode', { ...node })
+                      }
+                    }}
+                    className={`group absolute z-10 w-36 rounded-lg border bg-[var(--bg-secondary)] p-2 shadow-lg select-none touch-none transition-all duration-150 ${
+                      draggingThisNode
+                        ? 'scale-[1.01] shadow-2xl ring-1 ring-[var(--accent-border)] cursor-grabbing'
+                        : 'cursor-grab hover:-translate-y-0.5 hover:shadow-xl'
+                    } ${style.borderClass}`}
+                    style={{
+                      left: `${getPlotNodeLeft(node.chapter_number, chapterPx)}px`,
+                      top: `${yPos - (isHigh ? 60 : 0)}px`,
+                      ...style.borderStyle
+                    }}
+                  >
+                    {draggingThisNode && (
+                      <div className="mb-1 rounded-md bg-[var(--accent-surface)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--accent-secondary)]">
+                        拖拽中 · Ch {node.chapter_number} · {node.score > 0 ? `+${node.score}` : node.score}
+                      </div>
+                    )}
+
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="rounded bg-[var(--bg-tertiary)] px-1 py-0.5 text-[9px] font-mono text-[var(--text-primary)]">
+                        Ch {node.chapter_number}
+                      </span>
+                      <span className={`text-[10px] font-bold ${style.scoreClass}`}>
+                        {node.score > 0 ? `+${node.score}` : node.score}
+                      </span>
+                    </div>
+
+                    <div className="mb-0.5 truncate text-xs font-bold text-[var(--text-primary)]">{node.title}</div>
+
+                    {assocChars.length > 0 && (
+                      <div className="mb-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                        {assocChars.slice(0, 5).map((character) => (
+                          <span
+                            key={character!.id}
+                            title={character!.name}
+                            className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-primary)] bg-[var(--bg-tertiary)] text-[8px] font-medium text-[var(--text-primary)]"
+                          >
+                            {character!.name.slice(0, 1)}
+                          </span>
+                        ))}
+                        {assocChars.length > 5 && (
+                          <span className="text-[8px] text-[var(--text-muted)]">+{assocChars.length - 5}</span>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="line-clamp-1 text-[9px] text-[var(--text-muted)]">{node.description}</div>
+
+                    <div
+                      className={`absolute left-1/2 -ml-1.5 h-3 w-3 rounded-full border-2 border-[var(--bg-secondary)] ${dotRing} ${dotPos}`}
+                      style={Object.keys(style.dotStyle).length ? style.dotStyle : undefined}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>

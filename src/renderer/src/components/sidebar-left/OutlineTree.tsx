@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -72,7 +72,7 @@ function OutlineTabBar({
   )
 }
 
-function SortableChapterItem({
+const SortableChapterItem = memo(function SortableChapterItem({
   ch,
   isCurrent,
   isEditing,
@@ -150,12 +150,13 @@ function SortableChapterItem({
       )}
     </div>
   )
-}
+})
 
 function CharacterList() {
-  const { characters } = useCharacterStore()
+  const characters = useCharacterStore((s) => s.characters)
   const config = useConfigStore((s) => s.config)
-  const { openModal, pushModal } = useUIStore()
+  const openModal = useUIStore((s) => s.openModal)
+  const pushModal = useUIStore((s) => s.pushModal)
   const factionLabels = config?.faction_labels || []
   const factionLabel = (value: string) => factionLabels.find((f) => f.value === value)?.label || value
 
@@ -207,7 +208,12 @@ function CharacterList() {
 
 function WikiList() {
   const bookId = useBookStore((s) => s.currentBookId)!
-  const { categories, entries, selectedCategory, selectCategory, loadEntries, loadCategories } = useWikiStore()
+  const categories = useWikiStore((s) => s.categories)
+  const entries = useWikiStore((s) => s.entries)
+  const selectedCategory = useWikiStore((s) => s.selectedCategory)
+  const selectCategory = useWikiStore((s) => s.selectCategory)
+  const loadEntries = useWikiStore((s) => s.loadEntries)
+  const loadCategories = useWikiStore((s) => s.loadCategories)
   const openModal = useUIStore((s) => s.openModal)
 
   useEffect(() => {
@@ -257,16 +263,14 @@ function WikiList() {
 
 export default function OutlineTree() {
   const bookId = useBookStore((s) => s.currentBookId)!
-  const {
-    volumes,
-    currentChapter,
-    selectChapter,
-    updateVolumeTitle,
-    updateChapterTitle,
-    deleteVolume,
-    deleteChapter,
-    reorderChapters
-  } = useChapterStore()
+  const volumes = useChapterStore((s) => s.volumes)
+  const currentChapter = useChapterStore((s) => s.currentChapter)
+  const selectChapter = useChapterStore((s) => s.selectChapter)
+  const updateVolumeTitle = useChapterStore((s) => s.updateVolumeTitle)
+  const updateChapterTitle = useChapterStore((s) => s.updateChapterTitle)
+  const deleteVolume = useChapterStore((s) => s.deleteVolume)
+  const deleteChapter = useChapterStore((s) => s.deleteChapter)
+  const reorderChapters = useChapterStore((s) => s.reorderChapters)
   const openModal = useUIStore((s) => s.openModal)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const [activeTab, setActiveTab] = useState<LeftTab>('outline')

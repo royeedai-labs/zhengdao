@@ -16,8 +16,7 @@ import { SkillFeedbackForm } from '@/components/ai/SkillFeedbackForm'
  * 点击 chapterId 跳转章节。
  *
  * MVP 决策:
- *  1. 章节内容直接从 chapter-store.volumes 拿 (loadVolumes 已经一次性
- *     把全本 content 从 SQLite 拉回前端), 不再额外拉 IPC。
+ *  1. 章节列表保持元数据轻载; 打开本 modal 时按需读取全本正文。
  *  2. 默认扫描全本; 章节多时给"最近 N 章"快捷入口降低 token 成本。
  *  3. focus 维度复用后端 enum (character/setting/timeline/power/location)。
  *  4. 不在桌面端做 chunking, 后端 impl 已经按 6 章/window 滚动扫描。
@@ -46,6 +45,13 @@ interface WorldConsistencyOutput {
   }
 }
 
+interface ChapterContentRow {
+  id: number
+  title: string
+  content: string | null
+  sort_order: number
+}
+
 const FOCUS_OPTIONS: Array<{ id: FocusDim; label: string }> = [
   { id: 'character', label: '人物' },
   { id: 'setting', label: '设定' },
@@ -71,7 +77,6 @@ function parseLocks(stored: string | undefined): CanonLockEntry[] {
 export default function WorldConsistencyModal() {
   const closeModal = useUIStore((s) => s.closeModal)
   const bookId = useBookStore((s) => s.currentBookId)
-  const volumes = useChapterStore((s) => s.volumes)
   const selectChapter = useChapterStore((s) => s.selectChapter)
   const addToast = useToastStore((s) => s.addToast)
 
@@ -81,6 +86,7 @@ export default function WorldConsistencyModal() {
   const [result, setResult] = useState<WorldConsistencyOutput | null>(null)
   const [feedbackRunId, setFeedbackRunId] = useState<string | null>(null)
   const [canonLocks, setCanonLocks] = useState<CanonLockEntry[]>([])
+  const [chapterRows, setChapterRows] = useState<ChapterContentRow[]>([])
 
   useEffect(() => {
     if (!bookId) return
@@ -93,22 +99,39 @@ export default function WorldConsistencyModal() {
       .catch(() => setCanonLocks([]))
   }, [bookId])
 
+  useEffect(() => {
+    if (!bookId) {
+      setChapterRows([])
+      return
+    }
+    let cancelled = false
+    void window.api
+      .getAllChaptersForBook(bookId)
+      .then((rows: unknown) => {
+        if (!cancelled) setChapterRows(rows as ChapterContentRow[])
+      })
+      .catch(() => {
+        if (!cancelled) setChapterRows([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bookId])
+
   const allChapters = useMemo(() => {
     const out: Array<{ id: string; title: string; content: string; order: number }> = []
-    for (const vol of volumes) {
-      for (const ch of vol.chapters || []) {
-        const content = stripHtmlToText(ch.content || '').trim()
-        if (!content) continue
-        out.push({
-          id: String(ch.id),
-          title: ch.title || `第 ${ch.sort_order + 1} 章`,
-          content,
-          order: ch.sort_order
-        })
-      }
+    for (const ch of chapterRows) {
+      const content = stripHtmlToText(ch.content || '').trim()
+      if (!content) continue
+      out.push({
+        id: String(ch.id),
+        title: ch.title || `第 ${ch.sort_order + 1} 章`,
+        content,
+        order: ch.sort_order
+      })
     }
     return out.sort((a, b) => a.order - b.order)
-  }, [volumes])
+  }, [chapterRows])
 
   const scopedChapters = useMemo(() => {
     if (scope === 'all') return allChapters

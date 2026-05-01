@@ -1,5 +1,11 @@
 import { create } from 'zustand'
 import type { Book } from '@/types'
+import type { Genre } from '../../../shared/genre'
+
+interface CreateBookOptions {
+  productGenre?: Genre
+  coverSourcePath?: string
+}
 
 interface BookStore {
   books: Book[]
@@ -8,7 +14,7 @@ interface BookStore {
   loadBooks: () => Promise<void>
   openBook: (id: number) => void
   closeBook: () => void
-  createBook: (title: string, author: string) => Promise<Book>
+  createBook: (title: string, author: string, options?: CreateBookOptions) => Promise<Book>
   deleteBook: (id: number) => Promise<void>
 }
 
@@ -35,10 +41,10 @@ export const useBookStore = create<BookStore>((set, get) => ({
     set({ currentBookId: null })
   },
 
-  createBook: async (title, author) => {
+  createBook: async (title, author, options = {}) => {
     const wasEmpty = get().books.length === 0
     try {
-      const book = await window.api.createBook({ title, author })
+      const book = await window.api.createBook({ title, author, ...options })
       await get().loadBooks()
       if (wasEmpty) {
         try {

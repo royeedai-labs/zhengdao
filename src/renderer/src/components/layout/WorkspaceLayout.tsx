@@ -77,19 +77,17 @@ export default function WorkspaceLayout() {
     }
   }, [bookId, triggerOnboardingTour])
 
-  const {
-    leftPanelOpen,
-    rightPanelOpen,
-    bottomPanelOpen,
-    blackRoomMode,
-    splitView,
-    openModal,
-    workspaceLayoutPresetId,
-    workspaceLayoutPanelSizes,
-    workspaceLayoutMigrated,
-    setWorkspaceLayoutPanelSizes,
-    markWorkspaceLayoutMigrated
-  } = useUIStore()
+  const leftPanelOpen = useUIStore((s) => s.leftPanelOpen)
+  const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
+  const bottomPanelOpen = useUIStore((s) => s.bottomPanelOpen)
+  const blackRoomMode = useUIStore((s) => s.blackRoomMode)
+  const splitView = useUIStore((s) => s.splitView)
+  const openModal = useUIStore((s) => s.openModal)
+  const workspaceLayoutPresetId = useUIStore((s) => s.workspaceLayoutPresetId)
+  const workspaceLayoutPanelSizes = useUIStore((s) => s.workspaceLayoutPanelSizes)
+  const workspaceLayoutMigrated = useUIStore((s) => s.workspaceLayoutMigrated)
+  const setWorkspaceLayoutPanelSizes = useUIStore((s) => s.setWorkspaceLayoutPanelSizes)
+  const markWorkspaceLayoutMigrated = useUIStore((s) => s.markWorkspaceLayoutMigrated)
   const addToast = useToastStore((s) => s.addToast)
   const warningCount = useForeshadowStore((s) => s.getWarningCount())
   const loadVolumes = useChapterStore((s) => s.loadVolumes)

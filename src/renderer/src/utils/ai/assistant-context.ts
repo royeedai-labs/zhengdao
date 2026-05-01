@@ -44,23 +44,23 @@ export function resolveAssistantContext(input: ResolveAssistantContextInput): Re
     case 'bookshelf':
       return {
         surface,
-        title: 'AI 创作助手 · 新作品',
-        description: '先和你确认字数、章节、人物、主题和边界，再生成筹备包。',
+        title: 'AI 起书',
+        description: '写灵感、选方向、生成起书方案，确认后再创建作品。',
         quickActions: [
           {
             key: 'start_creation',
-            label: '讨论新作品',
-            input: '我想创建一部新小说，请先问我需要补充哪些信息。'
+            label: '我只有一个灵感',
+            input: '我想写一部新小说，只有一个大概灵感，请先帮我整理成可生成起书方案的方向。'
           },
           {
             key: 'summarize_brief',
-            label: '整理需求清单',
-            input: '请整理当前已确认的起书需求，并指出缺少哪些信息。'
+            label: '帮我整理方向',
+            input: '请整理当前已确认的起书方向，未填写的部分交给 AI 后续补全。'
           },
           {
             key: 'offer_options',
             label: '给我候选方案',
-            input: '我有些地方不确定，请给我几个可选择的方案，但不要替我直接决定。'
+            input: '我有些创作方向不确定，请给我几个可选方向，但不要替我写死。'
           }
         ]
       }

@@ -123,6 +123,38 @@ describe('runMigrations', () => {
     }
   })
 
+  it('adds cover_path to legacy books tables', () => {
+    const db = new BetterSqlite3(':memory:') as Database.Database
+
+    try {
+      db.exec(`
+        CREATE TABLE books (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          author TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          description TEXT NOT NULL,
+          applied_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+      `)
+      const insertMigration = db.prepare('INSERT INTO schema_migrations (version, description) VALUES (?, ?)')
+      for (let version = 1; version <= 26; version += 1) {
+        insertMigration.run(version, `migration ${version}`)
+      }
+
+      expect(() => runMigrations(db)).not.toThrow()
+
+      const bookColumns = db.prepare('PRAGMA table_info(books)').all() as { name: string }[]
+      expect(bookColumns.map((column) => column.name)).toContain('cover_path')
+    } finally {
+      db.close()
+    }
+  })
+
   it('seeds genre templates, system defaults, and daily goal mode on fresh schema', () => {
     const db = new BetterSqlite3(':memory:') as Database.Database
 

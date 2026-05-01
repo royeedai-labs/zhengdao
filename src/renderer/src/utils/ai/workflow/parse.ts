@@ -121,6 +121,68 @@ function firstTextField(source: Record<string, unknown>, keys: string[]): string
   return ''
 }
 
+function hasTextField(source: Record<string, unknown>, keys: string[]): boolean {
+  return Boolean(firstTextField(source, keys))
+}
+
+function validateAssistantDraftShape(draft: Record<string, unknown>, kind: AiDraftKind): string[] {
+  const errors: string[] = []
+  const missing = (field: string) => errors.push(`AI 草稿 ${kind} 缺少${field}`)
+
+  switch (kind) {
+    case 'insert_text':
+    case 'replace_text':
+      if (!hasTextField(draft, ['content', 'text', 'body'])) missing('正文内容')
+      break
+    case 'create_chapter':
+      if (!hasTextField(draft, ['title', 'chapter_title', 'chapterTitle', 'chapterName', '章节标题', '章节名'])) {
+        missing('章节标题')
+      }
+      if (!hasTextField(draft, ['content', 'body', 'text', 'chapter_content', 'chapterContent', '正文'])) {
+        missing('章节正文')
+      }
+      break
+    case 'update_chapter_summary':
+      if (!hasTextField(draft, ['summary', 'content', 'text'])) missing('章节摘要')
+      break
+    case 'create_character':
+      if (!hasTextField(draft, ['name', 'title', '角色名'])) missing('角色名')
+      break
+    case 'create_wiki_entry':
+      if (!hasTextField(draft, ['title', 'name', '设定标题'])) missing('设定标题')
+      if (!hasTextField(draft, ['content', 'description', 'text', '设定内容'])) missing('设定内容')
+      break
+    case 'create_plot_node':
+      if (!hasTextField(draft, ['title', 'name', '节点标题'])) missing('剧情节点标题')
+      if (!hasTextField(draft, ['description', 'content', 'text', '节点说明'])) missing('剧情节点说明')
+      break
+    case 'create_foreshadowing':
+      if (!hasTextField(draft, ['text', 'content', 'description', '伏笔描述'])) missing('伏笔描述')
+      break
+    case 'create_citation':
+      if (!hasTextField(draft, ['title', 'formatted', 'source', 'doi'])) missing('引用标题或来源')
+      break
+    case 'create_reference':
+      if (!hasTextField(draft, ['title', 'name'])) missing('文献标题')
+      if (!hasTextField(draft, ['content', 'text', 'excerpt'])) missing('文献内容')
+      break
+    case 'apply_format_template':
+      if (!hasTextField(draft, ['templateName', 'templateId'])) missing('公文模板')
+      break
+    case 'create_policy_anchor':
+      if (!hasTextField(draft, ['title', 'policyName', 'policyNumber'])) missing('政策名称或文号')
+      if (!hasTextField(draft, ['excerpt', 'content', 'text'])) missing('政策摘录')
+      break
+    case 'create_section_outline':
+      if (!hasTextField(draft, ['title', 'name'])) missing('章节大纲标题')
+      break
+    default:
+      break
+  }
+
+  return errors
+}
+
 export function parseAssistantDrafts(text: string): {
   drafts: AiDraftPayload[]
   errors: string[]
@@ -151,6 +213,11 @@ export function parseAssistantDrafts(text: string): {
     const kind = draft.kind
     if (typeof kind !== 'string' || !ALLOWED_DRAFT_KINDS.has(kind as AiDraftKind)) {
       errors.push(`不支持的 AI 草稿类型：${String(kind)}`)
+      continue
+    }
+    const shapeErrors = validateAssistantDraftShape(draft, kind as AiDraftKind)
+    if (shapeErrors.length > 0) {
+      errors.push(...shapeErrors)
       continue
     }
     drafts.push(draft as AiDraftPayload)

@@ -1,0 +1,7 @@
+id = "client-performance-overhaul-2026q2"
+title = "Client Performance Overhaul 2026Q2"
+status = "active"
+baseline_id = "CR-20260501-client-performance-overhaul"
+mode = "brownfield-change"
+quality_tier = "high"
+risk_tier = "medium"

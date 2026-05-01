@@ -8,4 +8,11 @@ describe('renderer content security policy', () => {
 
     expect(html).toContain("connect-src 'self' https: http://127.0.0.1:* http://localhost:*;")
   })
+
+  it('allows the internal book-cover image protocol without allowing file urls', () => {
+    const html = readFileSync(resolve(process.cwd(), 'src/renderer/index.html'), 'utf8')
+
+    expect(html).toContain("img-src 'self' data: blob: zhengdao-cover:;")
+    expect(html).not.toContain('file:')
+  })
 })

@@ -1,5 +1,5 @@
 import {
-  getCreationBriefMissingFields,
+  hasCreationBriefInput,
   type AiBookCreationPackage,
   type AssistantCreationBrief
 } from '../../../../../shared/ai-book-creation'
@@ -80,11 +80,10 @@ export function looksLikeJsonResponse(text: string): boolean {
 }
 
 export function buildBookshelfBriefFallbackContent(brief: AssistantCreationBrief): string {
-  const missing = getCreationBriefMissingFields(brief)
-  if (missing.length > 0) {
-    return `还缺 ${missing.length} 个核心必填项：${missing.map((field) => field.label).join('、')}。可以在输入框上方点选，或直接输入其他内容。`
+  if (hasCreationBriefInput(brief)) {
+    return '已记录起书方向，可以生成起书方案；也可以继续补充创作方向。'
   }
-  return '核心需求已齐，可以生成筹备包预览；也可以继续在输入框上方补充可选项。'
+  return '先写一句故事灵感，就可以生成起书方案。'
 }
 
 export function buildBookshelfBriefFinalContent(
@@ -105,7 +104,7 @@ function countStreamingMatches(text: string, pattern: RegExp): number {
   return text.match(pattern)?.length || 0
 }
 
-function formatBookPackageSummary(pkg: AiBookCreationPackage, title = '筹备包结构已解析'): string {
+function formatBookPackageSummary(pkg: AiBookCreationPackage, title = '起书方案结构已解析'): string {
   const chapterCount = pkg.volumes.reduce(
     (total, volume) => total + (Array.isArray(volume.chapters) ? volume.chapters.length : 0),
     0
@@ -114,7 +113,7 @@ function formatBookPackageSummary(pkg: AiBookCreationPackage, title = '筹备包
     title,
     `作品：《${pkg.book.title || '未命名'}》`,
     `分卷 ${pkg.volumes.length} · 章节 ${chapterCount}`,
-    `人物 ${pkg.characters.length} · 设定 ${pkg.wikiEntries.length}`,
+    `人物 ${pkg.characters.length} · 关系 ${pkg.relations?.length || 0} · 设定 ${pkg.wikiEntries.length}`,
     `剧情 ${pkg.plotNodes.length} · 伏笔 ${pkg.foreshadowings.length}`
   ].join('\n')
 }
@@ -149,7 +148,7 @@ export function buildBookPackageStreamContent(rawStream: string): string {
   ].filter(Boolean)
 
   return [
-    '正在解析筹备包结构...',
+    '正在解析起书方案结构...',
     bookTitle ? `作品：《${bookTitle}》` : '',
     counts.length > 0 ? `已识别：${counts.join(' · ')}` : ''
   ]

@@ -72,7 +72,11 @@ export function normalizeAssistantDrafts(
     return { drafts: [], errors: [] }
   }
   const parsed = parseAssistantDrafts(content)
-  if (skill.key === 'create_chapter' && parsed.drafts.length === 0) {
+  if (
+    skill.key === 'create_chapter' &&
+    parsed.drafts.length === 0 &&
+    parsed.errors.every((error) => error === 'AI 返回内容不是可解析的 JSON 草稿')
+  ) {
     const draft = createChapterDraftFromAssistantResponse(content, 'AI 新章节', {
       allowPlainTextFallback: true
     })

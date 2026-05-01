@@ -116,14 +116,26 @@ describe('buildAssistantContext', () => {
         plainText: '',
         summary: '建立老王的现实处境和即将到来的变化。'
       },
+      characters: [
+        { id: 1, name: '老王', description: '退休老人，主视角' },
+        { id: 2, name: '小李', description: '青年线索人物' }
+      ],
+      foreshadowings: [{ id: 1, text: '村口旧井夜里传出脚步声', status: 'pending' }],
       plotNodes: [
-        { id: 1, title: '现实处境', description: '主角在生活压力中登场', chapter_number: 1 }
+        { id: 1, title: '现实处境', description: '主角在生活压力中登场', chapter_number: 1 },
+        { id: 2, title: '异常钩子', description: '轻幻想异象打破平静', chapter_number: 1 }
       ]
     })
 
     expect(context.chips.map((chip) => chip.kind)).toContain('chapter')
+    expect(context.chips.map((chip) => chip.kind)).toContain('characters')
+    expect(context.chips.map((chip) => chip.kind)).toContain('foreshadowings')
+    expect(context.chips.map((chip) => chip.kind)).toContain('plot_nodes')
     expect(context.contextText).toContain('本章摘要：建立老王的现实处境')
+    expect(context.contextText).toContain('小李')
+    expect(context.contextText).toContain('村口旧井')
     expect(context.contextText).toContain('现实处境')
+    expect(context.contextText).toContain('异常钩子')
   })
 })
 
@@ -307,12 +319,31 @@ describe('parseAssistantDrafts', () => {
     ])
   })
 
+  it('rejects writeable drafts that are missing required schema fields', () => {
+    const parsed = parseAssistantDrafts(
+      JSON.stringify({
+        drafts: [
+          { kind: 'create_chapter', title: '第九章 空壳' },
+          { kind: 'create_character', description: '没有名字的角色' },
+          { kind: 'create_wiki_entry', title: '空设定' }
+        ]
+      })
+    )
+
+    expect(parsed.drafts).toEqual([])
+    expect(parsed.errors).toEqual([
+      'AI 草稿 create_chapter 缺少章节正文',
+      'AI 草稿 create_character 缺少角色名',
+      'AI 草稿 create_wiki_entry 缺少设定内容'
+    ])
+  })
+
   it('accepts new GP-05 academic and professional draft kinds', () => {
     const parsed = parseAssistantDrafts(
       JSON.stringify({
         drafts: [
           { kind: 'create_citation', title: 'Smith 2024', payload: {} },
-          { kind: 'apply_format_template', template: 'red-header-notice' }
+          { kind: 'apply_format_template', templateName: 'red-header-notice' }
         ]
       })
     )

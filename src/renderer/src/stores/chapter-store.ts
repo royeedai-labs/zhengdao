@@ -31,7 +31,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   loadVolumes: async (bookId) => {
     set({ loading: true })
     try {
-      const volumes = await window.api.getVolumesWithChapters(bookId)
+      const volumes = await window.api.getVolumesWithChapterMeta(bookId)
       set({ volumes })
     } finally {
       set({ loading: false })
@@ -70,10 +70,24 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
 
   updateChapterContent: async (id, content, wordCount) => {
     await window.api.updateChapter(id, { content, word_count: wordCount })
-    const cur = get().currentChapter
+    const { currentChapter: cur, volumes } = get()
+    const updated_at = new Date().toISOString()
     if (cur && cur.id === id) {
-      set({ currentChapter: { ...cur, content, word_count: wordCount, updated_at: new Date().toISOString() } })
+      set({
+        currentChapter: { ...cur, content, word_count: wordCount, updated_at },
+        volumes: volumes.map((v) => ({
+          ...v,
+          chapters: v.chapters?.map((c) => (c.id === id ? { ...c, word_count: wordCount, updated_at } : c))
+        }))
+      })
+      return
     }
+    set({
+      volumes: volumes.map((v) => ({
+        ...v,
+        chapters: v.chapters?.map((c) => (c.id === id ? { ...c, word_count: wordCount, updated_at } : c))
+      }))
+    })
   },
 
   updateChapterTitle: async (id, title) => {

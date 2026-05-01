@@ -33,7 +33,7 @@ describe('IPC channel registry', () => {
 
   it('every invoke channel uses a colon-separated namespace prefix', () => {
     const allowedPrefixes = new Set([
-      'db', 'ai', 'director', 'visual', 'mcp', 'auth', 'team', 'app', 'window', 'sync',
+      'db', 'book', 'ai', 'director', 'visual', 'mcp', 'auth', 'team', 'app', 'window', 'sync',
       'backup', 'data', 'fs', 'dialog', 'export'
     ])
     for (const ch of IPC_INVOKE_CHANNELS) {
@@ -63,7 +63,8 @@ describe('IPC channel registry', () => {
     // both this expectation and the registry literal union when adding a
     // handler — that's the whole point of the contract.
     expect(counts).toEqual({
-      db: 103,
+      db: 104,
+      book: 3,
       ai: 29,
       director: 12,
       visual: 2,

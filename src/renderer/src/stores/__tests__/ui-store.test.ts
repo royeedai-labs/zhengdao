@@ -192,4 +192,22 @@ describe('ui store bottom panel state', () => {
     useUIStore.getState().clearAiChapterDraft(31)
     expect(useUIStore.getState().aiChapterDraft).toBeNull()
   })
+
+  it('does not notify subscribers for repeated save status on the same chapter', async () => {
+    const { useUIStore } = await import('../ui-store')
+    let calls = 0
+    const unsubscribe = useUIStore.subscribe(() => {
+      calls += 1
+    })
+
+    useUIStore.getState().markChapterDirty(7)
+    useUIStore.getState().markChapterDirty(7)
+    useUIStore.getState().markChapterSaving(7)
+    useUIStore.getState().markChapterSaving(7)
+    useUIStore.getState().markChapterSaveError(7, '保存失败')
+    useUIStore.getState().markChapterSaveError(7, '保存失败')
+    unsubscribe()
+
+    expect(calls).toBe(3)
+  })
 })

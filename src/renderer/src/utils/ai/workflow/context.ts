@@ -118,6 +118,8 @@ export function buildAssistantContext(input: {
   const maxChapterChars = policy === 'full' ? 16000 : 2600
   const defaultEnabled = policy !== 'manual'
   const referenceText = `${input.selectedText || ''}\n${input.currentChapter?.summary || ''}\n${input.currentChapter?.plainText || ''}`.trim()
+  const currentChapterIsBlank = Boolean(input.currentChapter && !nonEmpty(input.currentChapter.plainText))
+  const includeDraftSeedAssets = policy === 'smart_minimal' && currentChapterIsBlank
   const blocks: AiContextBlock[] = []
 
   const selectionBlock = createContextBlock({
@@ -150,9 +152,11 @@ export function buildAssistantContext(input: {
 
   const rawCharacters =
     policy === 'smart_minimal'
-      ? (input.characters || [])
-          .filter((character) => isMentioned(referenceText, character.name))
-          .slice(0, 10)
+      ? includeDraftSeedAssets
+        ? (input.characters || []).slice(0, 12)
+        : (input.characters || [])
+            .filter((character) => isMentioned(referenceText, character.name))
+            .slice(0, 10)
       : (input.characters || []).slice(0, policy === 'full' ? 20 : 12)
   const charactersBlock = createContextBlock({
     id: 'characters',
@@ -170,9 +174,11 @@ export function buildAssistantContext(input: {
 
   const rawForeshadowings =
     policy === 'smart_minimal'
-      ? (input.foreshadowings || [])
-          .filter((item) => isMentioned(referenceText, item.text))
-          .slice(0, 8)
+      ? includeDraftSeedAssets
+        ? (input.foreshadowings || []).slice(0, 10)
+        : (input.foreshadowings || [])
+            .filter((item) => isMentioned(referenceText, item.text))
+            .slice(0, 8)
       : (input.foreshadowings || []).slice(0, policy === 'full' ? 16 : 10)
   const foreshadowingsBlock = createContextBlock({
     id: 'foreshadowings',
@@ -190,13 +196,15 @@ export function buildAssistantContext(input: {
 
   const rawPlotNodes =
     policy === 'smart_minimal'
-      ? (input.plotNodes || [])
-          .filter(
-            (node) =>
-              isMentioned(referenceText, node.title) ||
-              isMentioned(referenceText, node.description || '')
-          )
-          .slice(0, 8)
+      ? includeDraftSeedAssets
+        ? (input.plotNodes || []).slice(0, 10)
+        : (input.plotNodes || [])
+            .filter(
+              (node) =>
+                isMentioned(referenceText, node.title) ||
+                isMentioned(referenceText, node.description || '')
+            )
+            .slice(0, 8)
       : (input.plotNodes || []).slice(0, policy === 'full' ? 16 : 10)
   const plotNodesBlock = createContextBlock({
     id: 'plot_nodes',

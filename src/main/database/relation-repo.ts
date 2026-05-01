@@ -1,4 +1,5 @@
 import { getDb } from './connection'
+import { normalizeRelationType } from '../../shared/relation-types'
 
 export function getRelations(bookId: number) {
   const db = getDb()
@@ -27,14 +28,14 @@ export function createRelation(
     VALUES (?, ?, ?, ?, ?)
   `
     )
-    .run(bookId, sourceId, targetId, relationType || 'ally', label ?? '')
+    .run(bookId, sourceId, targetId, normalizeRelationType(relationType), label ?? '')
   return db.prepare('SELECT * FROM character_relations WHERE id = ?').get(result.lastInsertRowid)
 }
 
 export function updateRelation(id: number, relationType: string, label: string) {
   const db = getDb()
   db.prepare('UPDATE character_relations SET relation_type = ?, label = ? WHERE id = ?').run(
-    relationType,
+    normalizeRelationType(relationType),
     label ?? '',
     id
   )

@@ -26,6 +26,7 @@ import { AssistantPanelHeader } from './panel-parts/AssistantPanelHeader'
 import { ConversationListDropdown } from './panel-parts/ConversationListDropdown'
 import { DraftListPanel } from './panel-parts/DraftListPanel'
 import { MessageStreamArea } from './panel-parts/MessageStreamArea'
+import { resolveSeededAssistantSkill } from './conversation-mode'
 
 type AiMessage = {
   id: number
@@ -69,21 +70,19 @@ export function AiAssistantPanel() {
   const plotNodes = usePlotStore((s) => s.plotNodes)
   const createPlotNode = usePlotStore((s) => s.createPlotNode)
   const createWikiEntry = useWikiStore((s) => s.createEntry)
-  const {
-    aiAssistantSelectionText,
-    aiAssistantSelectionChapterId,
-    aiAssistantSelectionFrom,
-    aiAssistantSelectionTo,
-    aiAssistantCommand,
-    closeAiAssistant,
-    consumeAiAssistantCommand,
-    setInlineAiDraft,
-    clearInlineAiDraft,
-    setAiChapterDraft,
-    clearAiChapterDraft,
-    openModal,
-    activeModal
-  } = useUIStore()
+  const aiAssistantSelectionText = useUIStore((s) => s.aiAssistantSelectionText)
+  const aiAssistantSelectionChapterId = useUIStore((s) => s.aiAssistantSelectionChapterId)
+  const aiAssistantSelectionFrom = useUIStore((s) => s.aiAssistantSelectionFrom)
+  const aiAssistantSelectionTo = useUIStore((s) => s.aiAssistantSelectionTo)
+  const aiAssistantCommand = useUIStore((s) => s.aiAssistantCommand)
+  const closeAiAssistant = useUIStore((s) => s.closeAiAssistant)
+  const consumeAiAssistantCommand = useUIStore((s) => s.consumeAiAssistantCommand)
+  const setInlineAiDraft = useUIStore((s) => s.setInlineAiDraft)
+  const clearInlineAiDraft = useUIStore((s) => s.clearInlineAiDraft)
+  const setAiChapterDraft = useUIStore((s) => s.setAiChapterDraft)
+  const clearAiChapterDraft = useUIStore((s) => s.clearAiChapterDraft)
+  const openModal = useUIStore((s) => s.openModal)
+  const activeModal = useUIStore((s) => s.activeModal)
 
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [conversations, setConversations] = useState<AiConversationRow[]>([])
@@ -93,6 +92,7 @@ export function AiAssistantPanel() {
   const [overrides, setOverrides] = useState<AiSkillOverride[]>([])
   const [profile, setProfile] = useState<AiWorkProfile | null>(null)
   const [input, setInput] = useState('')
+  const [seededSkillKey, setSeededSkillKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conversationListOpen, setConversationListOpen] = useState(false)
@@ -130,7 +130,7 @@ export function AiAssistantPanel() {
     activeModal
   })
 
-  const { refreshConversation, refreshConfig } = useAiAssistantData({
+  const { refreshConversation } = useAiAssistantData({
     bookId,
     currentChapterId: currentChapter?.id,
     setSkills,
@@ -162,12 +162,6 @@ export function AiAssistantPanel() {
   }, [bookId])
 
   useEffect(() => {
-    if (!bookId) return
-    void refreshConfig()
-    void refreshConversation(conversationId)
-  }, [bookId, conversationId, refreshConfig, refreshConversation])
-
-  useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages.length, drafts.length, loading])
 
@@ -188,6 +182,7 @@ export function AiAssistantPanel() {
   useEffect(() => {
     if (!bookId || !aiAssistantCommand || !conversationId || loading || skills.length === 0) return
     const { id, input: commandInput, autoSend } = aiAssistantCommand
+    setSeededSkillKey(null)
     setInput(commandInput)
     consumeAiAssistantCommand(id)
     if (autoSend) {
@@ -224,13 +219,26 @@ export function AiAssistantPanel() {
 
   useEffect(() => {
     sendCommandRef.current = (text) => {
+      setSeededSkillKey(null)
       void send(undefined, text)
     }
   })
 
   if (!bookId) return <BookshelfCreationAssistantPanel />
 
+  const updateComposerInput = (value: string) => {
+    setSeededSkillKey(null)
+    setInput(value)
+  }
+
+  const submitComposer = () => {
+    const seededSkill = resolveSeededAssistantSkill(skills, seededSkillKey)
+    setSeededSkillKey(null)
+    void send(seededSkill)
+  }
+
   const seedQuickAction = (skill: AiSkillTemplate, actionInput?: string) => {
+    setSeededSkillKey(skill.key)
     if (actionInput) {
       setInput(actionInput)
     } else if (skill.key === 'continue_writing') {
@@ -366,7 +374,10 @@ export function AiAssistantPanel() {
             }))}
             skills={skills}
             onSeedSkill={(skill, input) => seedQuickAction(skill, input)}
-            onPrefillInput={(input) => setInput(input)}
+            onPrefillInput={(input) => {
+              setSeededSkillKey(null)
+              setInput(input)
+            }}
           >
             <DraftListPanel
               drafts={drafts}
@@ -383,8 +394,8 @@ export function AiAssistantPanel() {
 
           <AssistantPanelComposer
             value={input}
-            onChange={setInput}
-            onSubmit={() => void send()}
+            onChange={updateComposerInput}
+            onSubmit={submitComposer}
             loading={loading}
             quickActions={quickActions.map((action) => ({
               key: action.key,
@@ -395,7 +406,10 @@ export function AiAssistantPanel() {
             }))}
             skills={skills}
             onSeedSkill={(skill, input) => seedQuickAction(skill, input)}
-            onPrefillInput={(input) => setInput(input)}
+            onPrefillInput={(input) => {
+              setSeededSkillKey(null)
+              setInput(input)
+            }}
           />
 
         </div>

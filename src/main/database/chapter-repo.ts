@@ -58,7 +58,44 @@ export function getVolumesWithChapters(bookId: number) {
     SELECT c.* FROM chapters c
     JOIN volumes v ON v.id = c.volume_id
     WHERE v.book_id = ? AND c.deleted_at IS NULL AND v.deleted_at IS NULL
-    ORDER BY c.sort_order
+    ORDER BY v.sort_order, c.sort_order
+  `
+    )
+    .all(bookId)
+
+  const chaptersByVolume = new Map<number, any[]>()
+  for (const ch of allChapters) {
+    const list = chaptersByVolume.get(ch.volume_id) || []
+    list.push(ch)
+    chaptersByVolume.set(ch.volume_id, list)
+  }
+  for (const vol of volumes) {
+    vol.chapters = chaptersByVolume.get(vol.id) || []
+  }
+  return volumes
+}
+
+export function getVolumesWithChapterMeta(bookId: number) {
+  const db = getDb()
+  const volumes: any[] = db
+    .prepare('SELECT * FROM volumes WHERE book_id = ? AND deleted_at IS NULL ORDER BY sort_order')
+    .all(bookId)
+  const allChapters: any[] = db
+    .prepare(
+      `
+    SELECT
+      c.id,
+      c.volume_id,
+      c.title,
+      c.word_count,
+      c.summary,
+      c.sort_order,
+      c.created_at,
+      c.updated_at
+    FROM chapters c
+    JOIN volumes v ON v.id = c.volume_id
+    WHERE v.book_id = ? AND c.deleted_at IS NULL AND v.deleted_at IS NULL
+    ORDER BY v.sort_order, c.sort_order
   `
     )
     .all(bookId)

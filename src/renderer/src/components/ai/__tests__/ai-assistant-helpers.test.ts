@@ -3,10 +3,11 @@ import {
   draftTitle,
   ensureHtmlContent,
   formatProviderLabel,
+  normalizeAssistantDrafts,
   plainToHtml,
   withLocalRagChip
 } from '../ai-assistant-helpers'
-import type { AiAssistantContext, AiDraftPayload } from '@/utils/ai/assistant-workflow'
+import type { AiAssistantContext, AiDraftPayload, AiSkillTemplate } from '@/utils/ai/assistant-workflow'
 
 /**
  * SPLIT-006 phase 1 — boundary-lock for the AiAssistantPanel +
@@ -68,6 +69,50 @@ describe('draftTitle', () => {
 
   it('falls back to generic AI 草稿 for unknown kinds', () => {
     expect(draftTitle({ kind: 'something_else' } as unknown as AiDraftPayload)).toBe('AI 草稿')
+  })
+})
+
+describe('normalizeAssistantDrafts', () => {
+  const createChapterSkill: AiSkillTemplate = {
+    id: 1,
+    key: 'create_chapter',
+    name: '创建章节',
+    description: '',
+    system_prompt: '',
+    user_prompt_template: '',
+    context_policy: 'smart_minimal',
+    output_contract: '{"drafts":[{"kind":"create_chapter","title":"章节标题","content":"正文"}]}',
+    enabled_surfaces: 'assistant',
+    sort_order: 1,
+    is_builtin: 1,
+    created_at: '',
+    updated_at: ''
+  }
+
+  it('does not turn malformed structured chapter JSON into a plain-text chapter draft', () => {
+    const result = normalizeAssistantDrafts(
+      createChapterSkill,
+      '{"drafts":[{"kind":"create_chapter","title":"第九章 空壳"}]}'
+    )
+
+    expect(result.drafts).toEqual([])
+    expect(result.errors).toEqual(['AI 草稿 create_chapter 缺少章节正文'])
+  })
+
+  it('still wraps non-JSON chapter prose as a confirmable draft', () => {
+    const result = normalizeAssistantDrafts(
+      createChapterSkill,
+      '第十章 归来\n\n他推开门，风雪落在肩上。'
+    )
+
+    expect(result.errors).toEqual([])
+    expect(result.drafts).toEqual([
+      {
+        kind: 'create_chapter',
+        title: '第十章 归来',
+        content: '他推开门，风雪落在肩上。'
+      }
+    ])
   })
 })
 

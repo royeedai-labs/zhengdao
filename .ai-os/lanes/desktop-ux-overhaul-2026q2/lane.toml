@@ -1,0 +1,6 @@
+id = "desktop-ux-overhaul-2026q2"
+title = "桌面端 UX 系统重构"
+status = "active"
+baseline_id = "CR-20260501-desktop-ux-overhaul"
+quality_tier = "high"
+risk_tier = "medium"

@@ -12,7 +12,9 @@ import type { Chapter } from '@/types'
 export default function SplitEditor() {
   const volumes = useChapterStore((s) => s.volumes)
   const currentChapter = useChapterStore((s) => s.currentChapter)
-  const { splitChapterId, setSplitChapterId, toggleSplitView } = useUIStore()
+  const splitChapterId = useUIStore((s) => s.splitChapterId)
+  const setSplitChapterId = useUIStore((s) => s.setSplitChapterId)
+  const toggleSplitView = useUIStore((s) => s.toggleSplitView)
   const config = useConfigStore((s) => s.config)
 
   const editorFont = config?.editor_font || 'serif'

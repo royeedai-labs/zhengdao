@@ -1,5 +1,8 @@
 import { coerceGenre } from '../../shared/genre'
+import { generateAutoCoverForBook, mapBookCoverUrl } from '../book-cover-service'
 import {
+  getMinimumCharacterCount,
+  normalizeCreationRelations,
   normalizeCreationBrief,
   stripBookCreationChapterContent,
   validateBookCreationPackage,
@@ -129,7 +132,9 @@ export function createBookFromAiPackage(input: {
   package: AiBookCreationPackage
   messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string; metadata?: unknown }>
 }) {
-  const validation = validateBookCreationPackage(input.package)
+  const validation = validateBookCreationPackage(input.package, {
+    minCharacters: getMinimumCharacterCount(input.brief)
+  })
   if (!validation.ok) {
     throw new Error(validation.errors.join('；'))
   }
@@ -194,18 +199,31 @@ export function createBookFromAiPackage(input: {
     })
     if (firstChapterId == null) throw new Error('缺少章节草稿')
 
+    const characterIdsByName = new Map<string, number>()
     pkg.characters.forEach((character) => {
-      db.prepare(
+      const name = cleanText(character.name, '未命名角色')
+      const result = db.prepare(
         `INSERT INTO characters (book_id, name, faction, status, custom_fields, description)
          VALUES (?, ?, ?, ?, ?, ?)`
       ).run(
         bookId,
-        cleanText(character.name, '未命名角色'),
+        name,
         cleanText(character.faction, 'neutral'),
         cleanText(character.status, 'active'),
         JSON.stringify(character.customFields || {}),
         cleanText(character.description)
       )
+      if (!characterIdsByName.has(name)) characterIdsByName.set(name, Number(result.lastInsertRowid))
+    })
+
+    normalizeCreationRelations(pkg.relations, Array.from(characterIdsByName.keys())).forEach((relation) => {
+      const sourceId = characterIdsByName.get(relation.sourceName)
+      const targetId = characterIdsByName.get(relation.targetName)
+      if (!sourceId || !targetId) return
+      db.prepare(
+        `INSERT INTO character_relations (book_id, source_id, target_id, relation_type, label)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(bookId, sourceId, targetId, relation.relationType, relation.label)
     })
 
     pkg.wikiEntries.forEach((entry, index) => {
@@ -261,9 +279,26 @@ export function createBookFromAiPackage(input: {
     return {
       book: db.prepare('SELECT * FROM books WHERE id = ?').get(bookId),
       firstChapterId,
-      conversationId
+      conversationId,
+      genre: coerceGenre(pkg.workProfile?.productGenre || brief.productGenre)
     }
   })
 
-  return tx()
+  const result = tx() as {
+    book: { id: number; title: string; author: string }
+    firstChapterId: number
+    conversationId: number
+    genre: ReturnType<typeof coerceGenre>
+  }
+  generateAutoCoverForBook(result.book.id, {
+    title: result.book.title,
+    author: result.book.author,
+    genre: result.genre,
+    touchUpdatedAt: false
+  })
+  return {
+    firstChapterId: result.firstChapterId,
+    conversationId: result.conversationId,
+    book: mapBookCoverUrl(db.prepare('SELECT * FROM books WHERE id = ?').get(result.book.id) as any)
+  }
 }

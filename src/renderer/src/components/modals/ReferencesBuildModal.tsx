@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertCircle, BookOpen, Loader2, Wand2, X } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useToastStore } from '@/stores/toast-store'
 import { useBookStore } from '@/stores/book-store'
-import { useChapterStore } from '@/stores/chapter-store'
 import { stripHtmlToText } from '@/utils/html-to-text'
 import { getActiveEditor } from '@/components/editor/active-editor'
 import { SkillFeedbackForm } from '@/components/ai/SkillFeedbackForm'
@@ -53,10 +52,22 @@ interface ReferencesBuildOutput {
   missingCitekeys: string[]
 }
 
+interface ChapterContentRow {
+  title: string
+  content: string | null
+}
+
+async function loadManuscriptText(bookId: number): Promise<string> {
+  const rows = (await window.api.getAllChaptersForBook(bookId)) as ChapterContentRow[]
+  return rows
+    .map((chapter) => stripHtmlToText(chapter.content || '').trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 export default function ReferencesBuildModal() {
   const closeModal = useUIStore((s) => s.closeModal)
   const bookId = useBookStore((s) => s.currentBookId)
-  const volumes = useChapterStore((s) => s.volumes)
   const addToast = useToastStore((s) => s.addToast)
 
   const [style, setStyle] = useState<CitationStyle>('gb-t-7714')
@@ -65,6 +76,7 @@ export default function ReferencesBuildModal() {
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<ReferencesBuildOutput | null>(null)
   const [feedbackRunId, setFeedbackRunId] = useState<string | null>(null)
+  const [manuscriptCharCount, setManuscriptCharCount] = useState(0)
 
   useEffect(() => {
     if (!bookId) return
@@ -75,16 +87,23 @@ export default function ReferencesBuildModal() {
       .finally(() => setLoading(false))
   }, [bookId])
 
-  const manuscriptText = useMemo(() => {
-    const parts: string[] = []
-    for (const vol of volumes) {
-      for (const ch of vol.chapters || []) {
-        const text = stripHtmlToText(ch.content || '').trim()
-        if (text) parts.push(text)
-      }
+  useEffect(() => {
+    if (!bookId) {
+      setManuscriptCharCount(0)
+      return
     }
-    return parts.join('\n\n')
-  }, [volumes])
+    let cancelled = false
+    void loadManuscriptText(bookId)
+      .then((text) => {
+        if (!cancelled) setManuscriptCharCount(text.length)
+      })
+      .catch(() => {
+        if (!cancelled) setManuscriptCharCount(0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bookId])
 
   const handleBuild = async () => {
     if (!bookId) return
@@ -96,6 +115,7 @@ export default function ReferencesBuildModal() {
     setResult(null)
     setFeedbackRunId(null)
     try {
+      const manuscriptText = await loadManuscriptText(bookId)
       const r = await window.api.aiExecuteSkill(
         'layer2.references-section-build',
         {
@@ -214,7 +234,7 @@ export default function ReferencesBuildModal() {
 
             <div className="mt-3 flex items-center justify-between">
               <span className="text-[11px] text-[var(--text-muted)]">
-                引文条目 {citations.length} 条 · 全本正文 {manuscriptText.length.toLocaleString()} 字 · 模型档位 balanced
+                引文条目 {citations.length} 条 · 全本正文 {manuscriptCharCount.toLocaleString()} 字 · 模型档位 balanced
               </span>
               <button
                 type="button"

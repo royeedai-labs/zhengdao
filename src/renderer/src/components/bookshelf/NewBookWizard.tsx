@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { X, Save, ChevronRight, BookOpen, Plus, SlidersHorizontal, Star } from 'lucide-react'
+import { X, Save, ChevronRight, BookOpen, Plus, SlidersHorizontal, Star, ImagePlus, RefreshCw } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useBookStore } from '@/stores/book-store'
 import { useConfigStore } from '@/stores/config-store'
 import { useSettingsStore } from '@/stores/settings-store'
 import { GENRES, GENRE_LABELS, GENRE_DESCRIPTIONS, DEFAULT_GENRE, type Genre } from '../../../../shared/genre'
+
+type CoverDraft = {
+  path: string
+  name: string
+  url: string
+}
 
 export default function NewBookWizard() {
   const closeModal = useUIStore((s) => s.closeModal)
@@ -23,6 +29,7 @@ export default function NewBookWizard() {
   // GP-01 v2: 5 题材覆盖。webnovel 是默认值；非 webnovel 题材后续会在 ai_work_profiles
   // 上锁定 product genre，影响后端 SYSTEM_PROMPT / Skill prompt / 草稿 kind 路由。
   const [genre, setGenre] = useState<Genre>(DEFAULT_GENRE)
+  const [coverDraft, setCoverDraft] = useState<CoverDraft | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -50,7 +57,10 @@ export default function NewBookWizard() {
     if (!title.trim() || !selectedTemplate) return
     setSubmitting(true)
     try {
-      const book = await createBook(title.trim(), author.trim())
+      const book = await createBook(title.trim(), author.trim(), {
+        productGenre: genre,
+        coverSourcePath: coverDraft?.path
+      })
       await initConfigFromTemplate(book.id, selectedTemplate, systemDailyGoal)
       // GP-01 v2: 把 product genre 写入 ai_work_profiles。saveWorkProfile 会
       // 在缺 row 时先 insert 默认 row，再 update genre 列。
@@ -71,9 +81,14 @@ export default function NewBookWizard() {
     pushModal('appSettings', { tab: 'genreTemplates' })
   }
 
+  const chooseCover = async () => {
+    const picked = await window.api.book.pickCoverImage() as CoverDraft | null
+    if (picked) setCoverDraft(picked)
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[var(--surface-elevated)] border border-[var(--border-primary)] w-[520px] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="flex max-h-[calc(100vh-48px)] w-[520px] flex-col overflow-hidden rounded-xl border border-[var(--border-primary)] bg-[var(--surface-elevated)] shadow-2xl">
         <div className="h-12 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] flex items-center justify-between px-5">
           <div className="flex items-center space-x-2 text-[var(--accent-secondary)] font-bold">
             <BookOpen size={18} />
@@ -83,7 +98,7 @@ export default function NewBookWizard() {
             <X size={20} />
           </button>
         </div>
-        <div className="p-6 space-y-5 flex-1">
+        <div className="flex-1 space-y-5 overflow-y-auto p-6">
           {step === 1 && (
             <>
               <div>
@@ -106,6 +121,46 @@ export default function NewBookWizard() {
                   className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition"
                   placeholder="你的笔名"
                 />
+              </div>
+              <div>
+                <label className="mb-2 block text-[11px] uppercase tracking-wider text-[var(--text-muted)]">封面（可选）</label>
+                <div className="flex items-center gap-3 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3">
+                  <div className="h-28 w-20 shrink-0 overflow-hidden rounded border border-[var(--border-secondary)] bg-[var(--accent-surface)]">
+                    {coverDraft ? (
+                      <img src={coverDraft.url} alt="作品封面预览" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-[var(--accent-secondary)]">
+                        <BookOpen size={22} />
+                        <span className="text-[10px] font-semibold">自动生成</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                      {coverDraft?.name || '未选择封面'}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void chooseCover()}
+                        className="inline-flex items-center gap-1 rounded border border-[var(--accent-border)] px-3 py-1.5 text-xs text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)]"
+                      >
+                        <ImagePlus size={14} />
+                        选择封面
+                      </button>
+                      {coverDraft ? (
+                        <button
+                          type="button"
+                          onClick={() => setCoverDraft(null)}
+                          className="inline-flex items-center gap-1 rounded border border-[var(--border-secondary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:border-[var(--accent-border)] hover:text-[var(--text-primary)]"
+                        >
+                          <RefreshCw size={14} />
+                          自动生成
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-2">题材</label>

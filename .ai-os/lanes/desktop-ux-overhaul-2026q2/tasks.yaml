@@ -1,0 +1,111 @@
+version: 1
+baseline_id: "CR-20260501-desktop-ux-overhaul"
+scope:
+  mode: "brownfield-change"
+  focus: "desktop-ux-overhaul"
+  quality_tier: "high"
+
+tasks:
+  - id: TASK-DUX-001
+    title: "建立 UX lane 与竞品模式映射"
+    status: done
+    owner: AI
+    risk: low
+    priority: P0
+    verification_required:
+      - "artifact-review"
+
+  - id: TASK-DUX-002
+    title: "建立自动生成的 UX surface ledger"
+    status: done
+    owner: AI
+    risk: low
+    priority: P0
+    affected_components:
+      - "scripts/ux/generate-surface-ledger.mjs"
+      - "ModalType"
+      - "ModalManager"
+      - "CommandPalette"
+    verification_required:
+      - "node scripts/ux/generate-surface-ledger.mjs --check"
+
+  - id: TASK-DUX-003
+    title: "P0 导航与命令体系 UX 审计和方案"
+    status: todo
+    owner: AI
+    risk: medium
+    priority: P0
+    affected_components:
+      - "BookshelfPage"
+      - "TopBar"
+      - "CommandPalette"
+      - "GlobalSearchModal"
+    verification_required:
+      - "surface-ledger rows audited"
+      - "before screenshots"
+
+  - id: TASK-DUX-004
+    title: "P0 写作工作区 UX 审计和方案"
+    status: todo
+    owner: AI
+    risk: medium
+    priority: P0
+    affected_components:
+      - "WorkspaceLayout"
+      - "OutlineTree"
+      - "EditorArea"
+      - "AiAssistantDock"
+    verification_required:
+      - "surface-ledger rows audited"
+      - "before screenshots"
+
+  - id: TASK-DUX-005
+    title: "首批 P0 UX 实现"
+    status: todo
+    owner: AI
+    risk: medium
+    priority: P0
+    approval_required: "after TASK-DUX-003 and TASK-DUX-004 design lock"
+    verification_required:
+      - "npm test"
+      - "npm run typecheck"
+      - "npm run build"
+      - "browser/electron screenshots"
+
+  - id: TASK-DUX-006
+    title: "AI 工作流与写入确认体验收口"
+    status: todo
+    owner: AI
+    risk: medium
+    priority: P1
+    affected_components:
+      - "AiAssistantDock"
+      - "BookshelfCreationAssistantPanel"
+      - "ChapterReviewModal"
+      - "DirectorPanelModal"
+      - "WorldConsistencyModal"
+    verification_required:
+      - "AI write confirmation guard review"
+      - "targeted tests"
+      - "screenshots"
+
+  - id: TASK-DUX-007
+    title: "资料/设定/角色/剧情面板和弹窗统一"
+    status: todo
+    owner: AI
+    risk: medium
+    priority: P1
+    verification_required:
+      - "surface-ledger rows verified"
+      - "modal shell consistency review"
+
+  - id: TASK-DUX-008
+    title: "设置、低频工具、视觉与键盘 polish"
+    status: todo
+    owner: AI
+    risk: medium
+    priority: P2
+    verification_required:
+      - "text-overflow review"
+      - "keyboard navigation review"
+      - "light/dark screenshot matrix"

@@ -10,9 +10,16 @@ type AgentChatResponse = {
   messageText?: string
 }
 
+const MAX_OFFICIAL_AI_OUTPUT_TOKENS = 6000
+
 function modelHintFromRequest(request: AiBridgeCompleteRequest): 'fast' | 'balanced' | 'heavy' {
   if (request.model === 'balanced' || request.model === 'heavy') return request.model
   return 'fast'
+}
+
+function clampOutputTokens(value: number): number {
+  if (!Number.isFinite(value)) return 1024
+  return Math.max(1, Math.min(MAX_OFFICIAL_AI_OUTPUT_TOKENS, Math.trunc(value)))
 }
 
 async function apiRequest<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
@@ -47,6 +54,7 @@ function buildChatPayload(request: AiBridgeCompleteRequest, stream = false) {
   return {
     profileId: augmented.profileId || undefined,
     modelHint: modelHintFromRequest(augmented),
+    maxOutputTokens: clampOutputTokens(augmented.maxTokens),
     stream,
     messages: [
       { role: 'system', content: augmented.systemPrompt },

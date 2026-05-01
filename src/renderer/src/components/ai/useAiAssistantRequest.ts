@@ -47,6 +47,24 @@ import { draftTitle, normalizeAssistantDrafts, withLocalRagChip } from './ai-ass
  * from the composer + from its sendCommandRef effect.
  */
 
+const DEFAULT_ASSISTANT_MAX_TOKENS = 1400
+const CHAPTER_DRAFT_MAX_TOKENS = 4200
+
+export function resolveAssistantRequestMaxTokens(input: {
+  skillKey?: string | null
+  userInput?: string | null
+}): number {
+  const text = input.userInput || ''
+  if (input.skillKey === 'create_chapter') return CHAPTER_DRAFT_MAX_TOKENS
+  if (
+    input.skillKey === 'continue_writing' &&
+    /起草(?:第.{1,12}章|本章)正文|开始写(?:第.{1,12}章|本章)/.test(text)
+  ) {
+    return CHAPTER_DRAFT_MAX_TOKENS
+  }
+  return DEFAULT_ASSISTANT_MAX_TOKENS
+}
+
 export interface AiAssistantMessage {
   id: number
   role: 'user' | 'assistant' | 'system'
@@ -222,7 +240,7 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
             streamError = message
           }
         },
-        1400,
+        resolveAssistantRequestMaxTokens({ skillKey: skill?.key, userInput: text }),
         0.72,
         { signal: requestAbortController.signal }
       )

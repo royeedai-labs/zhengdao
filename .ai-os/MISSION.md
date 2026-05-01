@@ -59,3 +59,4 @@
   - `bookshelf-entry-behavior`：作品入口与总览触发收口
   - `v13-daily-workbench`：v1.3 可信日更工作台、审稿台与发布前检查包
   - `settings-workspace-polish`：系统/作品设置拆分、题材模板系统化与工作区交互统一
+  - `desktop-ux-overhaul-2026q2`：桌面端 UX 系统重构，先用源码生成 surface ledger 防遗漏，再分批审计、设计、实现和截图验收

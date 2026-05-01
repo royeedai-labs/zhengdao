@@ -55,6 +55,7 @@ export type IpcInvokeChannel =
   | 'db:deleteChapter'
   | 'db:getAllChaptersForBook'
   | 'db:getVolumesWithChapters'
+  | 'db:getVolumesWithChapterMeta'
   | 'db:getChapterTemplates'
   | 'db:createChapterTemplate'
   | 'db:deleteChapterTemplate'
@@ -131,6 +132,11 @@ export type IpcInvokeChannel =
   | 'db:createAnnotation'
   | 'db:updateAnnotation'
   | 'db:deleteAnnotation'
+
+  // book:* — local book cover file selection / regeneration
+  | 'book:pickCoverImage'
+  | 'book:chooseCoverImage'
+  | 'book:regenerateAutoCover'
 
   // ai:* — official + Gemini CLI bridge (registerAiIpc)
   | 'ai:getGlobalConfig'
@@ -285,7 +291,7 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'db:getVolumes', 'db:createVolume', 'db:updateVolume', 'db:deleteVolume',
   'db:getChapters', 'db:getChapter', 'db:createChapter', 'db:updateChapter',
   'db:updateChapterTitle', 'db:updateChapterSummary', 'db:deleteChapter',
-  'db:getAllChaptersForBook', 'db:getVolumesWithChapters',
+  'db:getAllChaptersForBook', 'db:getVolumesWithChapters', 'db:getVolumesWithChapterMeta',
   'db:getChapterTemplates', 'db:createChapterTemplate', 'db:deleteChapterTemplate',
   'db:reorderChapters', 'db:reorderVolumes', 'db:moveChapter',
   'db:searchChapters', 'db:rebuildSearchIndex',
@@ -311,6 +317,7 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'db:getNotes', 'db:createNote', 'db:deleteNote',
   'db:getAppState', 'db:setAppState',
   'db:getAnnotations', 'db:createAnnotation', 'db:updateAnnotation', 'db:deleteAnnotation',
+  'book:pickCoverImage', 'book:chooseCoverImage', 'book:regenerateAutoCover',
   'ai:getGlobalConfig', 'ai:saveGlobalConfig', 'ai:getSkillTemplates', 'ai:updateSkillTemplate',
   'ai:getWorkProfile', 'ai:saveWorkProfile', 'ai:getSkillOverrides',
   'ai:upsertSkillOverride', 'ai:deleteSkillOverride',

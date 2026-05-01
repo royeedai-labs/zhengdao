@@ -1,0 +1,58 @@
+version: 1
+baseline_id: "CR-20260501-client-performance-overhaul"
+tasks:
+  - id: TASK-PERF-001
+    title: "建立性能 lane 和预算"
+    status: done
+    priority: P0
+    risk: low
+    verification_required:
+      - "artifact-review"
+  - id: TASK-PERF-002
+    title: "收敛书架封面和章节目录 IPC payload"
+    status: in_progress
+    priority: P0
+    risk: medium
+    affected_components:
+      - "book-repo"
+      - "book-cover-service"
+      - "chapter-repo"
+      - "preload"
+      - "chapter-store"
+    verification_required:
+      - "targeted unit tests"
+  - id: TASK-PERF-003
+    title: "降低编辑器输入与保存路径同步工作"
+    status: in_progress
+    priority: P0
+    risk: medium
+    affected_components:
+      - "EditorArea"
+      - "sensitive-highlight"
+      - "ui-store"
+    verification_required:
+      - "targeted unit tests"
+      - "manual typing smoke"
+  - id: TASK-PERF-004
+    title: "去除 AI 面板重复初始化请求"
+    status: in_progress
+    priority: P1
+    risk: medium
+    affected_components:
+      - "AiAssistantDock"
+      - "useAiAssistantData"
+    verification_required:
+      - "targeted test or review"
+  - id: TASK-PERF-005
+    title: "重弹窗 lazy loading 与热区 memo"
+    status: in_progress
+    priority: P1
+    risk: low
+    affected_components:
+      - "ModalManager"
+      - "BookCard"
+      - "BookCover"
+      - "OutlineTree"
+    verification_required:
+      - "typecheck"
+      - "build"

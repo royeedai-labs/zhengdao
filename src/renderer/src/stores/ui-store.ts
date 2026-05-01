@@ -301,7 +301,9 @@ const initialWorkspaceLayoutSnapshot =
         bottomPanelOpen: readStoredBottomPanelOpen()
       })
 
-function persistWorkspaceLayoutState(presetId: WorkspaceLayoutPresetId, snapshot: WorkspaceLayoutSnapshot): void {
+let workspaceLayoutPersistTimer: ReturnType<typeof setTimeout> | null = null
+
+function writeWorkspaceLayoutState(presetId: WorkspaceLayoutPresetId, snapshot: WorkspaceLayoutSnapshot): void {
   const next = sanitizeWorkspaceLayoutSnapshot(snapshot)
   persistWorkspaceLayoutPresetId(presetId)
   persistWorkspaceLayoutSnapshot(next)
@@ -316,6 +318,25 @@ function persistWorkspaceLayoutState(presetId: WorkspaceLayoutPresetId, snapshot
   } catch {
     void 0
   }
+}
+
+function persistWorkspaceLayoutState(
+  presetId: WorkspaceLayoutPresetId,
+  snapshot: WorkspaceLayoutSnapshot,
+  options: { defer?: boolean } = {}
+): void {
+  if (workspaceLayoutPersistTimer) {
+    clearTimeout(workspaceLayoutPersistTimer)
+    workspaceLayoutPersistTimer = null
+  }
+  if (!options.defer) {
+    writeWorkspaceLayoutState(presetId, snapshot)
+    return
+  }
+  workspaceLayoutPersistTimer = setTimeout(() => {
+    workspaceLayoutPersistTimer = null
+    writeWorkspaceLayoutState(presetId, snapshot)
+  }, 160)
 }
 
 function readStoredTopbarToolsCollapsed(): boolean {
@@ -357,8 +378,22 @@ function readStoredAiAssistantPanelRect(): AiAssistantPanelRect {
   }
 }
 
-function persistAiAssistantPanelRect(rect: AiAssistantPanelRect): void {
+let aiAssistantPanelRectPersistTimer: ReturnType<typeof setTimeout> | null = null
+let aiAssistantLauncherPositionPersistTimer: ReturnType<typeof setTimeout> | null = null
+
+function persistAiAssistantPanelRect(rect: AiAssistantPanelRect, options: { defer?: boolean } = {}): void {
   if (typeof window === 'undefined') return
+  if (aiAssistantPanelRectPersistTimer) {
+    clearTimeout(aiAssistantPanelRectPersistTimer)
+    aiAssistantPanelRectPersistTimer = null
+  }
+  if (options.defer) {
+    aiAssistantPanelRectPersistTimer = setTimeout(() => {
+      aiAssistantPanelRectPersistTimer = null
+      persistAiAssistantPanelRect(rect)
+    }, 160)
+    return
+  }
   try {
     localStorage.setItem(AI_ASSISTANT_PANEL_RECT_STORAGE_KEY, JSON.stringify(rect))
   } catch {
@@ -388,8 +423,22 @@ function readStoredAiAssistantLauncherPosition(): AiAssistantLauncherPosition {
   }
 }
 
-function persistAiAssistantLauncherPosition(position: AiAssistantLauncherPosition): void {
+function persistAiAssistantLauncherPosition(
+  position: AiAssistantLauncherPosition,
+  options: { defer?: boolean } = {}
+): void {
   if (typeof window === 'undefined') return
+  if (aiAssistantLauncherPositionPersistTimer) {
+    clearTimeout(aiAssistantLauncherPositionPersistTimer)
+    aiAssistantLauncherPositionPersistTimer = null
+  }
+  if (options.defer) {
+    aiAssistantLauncherPositionPersistTimer = setTimeout(() => {
+      aiAssistantLauncherPositionPersistTimer = null
+      persistAiAssistantLauncherPosition(position)
+    }, 160)
+    return
+  }
   try {
     localStorage.setItem(AI_ASSISTANT_LAUNCHER_POSITION_STORAGE_KEY, JSON.stringify(position))
   } catch {
@@ -686,7 +735,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
         bottomPanelOpen: s.bottomPanelOpen,
         sizes: nextSizes
       })
-      persistWorkspaceLayoutState(s.workspaceLayoutPresetId, nextSnapshot)
+      persistWorkspaceLayoutState(s.workspaceLayoutPresetId, nextSnapshot, { defer: true })
       return {
         workspaceLayoutPanelSizes: nextSizes,
         leftPanelWidth: workspacePanelPercentToWidth('left', nextSizes.left, getViewportWidth()),
@@ -840,7 +889,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setAiAssistantPanelRect: (rect) => {
     const next =
       typeof window === 'undefined' ? rect : clampAiAssistantPanelRect(rect, window.innerWidth, window.innerHeight)
-    persistAiAssistantPanelRect(next)
+    persistAiAssistantPanelRect(next, { defer: true })
     set({ aiAssistantPanelRect: next })
   },
   setAiAssistantLauncherPosition: (position) => {
@@ -848,7 +897,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
       typeof window === 'undefined'
         ? position
         : clampAiAssistantLauncherPosition(position, window.innerWidth, window.innerHeight)
-    persistAiAssistantLauncherPosition(next)
+    persistAiAssistantLauncherPosition(next, { defer: true })
     set({ aiAssistantLauncherPosition: next })
   },
   setAiAssistantSelection: ({ text, chapterId, from, to }) =>
@@ -874,41 +923,59 @@ export const useUIStore = create<UIStore>((set, get) => ({
     }),
   setChapterSaveStatus: (status) => set({ chapterSaveStatus: status }),
   markChapterDirty: (chapterId) =>
-    set({
-      chapterSaveStatus: {
-        kind: 'dirty',
-        chapterId,
-        savedAt: null,
-        error: null
-      }
-    }),
+    set((s) =>
+      s.chapterSaveStatus.kind === 'dirty' && s.chapterSaveStatus.chapterId === chapterId
+        ? s
+        : {
+          chapterSaveStatus: {
+            kind: 'dirty',
+            chapterId,
+            savedAt: null,
+            error: null
+          }
+        }
+    ),
   markChapterSaving: (chapterId) =>
-    set({
-      chapterSaveStatus: {
-        kind: 'saving',
-        chapterId,
-        savedAt: null,
-        error: null
-      }
-    }),
+    set((s) =>
+      s.chapterSaveStatus.kind === 'saving' && s.chapterSaveStatus.chapterId === chapterId
+        ? s
+        : {
+          chapterSaveStatus: {
+            kind: 'saving',
+            chapterId,
+            savedAt: null,
+            error: null
+          }
+        }
+    ),
   markChapterSaved: (chapterId, savedAt = new Date().toISOString()) =>
-    set({
-      chapterSaveStatus: {
-        kind: 'saved',
-        chapterId,
-        savedAt,
-        error: null
-      }
-    }),
+    set((s) =>
+      s.chapterSaveStatus.kind === 'saved' && s.chapterSaveStatus.chapterId === chapterId
+        ? s
+        : {
+          chapterSaveStatus: {
+            kind: 'saved',
+            chapterId,
+            savedAt,
+            error: null
+          }
+        }
+    ),
   markChapterSaveError: (chapterId, error) =>
-    set({
-      chapterSaveStatus: {
-        kind: 'error',
-        chapterId,
-        savedAt: null,
-        error
-      }
-    }),
+    set((s) =>
+      s.chapterSaveStatus.kind === 'error' &&
+      s.chapterSaveStatus.chapterId === chapterId &&
+      s.chapterSaveStatus.error === error
+        ? s
+        : {
+          chapterSaveStatus: {
+            kind: 'error',
+            chapterId,
+            savedAt: null,
+            error
+          }
+        }
+    ),
 
   theme: initialTheme,
   setTheme: (theme) => {

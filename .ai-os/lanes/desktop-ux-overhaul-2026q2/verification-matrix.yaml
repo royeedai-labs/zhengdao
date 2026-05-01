@@ -1,0 +1,43 @@
+version: 1
+baseline_id: "CR-20260501-desktop-ux-overhaul"
+guards:
+  - id: UX-SURFACE-LEDGER-CURRENT
+    title: "Surface ledger stays generated from source"
+    command: "node scripts/ux/generate-surface-ledger.mjs --check"
+    required_for:
+      - "all UX batches"
+
+  - id: UX-NO-AI-AUTO-WRITE
+    title: "AI write paths keep preview and confirmation"
+    check: "Review changed AI surfaces for draft preview before writing正文、章节、人物、设定、剧情或伏笔"
+    required_for:
+      - "AI workflow changes"
+
+  - id: UX-SCREENSHOT-MATRIX
+    title: "Before/after screenshot matrix"
+    check: "1440x900, 1280x800, and 1024-wide in light/dark where applicable"
+    required_for:
+      - "implemented surface verification"
+
+  - id: UX-STATE-COVERAGE
+    title: "Surface state coverage"
+    check: "empty, populated, loading, error, keyboard, text overflow, dangerous confirmation"
+    required_for:
+      - "implemented surface verification"
+
+  - id: UX-NATIVE-STATIC-CHECKS
+    title: "Project-native static and build checks"
+    commands:
+      - "npm test"
+      - "npm run typecheck"
+      - "npm run build"
+    required_for:
+      - "each implementation batch"
+
+known_risks:
+  - id: RISK-DUX-001
+    title: "Existing dirty AI/book-creation changes are present"
+    mitigation: "Do not overwrite or normalize unrelated modified files; UX lane setup only adds isolated artifacts and script."
+  - id: RISK-DUX-002
+    title: "Full-page UX implementation is too large for one atomic patch"
+    mitigation: "Use generated ledger and batch gates; do not mark surfaces verified without screenshots and tests."

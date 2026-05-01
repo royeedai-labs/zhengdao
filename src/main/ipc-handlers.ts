@@ -1,6 +1,7 @@
 import { autoBackup } from './backup/auto-backup'
 import { registerAiIpc } from './ipc/register-ai-ipc'
 import { handleZhengdaoAuthCallbackUrl, registerAuthIpc } from './ipc/register-auth-ipc'
+import { registerBookCoverIpc } from './ipc/register-book-cover-ipc'
 import { registerDatabaseIpc } from './ipc/register-database-ipc'
 import { registerFsIpc } from './ipc/register-fs-ipc'
 import { registerMcpIpc } from './ipc/register-mcp-ipc'
@@ -24,6 +25,7 @@ import { registerUpdateIpc } from './ipc/register-update-ipc'
  */
 export function registerIpcHandlers(): void {
   registerDatabaseIpc()
+  registerBookCoverIpc()
   registerAiIpc()
   registerProFeatureIpc()
   registerMcpIpc()

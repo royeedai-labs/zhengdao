@@ -1007,6 +1007,15 @@ const migrations: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_chapter_review_mirrors_project ON chapter_review_mirrors(project_id, chapter_id, status);
       `)
     }
+  },
+  {
+    version: 27,
+    description: 'Add local cover path to books',
+    up: (db) => {
+      const columns = db.prepare('PRAGMA table_info(books)').all() as { name: string }[]
+      if (columns.some((column) => column.name === 'cover_path')) return
+      db.exec('ALTER TABLE books ADD COLUMN cover_path TEXT')
+    }
   }
 ]
 

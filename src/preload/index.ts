@@ -7,13 +7,15 @@ import type { McpServerInput, McpWriteRejectionInput } from '../shared/mcp'
 import type { SkillFeedbackPayload, SkillFeedbackSubmitResult } from '../shared/skill-feedback'
 import type { TeamInvitationRole } from '../shared/team-collaboration'
 import type { VisualGenerateInput } from '../shared/visual'
+import type { Genre } from '../shared/genre'
 
 let aiStreamRequestSeq = 0
 
 const api = {
   // Books
   getBooks: () => ipcRenderer.invoke('db:getBooks'),
-  createBook: (data: { title: string; author: string }) => ipcRenderer.invoke('db:createBook', data),
+  createBook: (data: { title: string; author: string; productGenre?: Genre; coverSourcePath?: string }) =>
+    ipcRenderer.invoke('db:createBook', data),
   createBookFromAiPackage: (data: {
     brief: AssistantCreationBrief
     package: AiBookCreationPackage
@@ -21,6 +23,12 @@ const api = {
   }) => ipcRenderer.invoke('db:createBookFromAiPackage', data),
   deleteBook: (id: number) => ipcRenderer.invoke('db:deleteBook', id),
   getBookStats: (bookId: number) => ipcRenderer.invoke('db:getBookStats', bookId),
+
+  book: {
+    pickCoverImage: () => ipcRenderer.invoke('book:pickCoverImage'),
+    chooseCoverImage: (bookId: number) => ipcRenderer.invoke('book:chooseCoverImage', bookId),
+    regenerateAutoCover: (bookId: number) => ipcRenderer.invoke('book:regenerateAutoCover', bookId)
+  },
 
   // Config
   getConfig: (bookId: number) => ipcRenderer.invoke('db:getConfig', bookId),
@@ -55,6 +63,7 @@ const api = {
   deleteChapter: (id: number) => ipcRenderer.invoke('db:deleteChapter', id),
   getAllChaptersForBook: (bookId: number) => ipcRenderer.invoke('db:getAllChaptersForBook', bookId),
   getVolumesWithChapters: (bookId: number) => ipcRenderer.invoke('db:getVolumesWithChapters', bookId),
+  getVolumesWithChapterMeta: (bookId: number) => ipcRenderer.invoke('db:getVolumesWithChapterMeta', bookId),
   reorderChapters: (volumeId: number, chapterIds: number[]) =>
     ipcRenderer.invoke('db:reorderChapters', volumeId, chapterIds),
   reorderVolumes: (bookId: number, volumeIds: number[]) => ipcRenderer.invoke('db:reorderVolumes', bookId, volumeIds),

@@ -18,6 +18,21 @@ describe('mapCharactersToGraph', () => {
     expect(nodes[0]?.data.label).toBe('甲')
   })
 
+  it('uses relation type plus note as the edge label', () => {
+    const chars: CharacterRow[] = [
+      { id: 1, name: '甲' },
+      { id: 2, name: '乙' }
+    ]
+    const rels: RelationRow[] = [
+      { id: 1, source_id: 1, target_id: 2, relation_type: 'enemy', label: '旧案对手' }
+    ]
+
+    const { edges } = mapCharactersToGraph(chars, rels)
+
+    expect(edges[0]?.label).toBe('敌对 · 旧案对手')
+    expect(edges[0]?.data.kind).toBe('enemy')
+  })
+
   it('skips edges whose endpoints are missing or self-loop', () => {
     const chars: CharacterRow[] = [{ id: 1, name: '甲' }]
     const rels: RelationRow[] = [

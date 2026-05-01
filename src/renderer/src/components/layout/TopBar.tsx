@@ -27,22 +27,22 @@ import { getCurrentTitlebarSafeArea } from '@/utils/window-shell'
 import { BUILTIN_WORKSPACE_LAYOUT_PRESETS, type WorkspaceLayoutPresetId } from '@/utils/workspace-layout'
 
 export default function TopBar() {
-  const {
-    leftPanelOpen,
-    rightPanelOpen,
-    bottomPanelOpen,
-    toggleLeftPanel,
-    toggleRightPanel,
-    toggleBottomPanel,
-    openModal,
-    topbarToolsCollapsed,
-    toggleTopbarToolsCollapsed,
-    workspaceLayoutPresetId,
-    customWorkspaceLayoutPresets,
-    applyWorkspaceLayoutPreset,
-    saveCurrentWorkspaceLayoutPreset
-  } = useUIStore()
-  const { books, currentBookId, closeBook } = useBookStore()
+  const leftPanelOpen = useUIStore((s) => s.leftPanelOpen)
+  const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
+  const bottomPanelOpen = useUIStore((s) => s.bottomPanelOpen)
+  const toggleLeftPanel = useUIStore((s) => s.toggleLeftPanel)
+  const toggleRightPanel = useUIStore((s) => s.toggleRightPanel)
+  const toggleBottomPanel = useUIStore((s) => s.toggleBottomPanel)
+  const openModal = useUIStore((s) => s.openModal)
+  const topbarToolsCollapsed = useUIStore((s) => s.topbarToolsCollapsed)
+  const toggleTopbarToolsCollapsed = useUIStore((s) => s.toggleTopbarToolsCollapsed)
+  const workspaceLayoutPresetId = useUIStore((s) => s.workspaceLayoutPresetId)
+  const customWorkspaceLayoutPresets = useUIStore((s) => s.customWorkspaceLayoutPresets)
+  const applyWorkspaceLayoutPreset = useUIStore((s) => s.applyWorkspaceLayoutPreset)
+  const saveCurrentWorkspaceLayoutPreset = useUIStore((s) => s.saveCurrentWorkspaceLayoutPreset)
+  const books = useBookStore((s) => s.books)
+  const currentBookId = useBookStore((s) => s.currentBookId)
+  const closeBook = useBookStore((s) => s.closeBook)
   const [toolMenuOpen, setToolMenuOpen] = useState(false)
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
   const [savingLayoutPreset, setSavingLayoutPreset] = useState(false)

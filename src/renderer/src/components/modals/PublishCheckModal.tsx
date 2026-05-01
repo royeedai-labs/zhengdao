@@ -16,6 +16,7 @@ import {
   type PublishIssue,
   type PublishCheckScope
 } from '@/utils/publish-check'
+import type { Chapter, ChapterMeta } from '@/types'
 
 type ExportFormat = 'txt' | 'docx' | 'md'
 type IssueTone = 'default' | 'success' | 'warning' | 'danger'
@@ -52,6 +53,16 @@ function buildIssuesByChapter(issues: PublishIssue[]): Map<number, PublishIssue[
     byChapter.set(issue.chapterId, list)
   }
   return byChapter
+}
+
+function toPublishCheckChapter(chapter: Chapter | ChapterMeta, volumeTitle = ''): PublishCheckChapter {
+  return {
+    id: chapter.id,
+    title: chapter.title,
+    content: 'content' in chapter ? chapter.content ?? null : null,
+    word_count: chapter.word_count,
+    volume_title: volumeTitle
+  }
 }
 
 function StatPill({ label, value, tone = 'default' }: { label: string; value: string; tone?: IssueTone }) {
@@ -119,11 +130,11 @@ export default function PublishCheckModal() {
     const byId = new Map<number, PublishCheckChapter>()
     for (const volume of volumes) {
       for (const chapter of volume.chapters || []) {
-        byId.set(chapter.id, { ...chapter, volume_title: volume.title })
+        byId.set(chapter.id, toPublishCheckChapter(chapter, volume.title))
       }
     }
     if (currentChapter && !byId.has(currentChapter.id)) {
-      byId.set(currentChapter.id, currentChapter)
+      byId.set(currentChapter.id, toPublishCheckChapter(currentChapter))
     }
     return Array.from(byId.values())
   }, [currentChapter, volumes])

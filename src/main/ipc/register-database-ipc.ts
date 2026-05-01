@@ -77,6 +77,7 @@ export function registerDatabaseIpc(): void {
   ipcMain.handle('db:deleteChapter', (_, id) => chapterRepo.deleteChapter(id))
   ipcMain.handle('db:getAllChaptersForBook', (_, bookId) => chapterRepo.getAllChaptersForBook(bookId))
   ipcMain.handle('db:getVolumesWithChapters', (_, bookId) => chapterRepo.getVolumesWithChapters(bookId))
+  ipcMain.handle('db:getVolumesWithChapterMeta', (_, bookId) => chapterRepo.getVolumesWithChapterMeta(bookId))
   ipcMain.handle('db:getChapterTemplates', (_, bookId: number) => templateRepo.getTemplates(bookId))
   ipcMain.handle('db:createChapterTemplate', (_, bookId: number, name: string, content: string) =>
     templateRepo.createTemplate(bookId, name, content)

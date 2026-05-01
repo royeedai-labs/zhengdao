@@ -1,3 +1,5 @@
+import { formatRelationLabel, normalizeRelationType } from '../../../../../shared/relation-types'
+
 /**
  * CG-A3.1 — characters → reactflow graph mapper.
  *
@@ -96,9 +98,9 @@ export function mapCharactersToGraph(
       id: `e-${rel.id}`,
       source: String(rel.source_id),
       target: String(rel.target_id),
-      label: rel.label && rel.label.length > 0 ? rel.label : rel.relation_type,
+      label: formatRelationLabel(rel.relation_type, rel.label),
       data: {
-        kind: rel.relation_type,
+        kind: normalizeRelationType(rel.relation_type),
         chapterRange:
           rel.chapter_range_start != null && rel.chapter_range_end != null
             ? [rel.chapter_range_start, rel.chapter_range_end]

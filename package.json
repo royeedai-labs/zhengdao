@@ -24,6 +24,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "ux:ledger": "node scripts/ux/generate-surface-ledger.mjs",
+    "ux:ledger:check": "node scripts/ux/generate-surface-ledger.mjs --check",
     "assets:icons": "bash scripts/assets/generate-icons.sh",
     "lint": "eslint src/",
     "format": "prettier --write src/",

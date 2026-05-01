@@ -1,45 +1,47 @@
+import { lazy, Suspense } from 'react'
 import { useUIStore } from '@/stores/ui-store'
 import type { ModalType } from '@/types'
-import CharacterEditModal from './CharacterEditModal'
-import FullCharactersModal from './FullCharactersModal'
-import FullSettingsModal from './FullSettingsModal'
-import PlotNodeModal from './PlotNodeModal'
-import NewVolumeModal from './NewVolumeModal'
-import NewChapterModal from './NewChapterModal'
-import ForeshadowModal from './ForeshadowModal'
-import ProjectSettingsModal from './ProjectSettingsModal'
-import SnapshotModal from './SnapshotModal'
-import ExportModal from './ExportModal'
-import ConfirmModal from './ConfirmModal'
-import NewBookWizard from '@/components/bookshelf/NewBookWizard'
-import CommandPalette from '@/components/shared/CommandPalette'
-import StyleAnalysisModal from './StyleAnalysisModal'
-import LoginModal from './LoginModal'
-import GlobalSearchModal from './GlobalSearchModal'
-import TrashModal from './TrashModal'
-import CharacterCompareModal from './CharacterCompareModal'
-import StatsModal from './StatsModal'
-import TextAnalysisModal from './TextAnalysisModal'
-import BookOverviewModal from './BookOverviewModal'
-import ConsistencyCheckModal from './ConsistencyCheckModal'
-import AiSettingsModal from './AiSettingsModal'
-import AppSettingsModal from './AppSettingsModal'
-import ChapterReviewModal from './ChapterReviewModal'
-import PublishCheckModal from './PublishCheckModal'
-import FormatTemplateModal from './FormatTemplateModal'
-import DialogueRewriteModal from './DialogueRewriteModal'
-import WorldConsistencyModal from './WorldConsistencyModal'
-import CitationsManagerModal from './CitationsManagerModal'
-import CitationPickerModal from './CitationPickerModal'
-import ReferencesBuildModal from './ReferencesBuildModal'
-import TeamManagementModal from './TeamManagementModal'
-import ForeshadowBoardModal from './ForeshadowBoardModal'
-import QuickNotesModal from './QuickNotesModal'
-import CanonPackModal from './CanonPackModal'
-import DirectorPanelModal from './DirectorPanelModal'
-import McpSettingsModal from './McpSettingsModal'
-import VisualStudioModal from './VisualStudioModal'
-import MarketScanDeconstructModal from './MarketScanDeconstructModal'
+
+const CharacterEditModal = lazy(() => import('./CharacterEditModal'))
+const FullCharactersModal = lazy(() => import('./FullCharactersModal'))
+const FullSettingsModal = lazy(() => import('./FullSettingsModal'))
+const PlotNodeModal = lazy(() => import('./PlotNodeModal'))
+const NewVolumeModal = lazy(() => import('./NewVolumeModal'))
+const NewChapterModal = lazy(() => import('./NewChapterModal'))
+const ForeshadowModal = lazy(() => import('./ForeshadowModal'))
+const ForeshadowBoardModal = lazy(() => import('./ForeshadowBoardModal'))
+const QuickNotesModal = lazy(() => import('./QuickNotesModal'))
+const ProjectSettingsModal = lazy(() => import('./ProjectSettingsModal'))
+const SnapshotModal = lazy(() => import('./SnapshotModal'))
+const ExportModal = lazy(() => import('./ExportModal'))
+const ConfirmModal = lazy(() => import('./ConfirmModal'))
+const LoginModal = lazy(() => import('./LoginModal'))
+const NewBookWizard = lazy(() => import('@/components/bookshelf/NewBookWizard'))
+const CommandPalette = lazy(() => import('@/components/shared/CommandPalette'))
+const StyleAnalysisModal = lazy(() => import('./StyleAnalysisModal'))
+const GlobalSearchModal = lazy(() => import('./GlobalSearchModal'))
+const TrashModal = lazy(() => import('./TrashModal'))
+const CharacterCompareModal = lazy(() => import('./CharacterCompareModal'))
+const StatsModal = lazy(() => import('./StatsModal'))
+const TextAnalysisModal = lazy(() => import('./TextAnalysisModal'))
+const BookOverviewModal = lazy(() => import('./BookOverviewModal'))
+const ConsistencyCheckModal = lazy(() => import('./ConsistencyCheckModal'))
+const AiSettingsModal = lazy(() => import('./AiSettingsModal'))
+const AppSettingsModal = lazy(() => import('./AppSettingsModal'))
+const ChapterReviewModal = lazy(() => import('./ChapterReviewModal'))
+const PublishCheckModal = lazy(() => import('./PublishCheckModal'))
+const FormatTemplateModal = lazy(() => import('./FormatTemplateModal'))
+const DialogueRewriteModal = lazy(() => import('./DialogueRewriteModal'))
+const WorldConsistencyModal = lazy(() => import('./WorldConsistencyModal'))
+const CitationsManagerModal = lazy(() => import('./CitationsManagerModal'))
+const CitationPickerModal = lazy(() => import('./CitationPickerModal'))
+const ReferencesBuildModal = lazy(() => import('./ReferencesBuildModal'))
+const TeamManagementModal = lazy(() => import('./TeamManagementModal'))
+const CanonPackModal = lazy(() => import('./CanonPackModal'))
+const DirectorPanelModal = lazy(() => import('./DirectorPanelModal'))
+const McpSettingsModal = lazy(() => import('./McpSettingsModal'))
+const VisualStudioModal = lazy(() => import('./VisualStudioModal'))
+const MarketScanDeconstructModal = lazy(() => import('./MarketScanDeconstructModal'))
 
 function renderModal(type: ModalType) {
   switch (type) {
@@ -92,13 +94,13 @@ export default function ModalManager() {
   const modalStack = useUIStore((s) => s.modalStack)
 
   return (
-    <>
+    <Suspense fallback={null}>
       {modalStack.map((entry, i) => (
         <div key={`stack-${i}-${entry.type}`} className="pointer-events-none">
           {renderModal(entry.type)}
         </div>
       ))}
       {activeModal && renderModal(activeModal)}
-    </>
+    </Suspense>
   )
 }

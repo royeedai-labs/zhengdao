@@ -7,7 +7,8 @@ import { useChapterStore } from '@/stores/chapter-store'
 import { useUpdateStore } from '@/stores/update-store'
 
 export default function BlackRoomMode() {
-  const { blackRoomMode, blackRoomTextColor } = useUIStore()
+  const blackRoomMode = useUIStore((s) => s.blackRoomMode)
+  const blackRoomTextColor = useUIStore((s) => s.blackRoomTextColor)
   const currentChapter = useChapterStore((s) => s.currentChapter)
   const updateChapterContent = useChapterStore((s) => s.updateChapterContent)
 

@@ -1,8 +1,10 @@
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { Bot, PenTool, Plus, Search, LayoutGrid, List, Trash2 } from 'lucide-react'
+import { Bot, PenTool, Plus, Search, LayoutGrid, List, Trash2, ImagePlus, RefreshCw } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
 import { useUIStore } from '@/stores/ui-store'
+import { useToastStore } from '@/stores/toast-store'
 import BookCard from './BookCard'
+import BookCover from './BookCover'
 import AppBrand from '@/components/shared/AppBrand'
 import AccountSettingsMenu from '@/components/shared/AccountSettingsMenu'
 import { getCurrentTitlebarSafeArea } from '@/utils/window-shell'
@@ -15,6 +17,7 @@ export default function BookshelfPage() {
   const openBook = useBookStore((s) => s.openBook)
   const openModal = useUIStore((s) => s.openModal)
   const openAiAssistant = useUIStore((s) => s.openAiAssistant)
+  const addToast = useToastStore((s) => s.addToast)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy, setSortBy] = useState<SortBy>('updated')
   const [searchQuery, setSearchQuery] = useState('')
@@ -52,6 +55,30 @@ export default function BookshelfPage() {
 
   const openBookshelfAssistant = () => {
     openAiAssistant({ surface: 'bookshelf' })
+  }
+
+  const chooseCover = async (event: ReactMouseEvent<HTMLButtonElement>, bookId: number) => {
+    event.stopPropagation()
+    try {
+      const result = await window.api.book.chooseCoverImage(bookId)
+      if (result) {
+        await loadBooks()
+        addToast('success', '已更新作品封面')
+      }
+    } catch (error) {
+      addToast('error', error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const regenerateCover = async (event: ReactMouseEvent<HTMLButtonElement>, bookId: number) => {
+    event.stopPropagation()
+    try {
+      await window.api.book.regenerateAutoCover(bookId)
+      await loadBooks()
+      addToast('success', '已重置为自动封面')
+    } catch (error) {
+      addToast('error', error instanceof Error ? error.message : String(error))
+    }
   }
 
   return (
@@ -92,7 +119,7 @@ export default function BookshelfPage() {
               className="mb-3 inline-flex items-center px-6 py-3 border border-[var(--accent-border)] bg-[var(--accent-surface)] hover:bg-[var(--bg-tertiary)] text-[var(--accent-secondary)] rounded-xl text-base font-bold transition"
             >
               <Bot size={18} className="mr-2" />
-              和 AI 讨论新作品
+              用 AI 起书
             </button>
             <button
               onClick={() => openModal('newBook')}
@@ -163,8 +190,8 @@ export default function BookshelfPage() {
                     <Bot size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-[var(--text-primary)] text-sm truncate">和 AI 讨论新作品</h3>
-                    <p className="text-[11px] text-[var(--text-muted)] truncate">先确认字数、章节、人物、主题和边界，再创建作品。</p>
+                    <h3 className="font-bold text-[var(--text-primary)] text-sm truncate">用 AI 起书</h3>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">写灵感、选方向、确认后创建。</p>
                   </div>
                 </div>
                 {filteredBooks.map((book) => (
@@ -176,9 +203,11 @@ export default function BookshelfPage() {
                     onKeyDown={(e) => e.key === 'Enter' && openBook(book.id)}
                     className="flex items-center bg-[var(--surface-primary)] border border-[var(--border-primary)] hover:border-[var(--accent-border)] rounded-lg px-4 py-3 cursor-pointer transition group"
                   >
-                    <div className="w-10 h-10 rounded bg-[var(--accent-surface)] border border-[var(--accent-border)] flex items-center justify-center text-[var(--accent-secondary)] font-bold mr-4 shrink-0">
-                      {book.title.charAt(0)}
-                    </div>
+                    <BookCover
+                      book={book}
+                      className="mr-4 h-16 w-12 shrink-0 rounded border border-[var(--accent-border)]"
+                      fallbackClassName="text-base"
+                    />
                     <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-[var(--text-primary)] text-sm truncate">《{book.title}》</h3>
                       <p className="text-[11px] text-[var(--text-muted)] truncate">{book.author || '未署名'}</p>
@@ -189,6 +218,24 @@ export default function BookshelfPage() {
                     <div className="text-xs text-[var(--text-muted)] mr-4 shrink-0 hidden md:block">
                       {new Date(book.updated_at).toLocaleDateString('zh-CN')}
                     </div>
+                    <button
+                      type="button"
+                      onClick={(event) => void chooseCover(event, book.id)}
+                      className="mr-1 rounded p-1.5 text-[var(--text-muted)] opacity-0 transition hover:text-[var(--accent-secondary)] group-hover:opacity-100 focus:opacity-100"
+                      aria-label={`更换《${book.title}》封面`}
+                      title="更换封面"
+                    >
+                      <ImagePlus size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => void regenerateCover(event, book.id)}
+                      className="mr-1 rounded p-1.5 text-[var(--text-muted)] opacity-0 transition hover:text-[var(--accent-secondary)] group-hover:opacity-100 focus:opacity-100"
+                      aria-label={`重置《${book.title}》自动封面`}
+                      title="重置自动封面"
+                    >
+                      <RefreshCw size={14} />
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -221,12 +268,12 @@ export default function BookshelfPage() {
                       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast)]">
                         <Bot size={22} />
                       </div>
-                      <h3 className="text-base font-bold text-[var(--text-primary)]">和 AI 讨论新作品</h3>
+                      <h3 className="text-base font-bold text-[var(--text-primary)]">用 AI 起书</h3>
                       <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
-                        先沟通字数、章节、人物、主题和边界，确认后再创建。
+                        一句话起步，书名、篇幅、人物和章节可先交给 AI。
                       </p>
                     </div>
-                    <div className="mt-4 text-xs font-semibold text-[var(--accent-secondary)]">打开 AI 创作助手</div>
+                    <div className="mt-4 text-xs font-semibold text-[var(--accent-secondary)]">打开 AI 起书</div>
                   </div>
                 </div>
                 {filteredBooks.map((book) => (

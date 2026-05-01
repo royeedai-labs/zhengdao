@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase } from './database/connection'
 import { handleZhengdaoAuthCallbackUrl, registerIpcHandlers } from './ipc-handlers'
 import { attachUpdaterWindow, notifyUpdaterAppActivated } from './updater/service'
+import { registerBookCoverProtocol, registerBookCoverProtocolScheme } from './book-cover-protocol'
 import {
   createDesktopTray,
   markDesktopTrayQuitRequested,
@@ -23,6 +24,7 @@ process.on('unhandledRejection', (reason) => {
 
 let mainWindow: BrowserWindow | null = null
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
+registerBookCoverProtocolScheme()
 
 function handleDeepLink(rawUrl: string): void {
   if (!rawUrl.startsWith('zhengdao://auth/callback')) return
@@ -114,6 +116,7 @@ app.whenReady().then(() => {
   })
 
   initDatabase()
+  registerBookCoverProtocol()
   registerIpcHandlers()
   createDesktopTray(createWindow(), process.platform)
 

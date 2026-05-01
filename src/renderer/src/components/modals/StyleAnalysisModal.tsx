@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RefreshCw, X } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
 import { useChapterStore } from '@/stores/chapter-store'
+import { useBookStore } from '@/stores/book-store'
 import { useToastStore } from '@/stores/toast-store'
 import { aiAnalyzeStyle, getResolvedGlobalAiConfig, isAiConfigReady } from '@/utils/ai'
 
@@ -47,14 +48,21 @@ function parseStyleResult(raw: string): {
   }
 }
 
+interface ChapterContentRow {
+  title: string
+  content: string | null
+}
+
 export default function StyleAnalysisModal() {
   const closeModal = useUIStore((s) => s.closeModal)
   const modalData = useUIStore((s) => s.modalData) as { text?: string } | null
-  const { volumes, currentChapter } = useChapterStore()
+  const currentChapter = useChapterStore((s) => s.currentChapter)
+  const bookId = useBookStore((s) => s.currentBookId)
   const [tab, setTab] = useState<'chapter' | 'book'>('chapter')
   const [loading, setLoading] = useState(false)
   const [metrics, setMetrics] = useState<Record<string, number>>({})
   const [summaryText, setSummaryText] = useState('')
+  const [bookPlain, setBookPlain] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const requestIdRef = useRef(0)
 
@@ -64,16 +72,31 @@ export default function StyleAnalysisModal() {
     return htmlToPlain(currentChapter?.content || '')
   }, [modalData, currentChapter])
 
-  const bookPlain = useMemo(() => {
-    const parts: string[] = []
-    for (const v of volumes) {
-      for (const ch of v.chapters || []) {
-        const t = htmlToPlain(ch.content || '')
-        if (t) parts.push(`【${ch.title}】\n${t}`)
-      }
+  useEffect(() => {
+    if (!bookId) {
+      setBookPlain('')
+      return
     }
-    return parts.join('\n\n')
-  }, [volumes])
+    let cancelled = false
+    void window.api
+      .getAllChaptersForBook(bookId)
+      .then((rows: unknown) => {
+        if (cancelled) return
+        const parts = (rows as ChapterContentRow[])
+          .map((chapter) => {
+            const text = htmlToPlain(chapter.content || '')
+            return text ? `【${chapter.title}】\n${text}` : ''
+          })
+          .filter(Boolean)
+        setBookPlain(parts.join('\n\n'))
+      })
+      .catch(() => {
+        if (!cancelled) setBookPlain('')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bookId])
 
   const runAnalyze = useCallback(async () => {
     const cfg = await getResolvedGlobalAiConfig()

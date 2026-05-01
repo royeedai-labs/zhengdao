@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, Network, Plus, Save, Trash2 } from 'lucide-react'
 import { useToastStore } from '@/stores/toast-store'
 import { useUIStore } from '@/stores/ui-store'
+import { RELATION_TYPES, normalizeRelationType } from '@/constants/relation-types'
 
 /**
  * DI-07 v3.4 — RelationsEditor.
@@ -32,8 +33,6 @@ interface RelationDraft extends Partial<RelationRow> {
   _key: string
   _new?: boolean
 }
-
-const RELATION_KINDS = ['ally', 'enemy', 'family', 'mentor', 'rival', 'romance']
 
 function makeKey(): string {
   return `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -82,7 +81,7 @@ export default function RelationsEditor({ bookId }: Props) {
       }
       const [chars, relations] = await Promise.all([api.getCharacters(bookId), api.getRelations(bookId)])
       setCharacters(chars || [])
-      setRows((relations || []).map((r) => ({ ...r, _key: `r-${r.id}` })))
+      setRows((relations || []).map((r) => ({ ...r, relation_type: normalizeRelationType(r.relation_type), _key: `r-${r.id}` })))
     } catch (err) {
       addToast('error', `关系数据加载失败: ${(err as Error).message ?? err}`)
     } finally {
@@ -212,9 +211,9 @@ export default function RelationsEditor({ bookId }: Props) {
                     onChange={(e) => patchRow(row._key, { relation_type: e.target.value })}
                     className="field !py-1 !text-xs"
                   >
-                    {RELATION_KINDS.map((k) => (
-                      <option key={k} value={k}>
-                        {k}
+                    {RELATION_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
                       </option>
                     ))}
                   </select>

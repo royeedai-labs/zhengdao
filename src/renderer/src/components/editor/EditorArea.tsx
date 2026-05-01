@@ -34,13 +34,13 @@ import { collectCharacterIdsFromContent } from '@/utils/character-association'
 import { setActiveEditor } from '@/components/editor/active-editor'
 import { buildAiAssistantSelectionSnapshot } from '@/components/editor/ai-selection'
 import { aiInlineDraftKey, createAiInlineDraftExtension } from '@/components/editor/AiInlineDraft'
+import { createSensitiveHighlightExtension } from '@/components/editor/sensitive-highlight'
 import { getLocalDateKey } from '@/utils/daily-workbench'
 import { planTextDraftApplication, type AiDraftPayload } from '@/utils/ai/assistant-workflow'
 import type { AiChapterDraft, InlineAiDraft } from '@/stores/ui-store'
 import MentionList from './MentionList'
 import type { MentionListRef } from './MentionList'
 
-const sensitivePluginKey = new PluginKey('sensitiveHighlight')
 const focusModePluginKey = new PluginKey<{ tick: number }>('focusMode')
 
 function createFocusModeExtension(getFocusMode: () => boolean) {
@@ -85,57 +85,6 @@ function createFocusModeExtension(getFocusMode: () => boolean) {
   })
 }
 
-function createSensitiveHighlightExtension(words: string[]) {
-  return Extension.create({
-    name: 'sensitiveHighlight',
-    addProseMirrorPlugins() {
-      return [
-        new Plugin({
-          key: sensitivePluginKey,
-          state: {
-            init(_, state) {
-              return buildDecorations(state.doc, words)
-            },
-            apply(tr, oldSet) {
-              if (tr.docChanged) {
-                return buildDecorations(tr.doc, words)
-              }
-              return oldSet
-            }
-          },
-          props: {
-            decorations(state) {
-              return this.getState(state)
-            }
-          }
-        })
-      ]
-    }
-  })
-}
-
-function buildDecorations(doc: any, words: string[]): DecorationSet {
-  if (words.length === 0) return DecorationSet.empty
-  const decorations: Decoration[] = []
-  doc.descendants((node: any, pos: number) => {
-    if (!node.isText || !node.text) return
-    for (const word of words) {
-      let idx = 0
-      while (true) {
-        const foundIdx = node.text.indexOf(word, idx)
-        if (foundIdx === -1) break
-        decorations.push(
-          Decoration.inline(pos + foundIdx, pos + foundIdx + word.length, {
-            class: 'sensitive-word'
-          })
-        )
-        idx = foundIdx + word.length
-      }
-    }
-  })
-  return DecorationSet.create(doc, decorations)
-}
-
 type PostSave = 'none' | 'syncOnly' | 'full'
 
 const AI_CONTINUE_PROMPT = '从当前光标或章节末尾自然续写，保持当前节奏。'
@@ -160,22 +109,40 @@ function countPlainWords(text: string): number {
   return text.replace(/\s/g, '').length
 }
 
+function scheduleIdleWork(callback: () => void, timeout = 450): () => void {
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number
+    cancelIdleCallback?: (handle: number) => void
+  }
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    const id = idleWindow.requestIdleCallback(callback, { timeout })
+    return () => idleWindow.cancelIdleCallback?.(id)
+  }
+  const id = window.setTimeout(callback, timeout)
+  return () => window.clearTimeout(id)
+}
+
 export default function EditorArea() {
-  const { currentChapter, volumes, createVolume, createChapter, selectChapter, updateChapterContent, updateChapterSummary, getTotalWords, getCurrentChapterNumber } =
-    useChapterStore()
-  const {
-    openModal,
-    focusMode,
-    toggleFocusMode,
-    openAiAssistant,
-    setAiAssistantSelection,
-    inlineAiDraft,
-    clearInlineAiDraft,
-    aiChapterDraft,
-    updateAiChapterDraft,
-    clearAiChapterDraft,
-    chapterSaveStatus
-  } = useUIStore()
+  const currentChapter = useChapterStore((s) => s.currentChapter)
+  const volumes = useChapterStore((s) => s.volumes)
+  const createVolume = useChapterStore((s) => s.createVolume)
+  const createChapter = useChapterStore((s) => s.createChapter)
+  const selectChapter = useChapterStore((s) => s.selectChapter)
+  const updateChapterContent = useChapterStore((s) => s.updateChapterContent)
+  const updateChapterSummary = useChapterStore((s) => s.updateChapterSummary)
+  const getTotalWords = useChapterStore((s) => s.getTotalWords)
+  const getCurrentChapterNumber = useChapterStore((s) => s.getCurrentChapterNumber)
+  const openModal = useUIStore((s) => s.openModal)
+  const focusMode = useUIStore((s) => s.focusMode)
+  const toggleFocusMode = useUIStore((s) => s.toggleFocusMode)
+  const openAiAssistant = useUIStore((s) => s.openAiAssistant)
+  const setAiAssistantSelection = useUIStore((s) => s.setAiAssistantSelection)
+  const inlineAiDraft = useUIStore((s) => s.inlineAiDraft)
+  const clearInlineAiDraft = useUIStore((s) => s.clearInlineAiDraft)
+  const aiChapterDraft = useUIStore((s) => s.aiChapterDraft)
+  const updateAiChapterDraft = useUIStore((s) => s.updateAiChapterDraft)
+  const clearAiChapterDraft = useUIStore((s) => s.clearAiChapterDraft)
+  const chapterSaveStatus = useUIStore((s) => s.chapterSaveStatus)
   const syncAppearances = useCharacterStore((s) => s.syncAppearances)
   const bookId = useBookStore((s) => s.currentBookId)!
 
@@ -216,6 +183,7 @@ export default function EditorArea() {
     editorWidth === 'narrow' ? 'max-w-xl' : editorWidth === 'wide' ? 'max-w-5xl' : 'max-w-3xl'
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const draftFlushCancelRef = useRef<(() => void) | null>(null)
   const isTypingRef = useRef(false)
   const lastSavedRef = useRef<string>('')
   const prevWordCountRef = useRef(0)
@@ -336,6 +304,27 @@ export default function EditorArea() {
     persistChapterRef.current = persistChapter
   }, [persistChapter])
 
+  const cancelDraftFlush = useCallback(() => {
+    draftFlushCancelRef.current?.()
+    draftFlushCancelRef.current = null
+  }, [])
+
+  const scheduleDraftFlush = useCallback(
+    (chapterId: number, editorInstance: Editor) => {
+      cancelDraftFlush()
+      draftFlushCancelRef.current = scheduleIdleWork(() => {
+        draftFlushCancelRef.current = null
+        if (useChapterStore.getState().currentChapter?.id !== chapterId) return
+        try {
+          localStorage.setItem(`draft_${chapterId}`, editorInstance.getHTML())
+        } catch {
+          void 0
+        }
+      })
+    },
+    [cancelDraftFlush]
+  )
+
   const mentionSuggestion = {
     char: '@',
     items: ({ query }: { query: string }) => {
@@ -447,17 +436,13 @@ export default function EditorArea() {
     onUpdate: ({ editor: e }) => {
       isTypingRef.current = true
       if (!currentChapter) return
-      const html = e.getHTML()
       useUIStore.getState().markChapterDirty(currentChapter.id)
-      try {
-        localStorage.setItem(`draft_${currentChapter.id}`, html)
-      } catch {
-        void 0
-      }
+      scheduleDraftFlush(currentChapter.id, e)
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       const scheduledChapterId = currentChapter.id
       saveTimerRef.current = setTimeout(async () => {
         if (useChapterStore.getState().currentChapter?.id !== scheduledChapterId) return
+        const html = e.getHTML()
         const text = e.getText()
         const wordCount = text.replace(/\s/g, '').length
         await persistChapterRef.current(scheduledChapterId, html, wordCount, e, 'full').catch((error) => {
@@ -653,6 +638,7 @@ export default function EditorArea() {
         clearTimeout(saveTimerRef.current)
         saveTimerRef.current = null
       }
+      cancelDraftFlush()
 
       const html = editor.getHTML()
       if (html === lastSavedRef.current) return
@@ -660,7 +646,7 @@ export default function EditorArea() {
       const wordCount = editor.getText().replace(/\s/g, '').length
       await persistChapterRef.current(currentChapter.id, html, wordCount, editor, postSave)
     },
-    [currentChapter, editor]
+    [cancelDraftFlush, currentChapter, editor]
   )
 
   useEffect(() => {
@@ -678,6 +664,7 @@ export default function EditorArea() {
       clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
+    cancelDraftFlush()
 
     const targetChapter = useChapterStore.getState().currentChapter
     const prevId = prevChapterIdRef.current
@@ -734,7 +721,14 @@ export default function EditorArea() {
     return () => {
       cancelled = true
     }
-  }, [editor, currentChapter?.id])
+  }, [cancelDraftFlush, editor, currentChapter?.id])
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      cancelDraftFlush()
+    }
+  }, [cancelDraftFlush])
 
   useEffect(() => {
     if (!editor) return

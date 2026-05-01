@@ -7,7 +7,7 @@ import { useBookStore } from '@/stores/book-store'
 import RelationGraph from '@/components/characters/RelationGraph'
 import AppearanceTimeline from '@/components/characters/AppearanceTimeline'
 import type { Character, CharacterRelation } from '@/types'
-import { RELATION_TYPES } from '@/constants/relation-types'
+import { RELATION_TYPES, relationColor, relationTypeLabel } from '@/constants/relation-types'
 
 type LibTab = 'list' | 'graph' | 'timeline'
 
@@ -253,7 +253,7 @@ export default function FullCharactersModal() {
                 <input
                   value={relLabel}
                   onChange={(e) => setRelLabel(e.target.value)}
-                  placeholder="线上标签"
+                  placeholder="关系备注"
                   className="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded px-2 py-1.5 text-xs text-[var(--text-primary)]"
                 />
               </div>
@@ -343,10 +343,10 @@ export default function FullCharactersModal() {
                           r.source_id === graphSel
                             ? characters.find((x) => x.id === r.target_id)
                             : characters.find((x) => x.id === r.source_id)
-                        const typeLabel = RELATION_TYPES.find((t) => t.value === r.relation_type)?.label ?? r.relation_type
+                        const typeLabel = relationTypeLabel(r.relation_type)
                         return (
                           <li key={r.id}>
-                            <span style={{ color: RELATION_TYPES.find((t) => t.value === r.relation_type)?.color }}>
+                            <span style={{ color: relationColor(r.relation_type) }}>
                               {typeLabel}
                             </span>{' '}
                             → {other?.name ?? '?'}

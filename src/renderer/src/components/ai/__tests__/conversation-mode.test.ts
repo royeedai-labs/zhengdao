@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolveAssistantIntent,
-  resolveAssistantSkillSelection
+  resolveAssistantSkillSelection,
+  resolveSeededAssistantSkill
 } from '../conversation-mode'
+import { START_FIRST_CHAPTER_INPUT } from '../chapter-quick-actions'
 import type { AiSkillOverride, AiSkillTemplate } from '../../../utils/ai/assistant-workflow'
 
 const skills: AiSkillTemplate[] = [
@@ -158,6 +160,14 @@ describe('resolveAssistantSkillSelection', () => {
       system_prompt: 'book continue'
     })
   })
+
+  it('keeps a quick-action skill bound until composer submit resolves it', () => {
+    expect(resolveSeededAssistantSkill(skills, 'continue_writing')).toMatchObject({
+      key: 'continue_writing'
+    })
+    expect(resolveSeededAssistantSkill(skills, null)).toBeUndefined()
+    expect(resolveSeededAssistantSkill(skills, 'missing_skill')).toBeUndefined()
+  })
 })
 
 describe('resolveAssistantIntent', () => {
@@ -188,6 +198,17 @@ describe('resolveAssistantIntent', () => {
         skills,
         userInput: '接着写下一段',
         hasCurrentChapter: true
+      })
+    ).toMatchObject({ mode: 'skill', skillKey: 'continue_writing' })
+  })
+
+  it('routes the blank first-chapter starter prompt to continue_writing', () => {
+    expect(
+      resolveAssistantIntent({
+        skills,
+        userInput: START_FIRST_CHAPTER_INPUT,
+        hasCurrentChapter: true,
+        hasVolumes: true
       })
     ).toMatchObject({ mode: 'skill', skillKey: 'continue_writing' })
   })

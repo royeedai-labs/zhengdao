@@ -12,10 +12,15 @@ import {
   XCircle
 } from 'lucide-react'
 import { useBookStore } from '@/stores/book-store'
+import { useChapterStore } from '@/stores/chapter-store'
+import { useCharacterStore } from '@/stores/character-store'
+import { useForeshadowStore } from '@/stores/foreshadow-store'
+import { usePlotStore } from '@/stores/plot-store'
 import { useToastStore } from '@/stores/toast-store'
 import { useUIStore } from '@/stores/ui-store'
 import { GENRE_LABELS, GENRES, type Genre } from '../../../../shared/genre'
 import type {
+  DirectorCanonContext,
   DirectorChapterCache,
   DirectorEvent,
   DirectorRemoteRun,
@@ -31,6 +36,66 @@ const STEP_OPTIONS: DirectorStepName[] = [
   'rhythm_breakdown',
   'chapter_draft'
 ]
+
+async function buildDirectorCanonContext(bookId: number): Promise<DirectorCanonContext> {
+  const book = useBookStore.getState().books.find((item) => item.id === bookId)
+  await Promise.all([
+    useChapterStore.getState().loadVolumes(bookId),
+    useCharacterStore.getState().loadCharacters(bookId),
+    usePlotStore.getState().loadPlotNodes(bookId),
+    useForeshadowStore.getState().loadForeshadowings(bookId)
+  ])
+  const profile = (await window.api.aiGetWorkProfile(bookId)) as
+    | {
+        style_guide?: string
+        genre_rules?: string
+        content_boundaries?: string
+        rhythm_rules?: string
+        asset_rules?: string
+      }
+    | null
+  const volumes = useChapterStore.getState().volumes
+  const characters = useCharacterStore.getState().characters
+  const plotNodes = usePlotStore.getState().plotNodes
+  const foreshadowings = useForeshadowStore.getState().foreshadowings
+  let chapterNumber = 0
+
+  return {
+    bookTitle: book?.title,
+    workProfile: {
+      styleGuide: profile?.style_guide || '',
+      genreRules: profile?.genre_rules || '',
+      contentBoundaries: profile?.content_boundaries || '',
+      rhythmRules: profile?.rhythm_rules || '',
+      assetRules: profile?.asset_rules || ''
+    },
+    characters: characters.slice(0, 20).map((character) => ({
+      name: character.name,
+      description: character.description || '',
+      faction: character.faction || '',
+      status: character.status || ''
+    })),
+    plotNodes: plotNodes.slice(0, 40).map((node) => ({
+      chapterNumber: node.chapter_number,
+      title: node.title,
+      score: node.score,
+      description: node.description || ''
+    })),
+    foreshadowings: foreshadowings.slice(0, 30).map((item) => ({
+      text: item.text,
+      status: item.status,
+      expectedChapter: item.expected_chapter ?? null
+    })),
+    chapters: volumes.flatMap((volume) =>
+      (volume.chapters || []).map((chapter) => ({
+        chapterNumber: ++chapterNumber,
+        title: chapter.title,
+        summary: chapter.summary || ''
+      }))
+    ),
+    minimumCharacterCount: Math.max(2, characters.length)
+  }
+}
 
 export default function DirectorPanelModal() {
   const closeModal = useUIStore((s) => s.closeModal)
@@ -105,11 +170,12 @@ export default function DirectorPanelModal() {
     }
     setLoading(true)
     try {
+      const canonContext = await buildDirectorCanonContext(bookId)
       const result = await window.api.director.startRun({
         bookId,
         seed: trimmed,
         genre,
-        options: { maxChapters }
+        options: { maxChapters, canonContext }
       }) as { runId: string }
       setActiveRunId(result.runId)
       setEvents([])

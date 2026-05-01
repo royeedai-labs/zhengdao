@@ -3,6 +3,7 @@ export interface Book {
   title: string
   author: string
   cover_path: string | null
+  cover_url?: string | null
   created_at: string
   updated_at: string
   total_words?: number
@@ -54,19 +55,22 @@ export interface Volume {
   title: string
   sort_order: number
   created_at: string
-  chapters?: Chapter[]
+  chapters?: ChapterMeta[]
 }
 
-export interface Chapter {
+export interface ChapterMeta {
   id: number
   volume_id: number
   title: string
-  content: string | null
   word_count: number
   summary?: string
   sort_order: number
   created_at: string
   updated_at: string
+}
+
+export interface Chapter extends ChapterMeta {
+  content?: string | null
 }
 
 export interface Character {

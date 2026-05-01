@@ -4,14 +4,12 @@ import { useShortcutStore } from '@/stores/shortcut-store'
 import { matchesShortcutChord } from '@/utils/shortcuts'
 
 export function useKeyboardShortcuts() {
-  const {
-    openModal,
-    toggleBottomPanel,
-    blackRoomMode,
-    setBlackRoomMode,
-    toggleBlackRoomTextColor,
-    toggleSplitView
-  } = useUIStore()
+  const openModal = useUIStore((s) => s.openModal)
+  const toggleBottomPanel = useUIStore((s) => s.toggleBottomPanel)
+  const blackRoomMode = useUIStore((s) => s.blackRoomMode)
+  const setBlackRoomMode = useUIStore((s) => s.setBlackRoomMode)
+  const toggleBlackRoomTextColor = useUIStore((s) => s.toggleBlackRoomTextColor)
+  const toggleSplitView = useUIStore((s) => s.toggleSplitView)
 
   const overrides = useShortcutStore((s) => s.overrides)
 

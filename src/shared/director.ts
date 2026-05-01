@@ -19,6 +19,40 @@ export type DirectorStepName =
   | 'rhythm_breakdown'
   | 'chapter_draft'
 
+export type DirectorCanonContext = {
+  bookTitle?: string
+  workProfile?: {
+    styleGuide?: string
+    genreRules?: string
+    contentBoundaries?: string
+    rhythmRules?: string
+    assetRules?: string
+  }
+  characters?: Array<{
+    name: string
+    description?: string
+    faction?: string
+    status?: string
+  }>
+  plotNodes?: Array<{
+    chapterNumber?: number
+    title: string
+    score?: number
+    description?: string
+  }>
+  foreshadowings?: Array<{
+    text: string
+    status?: string
+    expectedChapter?: number | null
+  }>
+  chapters?: Array<{
+    chapterNumber: number
+    title: string
+    summary?: string
+  }>
+  minimumCharacterCount?: number
+}
+
 export type DirectorEvent =
   | { type: 'run_started'; runId: string; genre: Genre; seed: string; ts: string }
   | { type: 'step_started'; runId: string; stepName: DirectorStepName; ts: string }
@@ -49,6 +83,7 @@ export type DirectorStartRunInput = {
     criticModel?: string
     auditorModel?: string
     maxChapters?: number
+    canonContext?: DirectorCanonContext
   }
 }
 

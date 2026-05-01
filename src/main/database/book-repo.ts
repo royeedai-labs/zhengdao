@@ -1,5 +1,12 @@
 import { getDb } from './connection'
 import { saveConfig } from './config-repo'
+import type { Genre } from '../../shared/genre'
+import {
+  generateAutoCoverForBook,
+  mapBookCoverUrl,
+  removeBookCoverDirectory,
+  setBookCoverFromFile
+} from '../book-cover-service'
 
 export function getBooks() {
   const db = getDb()
@@ -11,10 +18,10 @@ export function getBooks() {
     GROUP BY b.id
     ORDER BY b.updated_at DESC
   `).all()
-  return books
+  return books.map((book) => mapBookCoverUrl(book as any))
 }
 
-export function createBook(data: { title: string; author: string }) {
+export function createBook(data: { title: string; author: string; productGenre?: Genre; coverSourcePath?: string }) {
   const db = getDb()
   const result = db.prepare('INSERT INTO books (title, author) VALUES (?, ?)').run(data.title, data.author)
   const bookId = result.lastInsertRowid as number
@@ -30,12 +37,23 @@ export function createBook(data: { title: string; author: string }) {
     sensitive_list: 'default'
   })
 
-  return db.prepare('SELECT * FROM books WHERE id = ?').get(bookId)
+  if (data.coverSourcePath) {
+    setBookCoverFromFile(bookId, data.coverSourcePath)
+  } else {
+    generateAutoCoverForBook(bookId, {
+      title: data.title,
+      author: data.author,
+      genre: data.productGenre
+    })
+  }
+
+  return mapBookCoverUrl(db.prepare('SELECT * FROM books WHERE id = ?').get(bookId) as any)
 }
 
 export function deleteBook(id: number) {
   const db = getDb()
   db.prepare('DELETE FROM books WHERE id = ?').run(id)
+  removeBookCoverDirectory(id)
 }
 
 export function getBookStats(bookId: number) {

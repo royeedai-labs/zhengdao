@@ -99,6 +99,10 @@ export function resolveAssistantIntent(input: {
     '继续写',
     '接着写',
     '往下写',
+    '起草本章正文',
+    '起草第一章正文',
+    '开始写本章',
+    '开始写第一章',
     '下一段',
     '延续',
     'continue'
@@ -148,4 +152,12 @@ export function resolveAssistantSkillSelection(
   if (!base) return null
   const override = overrides.find((item) => item.skill_key === base.key) || null
   return resolveSkillForBook(base, override)
+}
+
+export function resolveSeededAssistantSkill(
+  skills: AiSkillTemplate[],
+  seededSkillKey: string | null | undefined
+): AiSkillTemplate | undefined {
+  if (!seededSkillKey) return undefined
+  return skills.find((skill) => skill.key === seededSkillKey)
 }

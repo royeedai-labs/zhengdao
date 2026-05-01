@@ -19,6 +19,7 @@ export function mergeCreationBrief(
   const normalized = normalizeCreationBrief(incoming)
   const next: AssistantCreationBrief = { ...current }
   const writable = next as Record<string, unknown>
+  if (normalized.seedIdea) next.seedIdea = normalized.seedIdea
   for (const field of CREATION_BRIEF_FIELDS) {
     const value = normalized[field.key]
     if (typeof value === 'string' && value.trim()) {
@@ -32,11 +33,13 @@ export function mergeCreationBrief(
 
 export function formatBriefForPrompt(brief: AssistantCreationBrief): string {
   const normalized = normalizeCreationBrief(brief)
-  return CREATION_BRIEF_FIELDS.map((field) => {
-    const value = String(normalized[field.key] || '').trim()
-    const fallback = field.required ? '未确认' : '可由 AI 评估/代写'
-    return `${field.required ? '必填' : '可选'}｜${field.label}: ${value || fallback}`
-  }).join('\n')
+  return [
+    `核心灵感: ${normalized.seedIdea || '未填写，可由 AI 根据创作方向补全'}`,
+    ...CREATION_BRIEF_FIELDS.map((field) => {
+      const value = String(normalized[field.key] || '').trim()
+      return `可选｜${field.label}: ${value || '未填写，交给 AI 补全'}`
+    })
+  ].join('\n')
 }
 
 export function formatCreationBriefFieldGuide(): string {
@@ -44,6 +47,6 @@ export function formatCreationBriefFieldGuide(): string {
     const options = field.quickOptions
       .map((option, optionIndex) => `${optionIndex + 1}) ${option}`)
       .join('；')
-    return `${index + 1}. ${field.required ? '必填' : '可选'}${field.multiSelect ? '｜可多选' : ''}｜${field.label}：${options}`
+    return `${index + 1}. 创作方向可选${field.multiSelect ? '｜可多选' : ''}｜${field.label}：${options}`
   }).join('\n')
 }

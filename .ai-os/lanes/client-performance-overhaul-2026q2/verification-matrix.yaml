@@ -1,0 +1,22 @@
+version: 1
+baseline_id: "CR-20260501-client-performance-overhaul"
+guards:
+  - id: PERF-CHAPTER-META-NO-CONTENT
+    title: "Chapter outline metadata excludes content"
+    command: "npm test -- src/main/database/__tests__/chapter-repo-performance.test.ts"
+  - id: PERF-BOOK-COVER-NO-DATA-URL
+    title: "Book list does not inline cover bytes"
+    command: "npm test -- src/main/database/__tests__/book-repo.test.ts src/main/__tests__/book-cover-service.test.ts"
+  - id: PERF-UI-STORE-IDEMPOTENT-SAVE
+    title: "Repeated save status updates do not notify subscribers"
+    command: "npm test -- src/renderer/src/stores/__tests__/ui-store.test.ts"
+  - id: PERF-SENSITIVE-MATCHER
+    title: "Sensitive word matcher handles empty and multiline text"
+    command: "npm test -- src/renderer/src/components/editor/__tests__/sensitive-highlight.test.ts"
+  - id: PERF-NATIVE-CHECKS
+    title: "Project-native regression checks"
+    commands:
+      - "npm test"
+      - "npm run typecheck"
+      - "npm run build"
+      - "git diff --check"
