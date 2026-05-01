@@ -245,6 +245,7 @@ export type IpcInvokeChannel =
 
   // sync:* + backup:* + data:* — cloud sync, local rotating backups, full export
   | 'sync:uploadBook'
+  | 'sync:syncAllBooks'
   | 'sync:listCloudBooks'
   | 'sync:downloadBook'
   | 'backup:configure'
@@ -355,7 +356,7 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'app:downloadManualInstallerUpdate', 'app:installDownloadedUpdate', 'app:reloadWindow',
   'window:notify', 'window:setFullScreen', 'window:isFullScreen',
   'window:isMaximized', 'window:toggleMaximize', 'window:setTitleBarOverlay',
-  'sync:uploadBook', 'sync:listCloudBooks', 'sync:downloadBook',
+  'sync:uploadBook', 'sync:syncAllBooks', 'sync:listCloudBooks', 'sync:downloadBook',
   'backup:configure', 'backup:now', 'backup:list', 'backup:restore', 'backup:restoreFrom',
   'data:exportFull', 'data:importFull',
   'fs:writeFile',

@@ -18,7 +18,10 @@ interface AuthLoginResult {
 }
 
 const SYNC_TOGGLE_KEY = 'zhengdao_sync_enabled'
-const LEGACY_SYNC_TOGGLE_KEY = 'google_sync_enabled'
+
+function hasOfficialSyncEntitlement(user: ZhengdaoUser | null): boolean {
+  return Boolean(user && (user.pro || user.tier === 'pro' || user.tier === 'team'))
+}
 
 interface AuthStore {
   user: ZhengdaoUser | null
@@ -32,6 +35,7 @@ interface AuthStore {
   login: () => Promise<AuthLoginResult>
   logout: () => Promise<void>
   syncUploadBook: (bookId: number) => Promise<void>
+  syncAllBooks: () => Promise<void>
   setSyncEnabled: (enabled: boolean) => Promise<void>
   applyAuthUpdate: (user: ZhengdaoUser | null) => void
 }
@@ -47,8 +51,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ loading: true })
     try {
       const user = (await window.api.authGetUser()) as ZhengdaoUser | null
-      const raw = (await window.api.getAppState(SYNC_TOGGLE_KEY)) || (await window.api.getAppState(LEGACY_SYNC_TOGGLE_KEY))
-      const syncEnabled = raw === '1'
+      const raw = await window.api.getAppState(SYNC_TOGGLE_KEY)
+      const syncEnabled = raw === null ? hasOfficialSyncEntitlement(user) : raw === '1'
       set({ user, syncEnabled })
     } finally {
       set({ loading: false })
@@ -94,6 +98,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       await window.api.syncUploadBook(bookId)
       await get().loadBookSyncMeta(bookId)
+    } finally {
+      set({ syncing: false })
+    }
+  },
+
+  syncAllBooks: async () => {
+    set({ syncing: true })
+    try {
+      await window.api.syncAllBooks()
     } finally {
       set({ syncing: false })
     }

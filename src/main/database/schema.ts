@@ -7,9 +7,18 @@ export function createSchema(db: Database.Database): void {
       title TEXT NOT NULL,
       author TEXT NOT NULL DEFAULT '',
       cover_path TEXT,
+      cloud_book_id TEXT UNIQUE,
+      cloud_sync_version INTEGER NOT NULL DEFAULT 0,
+      cloud_payload_hash TEXT NOT NULL DEFAULT '',
+      cloud_updated_at TEXT,
+      cloud_sync_status TEXT NOT NULL DEFAULT 'idle'
+        CHECK(cloud_sync_status IN ('idle','synced','pending','conflict','error','archived')),
+      archived_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_books_cloud_book_id ON books(cloud_book_id);
+    CREATE INDEX IF NOT EXISTS idx_books_archived_at ON books(archived_at);
 
     CREATE TABLE IF NOT EXISTS project_config (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

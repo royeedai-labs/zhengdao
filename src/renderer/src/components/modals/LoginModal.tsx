@@ -25,6 +25,7 @@ export function AccountSyncSettings() {
   const login = useAuthStore((s) => s.login)
   const logout = useAuthStore((s) => s.logout)
   const syncUploadBook = useAuthStore((s) => s.syncUploadBook)
+  const syncAllBooks = useAuthStore((s) => s.syncAllBooks)
   const setSyncEnabled = useAuthStore((s) => s.setSyncEnabled)
   const applyAuthUpdate = useAuthStore((s) => s.applyAuthUpdate)
 
@@ -73,10 +74,11 @@ export function AccountSyncSettings() {
     return window.api.onAuthUpdated((incoming) => {
       const nextUser = incoming as Parameters<typeof applyAuthUpdate>[0]
       applyAuthUpdate(nextUser)
+      void loadUser()
       setSyncMsg(hasProEntitlement(nextUser) ? '证道账号已关联，云端能力已可用。' : '证道账号已关联，升级 Pro 后可使用云端能力。')
       if (hasProEntitlement(nextUser)) void loadCloudFiles()
     })
-  }, [applyAuthUpdate])
+  }, [applyAuthUpdate, loadUser])
 
   const handleLogin = async () => {
     setSyncMsg(null)
@@ -96,7 +98,19 @@ export function AccountSyncSettings() {
     setSyncMsg(null)
     try {
       await syncUploadBook(currentBookId)
-      setSyncMsg('已上传到官网云备份')
+      await loadCloudFiles()
+      setSyncMsg('当前作品已同步到官方云端')
+    } catch (e) {
+      setSyncMsg(e instanceof Error ? e.message : '同步失败')
+    }
+  }
+
+  const handleSyncAll = async () => {
+    setSyncMsg(null)
+    try {
+      await syncAllBooks()
+      await loadCloudFiles()
+      setSyncMsg('已同步全部作品')
     } catch (e) {
       setSyncMsg(e instanceof Error ? e.message : '同步失败')
     }
@@ -211,12 +225,12 @@ export function AccountSyncSettings() {
               onChange={(e) => void setSyncEnabled(e.target.checked)}
               className="rounded border-[var(--border-secondary)] bg-[var(--bg-primary)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
             />
-            <span className="text-xs text-[var(--text-primary)]">启用后将显示云同步状态（仍需手动上传备份）</span>
+            <span className="text-xs text-[var(--text-primary)]">开启后自动同步本机与云端作品；关闭后仍可手动同步。</span>
           </label>
 
           <div className="rounded-lg border border-[var(--border-primary)] overflow-hidden">
             <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)] bg-[var(--bg-primary)]">
-              当前作品 · 手动上传官网云备份
+              当前作品 · 官方云同步
             </div>
             <div className="p-3 space-y-2">
               <p className="text-xs text-[var(--text-muted)]">
@@ -232,7 +246,15 @@ export function AccountSyncSettings() {
                 className="w-full py-2.5 text-xs font-bold rounded-lg bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 text-[var(--accent-contrast)] flex items-center justify-center gap-2 transition"
               >
                 {syncing ? <Loader2 size={16} className="animate-spin" /> : <Cloud size={16} />}
-                {syncing ? '正在上传…' : '立即备份到云端'}
+                {syncing ? '正在同步…' : '立即同步当前作品'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSyncAll()}
+                disabled={syncing}
+                className="w-full py-2 text-xs font-semibold rounded-lg border border-[var(--border-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] disabled:opacity-40 transition"
+              >
+                同步全部作品
               </button>
             </div>
           </div>

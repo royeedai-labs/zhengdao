@@ -4,6 +4,12 @@ export interface Book {
   author: string
   cover_path: string | null
   cover_url?: string | null
+  cloud_book_id?: string | null
+  cloud_sync_version?: number
+  cloud_payload_hash?: string
+  cloud_updated_at?: string | null
+  cloud_sync_status?: 'idle' | 'synced' | 'pending' | 'conflict' | 'error' | 'archived'
+  archived_at?: string | null
   created_at: string
   updated_at: string
   total_words?: number

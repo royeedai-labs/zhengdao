@@ -40,7 +40,7 @@
 
 - OpenAI 兼容、Gemini、Ollama Provider 配置入口
 - 风格分析、一致性检查等 AI 功能入口
-- Google 登录与 Google Drive 云同步链路
+- 证道账号登录与官网云备份链路
 
 ### 交付与更新
 

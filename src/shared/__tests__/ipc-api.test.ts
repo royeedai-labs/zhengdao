@@ -73,7 +73,7 @@ describe('IPC channel registry', () => {
       team: 16,
       app: 7,
       window: 6,
-      sync: 3,
+      sync: 4,
       backup: 5,
       data: 2,
       fs: 1,

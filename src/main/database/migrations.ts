@@ -76,7 +76,7 @@ const migrations: Migration[] = [
   },
   {
     version: 5,
-    description: 'Add sync_queue for Drive upload tracking',
+    description: 'Add sync_queue for cloud backup upload tracking',
     up: (db) => {
       db.exec(`
         CREATE TABLE IF NOT EXISTS sync_queue (
@@ -1051,6 +1051,35 @@ const migrations: Migration[] = [
           FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_story_bible_snapshots_book ON ai_story_bible_snapshots(book_id, created_at);
+      `)
+    }
+  },
+  {
+    version: 29,
+    description: 'Add official desktop cloud sync columns to books',
+    up: (db) => {
+      const cols = db.prepare('PRAGMA table_info(books)').all() as { name: string }[]
+      const has = (name: string) => cols.some((col) => col.name === name)
+      const statements: string[] = []
+      if (!has('cloud_book_id')) statements.push('ALTER TABLE books ADD COLUMN cloud_book_id TEXT')
+      if (!has('cloud_sync_version')) {
+        statements.push('ALTER TABLE books ADD COLUMN cloud_sync_version INTEGER NOT NULL DEFAULT 0')
+      }
+      if (!has('cloud_payload_hash')) {
+        statements.push("ALTER TABLE books ADD COLUMN cloud_payload_hash TEXT NOT NULL DEFAULT ''")
+      }
+      if (!has('cloud_updated_at')) statements.push('ALTER TABLE books ADD COLUMN cloud_updated_at TEXT')
+      if (!has('cloud_sync_status')) {
+        statements.push(
+          `ALTER TABLE books ADD COLUMN cloud_sync_status TEXT NOT NULL DEFAULT 'idle'
+             CHECK(cloud_sync_status IN ('idle','synced','pending','conflict','error','archived'))`
+        )
+      }
+      if (!has('archived_at')) statements.push('ALTER TABLE books ADD COLUMN archived_at TEXT')
+      if (statements.length > 0) db.exec(statements.join(';\n'))
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_books_cloud_book_id ON books(cloud_book_id);
+        CREATE INDEX IF NOT EXISTS idx_books_archived_at ON books(archived_at);
       `)
     }
   }

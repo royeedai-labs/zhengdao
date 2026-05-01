@@ -30,10 +30,12 @@ function restoreBackupFromPath(src: string): { ok: boolean; error?: string } {
 export function registerSyncIpc(): void {
   // Cloud sync
   ipcMain.handle('sync:uploadBook', async (_, bookId: number) => {
-    await cloudSync.syncBook(bookId)
+    return cloudSync.syncBook(bookId)
   })
+  ipcMain.handle('sync:syncAllBooks', async () => cloudSync.syncAllBooks({ force: true }))
   ipcMain.handle('sync:listCloudBooks', async () => cloudSync.listCloudBooks())
   ipcMain.handle('sync:downloadBook', async (_, fileId: string) => cloudSync.downloadBook(fileId))
+  cloudSync.startBackgroundSync()
 
   // Local rotating backup
   ipcMain.handle(

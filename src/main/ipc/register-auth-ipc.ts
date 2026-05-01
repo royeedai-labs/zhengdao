@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import { zhengdaoAuth } from './state'
+import { cloudSync, zhengdaoAuth } from './state'
 
 /**
  * SPLIT-007 — auth:* IPC handlers + the deep-link callback bridge.
@@ -24,4 +24,5 @@ export async function handleZhengdaoAuthCallbackUrl(url: string): Promise<void> 
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('auth:updated', user)
   }
+  void cloudSync.syncAllBooks().catch((error) => console.warn('[CloudSync] login sync skipped', error))
 }

@@ -441,6 +441,7 @@ const api = {
   },
 
   syncUploadBook: (bookId: number) => ipcRenderer.invoke('sync:uploadBook', bookId),
+  syncAllBooks: () => ipcRenderer.invoke('sync:syncAllBooks'),
   syncListCloudBooks: () => ipcRenderer.invoke('sync:listCloudBooks'),
   syncDownloadBook: (fileId: string) => ipcRenderer.invoke('sync:downloadBook', fileId),
 

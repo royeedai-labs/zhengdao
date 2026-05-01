@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.8.1 - 2026-05-02
+
+### Release
+
+- 发布官方云同步客户端修复版
+
+### Added
+
+- 新增桌面端官方云作品包格式，覆盖作品、卷章、人物、剧情、设定、引文、AI 会话、Canon 和视觉资产元数据。
+- 新增「同步全部作品」入口，并在登录成功后触发官方云同步。
+
+### Changed
+
+- 客户端云同步从旧 Google Drive 路径迁移到 `agent.xiangweihu.com` 官方账号与 `/api/v1/desktop-sync` 接口。
+- Pro / Team 账号默认开启官方云同步，手动关闭后继续尊重本机设置。
+
+### Fixed
+
+- 修复多设备冲突时云端副本复用同一个 `cloud_book_id` 导致本地唯一索引冲突的问题。
+- 云同步作品包会清空本地 API Key 和本机文件路径，避免把本地凭据或机器路径写入云端。
+
+### Docs
+
+- README 与历史更新日志中的云同步口径统一为证道账号和官网云备份。
+
 ## v1.8.0 - 2026-05-01
 
 ### Release
@@ -213,7 +238,7 @@ The project follows Semantic Versioning for release numbers. Release entries use
 
 ### Changed
 
-- Move desktop account and cloud sync from Google OAuth / Drive credentials to the Zhengdao website account flow.
+- Move desktop account and cloud backup credentials to the Zhengdao website account flow.
 - Keep AI accounts as application-level defaults only; work AI profiles no longer expose or persist work-level account selection.
 - Remove the built-in usage-help modal and F1 help shortcut now that product documentation is moving to the website docs center.
 - Simplify the daily workbench to focus on writing progress, save state, snapshots, local backups, review, and publish checks.
@@ -323,7 +348,7 @@ The project follows Semantic Versioning for release numbers. Release entries use
 
 ### Changed
 
-- Move theme, Google account / cloud sync, AI global accounts, updates and about information into Application Settings.
+- Move theme, desktop account / cloud backup, AI global accounts, updates and about information into Application Settings.
 - Remove scattered title-bar system controls so the workspace title bar keeps only workspace actions plus one Application Settings entry.
 - Keep project AI settings focused on work-level AI profiles and capability cards while global account management lives at the app level.
 - Add `predev` and `pretest` native rebuild hooks so Electron startup and Node-based tests use the correct `better-sqlite3` ABI.

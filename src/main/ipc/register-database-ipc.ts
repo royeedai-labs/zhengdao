@@ -25,7 +25,7 @@ import * as shortcutRepo from '../database/shortcut-repo'
 import * as canonEventRepo from '../database/canon-event-repo'
 import * as canonOrgRepo from '../database/canon-organization-repo'
 import * as canonCharOrgRepo from '../database/canon-character-org-repo'
-import { searchRepo } from './state'
+import { cloudSync, searchRepo } from './state'
 
 /**
  * SPLIT-007 — db:* IPC handlers.
@@ -41,7 +41,14 @@ export function registerDatabaseIpc(): void {
   ipcMain.handle('db:createBookFromAiPackage', (_, data) =>
     aiBookCreationRepo.createBookFromAiPackage(data)
   )
-  ipcMain.handle('db:deleteBook', (_, id) => bookRepo.deleteBook(id))
+  ipcMain.handle('db:deleteBook', async (_, id: number) => {
+    const book = bookRepo.getBookById(id)
+    if (book?.cloud_book_id) {
+      await cloudSync.archiveLocalBook(id)
+      return
+    }
+    bookRepo.deleteBook(id)
+  })
   ipcMain.handle('db:getBookStats', (_, bookId) => bookRepo.getBookStats(bookId))
 
   // Config + genre templates + custom shortcuts
