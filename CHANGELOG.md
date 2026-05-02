@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The project follows Semantic Versioning for release numbers. Release entries use a simple `Added / Changed / Fixed / Docs / Release` structure so the app package, Git tag, GitHub Release and changelog can stay aligned.
 
+## v1.9.0 - 2026-05-02
+
+### Release
+
+- 发布作者成长与拆解报告客户端
+
+### Added
+
+- 新增「作者成长工作台」，支持本地写作冲刺、作者周报成长卡和投稿准备清单，分享文本只包含统计摘要，不包含正文或 AI 草稿。
+- 新增投稿准备入口，复用发布前检查、敏感词和伏笔风险结果，按长篇网文、开篇样章和连载发布三个档位给出阻断项、提醒项和下一步建议。
+- 新增市场扫描 / 作品拆解报告本地保存能力，只保存来源说明、输入哈希、结构化输出和短证据摘录，避免持久化完整授权样本。
+
+### Changed
+
+- 日更工作台新增作者成长和投稿准备快捷入口，当前作品的日更、总字数、章节数、连续写作和发布风险可以直接进入成长面板复核。
+- 市场扫描与作品拆解面板补齐历史报告读取、结果保存和删除路径，方便后续回看已授权的拆解结论。
+
+### Fixed
+
+- 同步新增的拆解报告 IPC 通道与契约测试计数，避免新增 `ai:*` 通道后主进程、preload 和共享 channel registry 脱节。
+
 ## v1.8.1 - 2026-05-02
 
 ### Release
