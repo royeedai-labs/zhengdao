@@ -51,6 +51,12 @@ impact_rules:
       - "npm test -- src/main/__tests__/deep-link.test.ts"
       - "npm run build"
       - "git diff --check"
+  - when: "desktop-auth-login-url-fix"
+    run:
+      - "npm test -- src/main/auth/__tests__/zhengdao-auth.test.ts"
+      - "npm run typecheck"
+      - "npm run build"
+      - "git diff --check"
   - when: "ai-story-bible-context-change"
     run:
       - "npm test -- src/main/database/__tests__/story-bible-repo.test.ts src/main/database/__tests__/migrations.test.ts src/renderer/src/utils/ai/__tests__/assistant-workflow.test.ts src/shared/__tests__/ipc-api.test.ts"
@@ -149,6 +155,10 @@ failure_modes:
     scenario: "Old local databases reach createSchema before v29 has added books.cloud_book_id"
     expected: "App startup can run createSchema and then migrations on legacy books tables without indexing missing cloud sync columns"
     guard: "src/main/database/__tests__/migrations.test.ts"
+  - id: FM-DEF-022
+    scenario: "Desktop auth start returns a loopback or missing loginUrl while the desktop app is using the production API"
+    expected: "The client opens the configured official website /login desktop-link URL with the returned state, while local dev still allows localhost login URLs"
+    guard: "src/main/auth/__tests__/zhengdao-auth.test.ts plus npm run build"
 
 guards:
   - ".ai-os/lanes/default/evals/ai-os-v9-lane-normalization.md"

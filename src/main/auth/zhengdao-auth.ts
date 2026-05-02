@@ -4,6 +4,36 @@ import * as appStateRepo from '../database/app-state-repo'
 const WEBSITE_URL = (process.env.ZHENGDAO_WEBSITE_URL || 'https://agent.xiangweihu.com').replace(/\/$/, '')
 const API_BASE = (process.env.ZHENGDAO_API_URL || `${WEBSITE_URL}/api/v1`).replace(/\/$/, '')
 
+function isLoopbackUrl(rawUrl: string): boolean {
+  try {
+    const { hostname } = new URL(rawUrl)
+    const normalized = hostname.replace(/^\[|\]$/g, '')
+    return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1'
+  } catch {
+    return false
+  }
+}
+
+function buildDesktopLoginUrl(state: string): string {
+  const url = new URL('/login', `${WEBSITE_URL}/`)
+  url.searchParams.set('client', 'desktop')
+  url.searchParams.set('desktop_state', state)
+  return url.toString()
+}
+
+function resolveDesktopLoginUrl(session: { state: string; loginUrl?: string }): string {
+  if (!session.loginUrl) return buildDesktopLoginUrl(session.state)
+
+  try {
+    const url = new URL(session.loginUrl)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return buildDesktopLoginUrl(session.state)
+    if (isLoopbackUrl(session.loginUrl) && !isLoopbackUrl(API_BASE)) return buildDesktopLoginUrl(session.state)
+    return url.toString()
+  } catch {
+    return buildDesktopLoginUrl(session.state)
+  }
+}
+
 export interface ZhengdaoUser {
   id: string
   email: string
@@ -57,8 +87,9 @@ export class ZhengdaoAuth {
         body: JSON.stringify({})
       })
       appStateRepo.setAppState(KEYS.pendingState, session.state)
-      await shell.openExternal(session.loginUrl)
-      return { ok: true, loginUrl: session.loginUrl }
+      const loginUrl = resolveDesktopLoginUrl(session)
+      await shell.openExternal(loginUrl)
+      return { ok: true, loginUrl }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
