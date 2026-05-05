@@ -39,6 +39,9 @@ const STEP_OPTIONS: DirectorStepName[] = [
   'chapter_draft'
 ]
 
+const CREATION_PLANNING_TITLE = '创作策划'
+const CREATION_PLANNING_SUBTITLE = '先确定选题、读者、结构、风格、素材和章节安排，再开始写作。'
+
 async function buildDirectorCanonContext(bookId: number): Promise<DirectorCanonContext> {
   const book = useBookStore.getState().books.find((item) => item.id === bookId)
   await Promise.all([
@@ -192,7 +195,7 @@ export default function DirectorPanelModal() {
       setEvents([])
       await refreshRuns()
       await subscribe(result.runId)
-      addToast('success', 'Director run 已启动')
+      addToast('success', '创作策划已启动')
     } catch (error) {
       addToast('error', error instanceof Error ? error.message : String(error))
     } finally {
@@ -253,10 +256,13 @@ export default function DirectorPanelModal() {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] shadow-2xl">
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-5">
-          <div className="flex items-center gap-2 font-bold text-[var(--text-primary)]">
-            <Clapperboard size={18} className="text-[var(--accent-secondary)]" />
-            Pro 自动导演
+        <div className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-5 py-3">
+          <div className="flex min-w-0 items-start gap-2">
+            <Clapperboard size={18} className="mt-0.5 shrink-0 text-[var(--accent-secondary)]" />
+            <div className="min-w-0">
+              <div className="font-bold text-[var(--text-primary)]">Pro 自动导演 · {CREATION_PLANNING_TITLE}</div>
+              <div className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{CREATION_PLANNING_SUBTITLE}</div>
+            </div>
           </div>
           <button type="button" onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
             <X size={20} />
@@ -284,7 +290,7 @@ export default function DirectorPanelModal() {
                 </select>
               </label>
               <label className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                Planning size
+                策划章节数
                 <input
                   type="number"
                   min={1}
@@ -302,7 +308,7 @@ export default function DirectorPanelModal() {
               className="inline-flex items-center justify-center gap-2 rounded bg-[var(--accent-primary)] px-3 py-2 text-xs font-bold text-[var(--accent-contrast)] disabled:opacity-40"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-              启动 Director
+              启动创作策划
             </button>
 
             <div className="rounded-lg border border-[var(--border-primary)]">
@@ -369,7 +375,7 @@ export default function DirectorPanelModal() {
             <section className="grid min-h-0 grid-cols-[minmax(0,1fr)_320px] overflow-hidden">
               <div className="overflow-y-auto p-4">
                 <h3 className="mb-3 text-sm font-bold text-[var(--text-primary)]">
-                  {remoteRun?.planningPack ? '整本规划' : '章节草稿'}
+                  {remoteRun?.planningPack ? CREATION_PLANNING_TITLE : '章节草稿'}
                 </h3>
                 {remoteRun?.planningPack ? (
                   <div className="space-y-3">

@@ -242,7 +242,7 @@ describe('BookshelfCreationAssistantPanel UX copy', () => {
   it('renders the empty state as a four-step AI book-starting workspace', async () => {
     const html = await renderBookshelfCreationAssistantPanel()
 
-    expect(html).toContain('AI 起书')
+    expect(html).toContain('创作策划')
     expect(html).toContain('第 1/4 步')
     expect(html).toContain('创作方向（可选）')
     expect(html).toContain('生成起书方案')

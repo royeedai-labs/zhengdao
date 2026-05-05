@@ -77,6 +77,9 @@ type AiMessage = {
 
 type ActiveOperation = 'brief' | 'package' | null
 
+const CREATION_PLANNING_TITLE = '创作策划'
+const CREATION_PLANNING_SUBTITLE = '先确定选题、读者、结构、风格、素材和章节安排，再开始写作。'
+
 const ADVANCED_BRIEF_FIELD_GROUPS: Array<{
   title: string
   keys: Array<CreationBriefField['key']>
@@ -496,13 +499,20 @@ export function BookshelfCreationAssistantPanel(): JSX.Element {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--bg-secondary)]">
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-3">
-        <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
-          <Bot size={17} className="text-[var(--accent-primary)]" />
-          <span>AI 起书</span>
-          <span className="hidden truncate text-[11px] font-semibold text-[var(--text-muted)] sm:inline">
-            {flowState.status}
-          </span>
+      <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--border-primary)] bg-[var(--bg-primary)] px-3 py-2">
+        <div className="flex min-w-0 items-start gap-2">
+          <Bot size={17} className="mt-0.5 shrink-0 text-[var(--accent-primary)]" />
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+              <span>{CREATION_PLANNING_TITLE}</span>
+              <span className="hidden truncate text-[11px] font-semibold text-[var(--text-muted)] sm:inline">
+                {flowState.status}
+              </span>
+            </div>
+            <div className="mt-0.5 text-[11px] leading-4 text-[var(--text-muted)]">
+              {CREATION_PLANNING_SUBTITLE}
+            </div>
+          </div>
         </div>
         <button
           type="button"
@@ -552,7 +562,7 @@ export function BookshelfCreationAssistantPanel(): JSX.Element {
             {messages.length === 0 && (
               <div className="space-y-3">
                 <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-3 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  从一句故事灵感开始。书名、篇幅、人物、章节和设定都可以留空，AI 会先生成可确认的起书方案。
+                  {CREATION_PLANNING_SUBTITLE} 书名、篇幅、人物、章节和设定都可以留空，AI 会先生成可确认的起书方案。
                 </div>
                 <div className="grid grid-cols-1 gap-2">
                   {resolveAssistantContext({ currentBookId: null, requestedSurface: 'bookshelf' }).quickActions.map(

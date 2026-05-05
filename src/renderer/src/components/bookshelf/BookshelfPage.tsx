@@ -119,7 +119,7 @@ export default function BookshelfPage() {
               className="mb-3 inline-flex items-center px-6 py-3 border border-[var(--accent-border)] bg-[var(--accent-surface)] hover:bg-[var(--bg-tertiary)] text-[var(--accent-secondary)] rounded-xl text-base font-bold transition"
             >
               <Bot size={18} className="mr-2" />
-              用 AI 起书
+              打开创作策划
             </button>
             <button
               onClick={() => openModal('newBook')}
@@ -190,8 +190,8 @@ export default function BookshelfPage() {
                     <Bot size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-[var(--text-primary)] text-sm truncate">用 AI 起书</h3>
-                    <p className="text-[11px] text-[var(--text-muted)] truncate">写灵感、选方向、确认后创建。</p>
+                    <h3 className="font-bold text-[var(--text-primary)] text-sm truncate">创作策划</h3>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">先确定选题、读者、结构、风格和章节安排。</p>
                   </div>
                 </div>
                 {filteredBooks.map((book) => (
@@ -268,12 +268,12 @@ export default function BookshelfPage() {
                       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast)]">
                         <Bot size={22} />
                       </div>
-                      <h3 className="text-base font-bold text-[var(--text-primary)]">用 AI 起书</h3>
+                      <h3 className="text-base font-bold text-[var(--text-primary)]">创作策划</h3>
                       <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
-                        一句话起步，书名、篇幅、人物和章节可先交给 AI。
+                        先确定选题、读者、结构、风格、素材和章节安排，再开始写作。
                       </p>
                     </div>
-                    <div className="mt-4 text-xs font-semibold text-[var(--accent-secondary)]">打开 AI 起书</div>
+                    <div className="mt-4 text-xs font-semibold text-[var(--accent-secondary)]">打开创作策划</div>
                   </div>
                 </div>
                 {filteredBooks.map((book) => (

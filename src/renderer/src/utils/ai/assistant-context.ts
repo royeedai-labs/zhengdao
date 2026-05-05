@@ -9,6 +9,9 @@ export type ResolveAssistantContextInput = {
   requestedSurface?: AssistantSurface | null
 }
 
+const CREATION_PLANNING_TITLE = '创作策划'
+const CREATION_PLANNING_SUBTITLE = '先确定选题、读者、结构、风格、素材和章节安排，再开始写作。'
+
 function surfaceFromModal(modal: ModalType): AssistantSurface | null {
   switch (modal) {
     case 'bookOverview':
@@ -44,8 +47,8 @@ export function resolveAssistantContext(input: ResolveAssistantContextInput): Re
     case 'bookshelf':
       return {
         surface,
-        title: 'AI 起书',
-        description: '写灵感、选方向、生成起书方案，确认后再创建作品。',
+        title: CREATION_PLANNING_TITLE,
+        description: CREATION_PLANNING_SUBTITLE,
         quickActions: [
           {
             key: 'start_creation',
