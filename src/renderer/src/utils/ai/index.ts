@@ -134,8 +134,8 @@ async function bridgeStreamComplete(
     }
     const bridgeHandle = window.api.aiStreamComplete(request, {
       onToken: callbacks.onToken,
-      onComplete: (content) => {
-        callbacks.onComplete(content)
+      onComplete: (content, metadata) => {
+        callbacks.onComplete(content, metadata)
         finish()
       },
       onError: (error) => {
@@ -239,7 +239,7 @@ async function streamWithProvider(
       return
     }
     callbacks.onToken(result.content)
-    callbacks.onComplete(result.content)
+    callbacks.onComplete(result.content, result.metadata)
     return
   }
 

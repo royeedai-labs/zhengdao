@@ -1,4 +1,5 @@
 import type { AiBridgeCompleteRequest, AiOfficialProfile, AiResponse, AiStreamCallbacks } from '../../shared/ai'
+import { extractAssistantPresentation, type AssistantPresentationMetadata } from '../../shared/assistant-presentation'
 import { formatLocalRagPrompt, retrieveLocalBookSnippets } from './local-rag-service'
 import { parseSseBlock, splitSseBlocks } from './sse-parser'
 
@@ -6,7 +7,8 @@ const WEBSITE_URL = (process.env.ZHENGDAO_WEBSITE_URL || 'https://agent.xiangwei
 const API_BASE = (process.env.ZHENGDAO_API_URL || `${WEBSITE_URL}/api/v1`).replace(/\/$/, '')
 
 type AgentChatResponse = {
-  message?: { role?: string; content?: string }
+  message?: { role?: string; content?: string; metadata?: AssistantPresentationMetadata }
+  metadata?: AssistantPresentationMetadata
   error?: string
   messageText?: string
 }
@@ -101,7 +103,12 @@ export async function completeOfficialAi(
       method: 'POST',
       body: JSON.stringify(buildChatPayload(request, false))
     })
-    return { content: result.message?.content || result.messageText || '' }
+    const content = result.message?.content || result.messageText || ''
+    const extracted = extractAssistantPresentation(content)
+    return {
+      content: extracted.content,
+      metadata: result.message?.metadata || result.metadata || (extracted.authorThought ? { authorThought: extracted.authorThought } : undefined)
+    }
   } catch (error) {
     return { content: '', error: error instanceof Error ? error.message : String(error) }
   }
@@ -114,6 +121,7 @@ export function streamOfficialAi(
 ) {
   const controller = new AbortController()
   let fullText = ''
+  let presentationMetadata: AssistantPresentationMetadata | undefined
 
   const done = (async () => {
     if (!token) {
@@ -151,23 +159,29 @@ export function streamOfficialAi(
         for (const block of blocks) {
           const parsed = parseSseBlock(block)
           if (!parsed) continue
-          const data = JSON.parse(parsed.data) as { text?: string; message?: string }
+          const data = JSON.parse(parsed.data) as {
+            text?: string
+            message?: string
+            authorThought?: AssistantPresentationMetadata['authorThought']
+          }
           if (parsed.event === 'delta' && data.text) {
             fullText += data.text
             callbacks.onToken(data.text)
+          } else if (parsed.event === 'presentation') {
+            presentationMetadata = data.authorThought ? { authorThought: data.authorThought } : undefined
           } else if (parsed.event === 'error') {
             callbacks.onError(data.message || '证道官方 AI 生成失败')
             return
           } else if (parsed.event === 'done') {
-            callbacks.onComplete(fullText)
+            callbacks.onComplete(fullText, presentationMetadata)
             return
           }
         }
       }
-      callbacks.onComplete(fullText)
+      callbacks.onComplete(fullText, presentationMetadata)
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
-        callbacks.onComplete(fullText)
+        callbacks.onComplete(fullText, presentationMetadata)
         return
       }
       callbacks.onError(error instanceof Error ? error.message : String(error))

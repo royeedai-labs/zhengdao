@@ -140,9 +140,9 @@ export function registerAiIpc(): void {
         void (async () => {
           const session = streamOfficialAi(request, await zhengdaoAuth.getAccessToken(), {
             onToken: (token) => event.sender.send('ai:streamToken', requestId, token),
-            onComplete: (content) => {
+            onComplete: (content, metadata) => {
               activeGeminiStreamSessions.delete(requestId)
-              event.sender.send('ai:streamComplete', requestId, content)
+              event.sender.send('ai:streamComplete', requestId, content, metadata)
             },
             onError: (error) => {
               activeGeminiStreamSessions.delete(requestId)
@@ -163,9 +163,9 @@ export function registerAiIpc(): void {
 
       const session = getGeminiCliService().stream(request, {
         onToken: (token) => event.sender.send('ai:streamToken', requestId, token),
-        onComplete: (content) => {
+        onComplete: (content, metadata) => {
           activeGeminiStreamSessions.delete(requestId)
-          event.sender.send('ai:streamComplete', requestId, content)
+          event.sender.send('ai:streamComplete', requestId, content, metadata)
         },
         onError: (error) => {
           activeGeminiStreamSessions.delete(requestId)

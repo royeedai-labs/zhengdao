@@ -1,6 +1,10 @@
 import { Send } from 'lucide-react'
 import type { AiSkillTemplate } from '@/utils/ai/assistant-workflow'
 import { shouldSubmitAiAssistantInput } from '../input-behavior'
+import {
+  ASSISTANT_INTERACTION_MODE_OPTIONS,
+  type AssistantInteractionMode
+} from '../assistant-interaction-mode'
 
 /**
  * SPLIT-006 phase 2 — bottom composer (quick action buttons + input + send).
@@ -27,6 +31,8 @@ export interface AssistantPanelComposerProps {
   onChange: (value: string) => void
   onSubmit: () => void
   loading: boolean
+  assistantMode: AssistantInteractionMode
+  onAssistantModeChange: (mode: AssistantInteractionMode) => void
   quickActions: QuickActionItem[]
   skills: AiSkillTemplate[]
   onSeedSkill: (skill: AiSkillTemplate, input: string | undefined) => void
@@ -36,6 +42,28 @@ export interface AssistantPanelComposerProps {
 export function AssistantPanelComposer(props: AssistantPanelComposerProps): JSX.Element {
   return (
     <div className="shrink-0 border-t border-[var(--border-primary)] bg-[var(--bg-primary)] p-3">
+      <div className="mb-2 grid grid-cols-2 gap-1.5 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-1">
+        {ASSISTANT_INTERACTION_MODE_OPTIONS.map((mode) => {
+          const active = props.assistantMode === mode.id
+          return (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => props.onAssistantModeChange(mode.id)}
+              className={`rounded-md px-2 py-1.5 text-left transition ${
+                active
+                  ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+              }`}
+              title={mode.description}
+              aria-pressed={active}
+            >
+              <div className="text-[11px] font-bold">{mode.label}</div>
+              <div className="mt-0.5 line-clamp-1 text-[10px] opacity-80">{mode.description}</div>
+            </button>
+          )
+        })}
+      </div>
       <div className="mb-2 grid grid-cols-3 gap-1.5">
         {props.quickActions.map((action) => {
           const skill = props.skills.find((item) => item.key === action.key)

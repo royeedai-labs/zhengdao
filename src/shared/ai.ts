@@ -1,3 +1,5 @@
+import type { AssistantPresentationMetadata } from './assistant-presentation'
+
 export type AiProvider = 'zhengdao_official' | 'openai' | 'gemini' | 'gemini_cli' | 'ollama' | 'custom'
 
 export interface AiOfficialProfile {
@@ -26,11 +28,12 @@ export type AiCallerConfig = Omit<AiConfig, 'ai_provider'> & {
 export interface AiResponse {
   content: string
   error?: string
+  metadata?: AssistantPresentationMetadata
 }
 
 export interface AiStreamCallbacks {
   onToken: (token: string) => void
-  onComplete: (fullText: string) => void
+  onComplete: (fullText: string, metadata?: AssistantPresentationMetadata) => void
   onError: (error: string) => void
 }
 

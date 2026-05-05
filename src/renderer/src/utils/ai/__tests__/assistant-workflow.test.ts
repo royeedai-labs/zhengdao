@@ -223,6 +223,23 @@ describe('composeSkillPrompt', () => {
     expect(prompt.userPrompt).toContain('当前章节：主角来到宴会。')
     expect(prompt.userPrompt).toContain('第七章 宴会')
   })
+
+  it('can enable the author-thought dual-channel protocol without changing the main contract', () => {
+    const prompt = composeSkillPrompt({
+      skill: {
+        ...baseSkill,
+        output_contract: 'json_drafts'
+      },
+      profile,
+      context: { contextText: '', chips: [] },
+      userInput: '生成章节草稿',
+      presentationMode: 'author_thought_dual_channel'
+    })
+
+    expect(prompt.systemPrompt).toContain('双通道展示协议')
+    expect(prompt.systemPrompt).toContain('<<<AUTHOR_THOUGHT_BLOCK>>>')
+    expect(prompt.userPrompt).toContain('请严格只返回一个可解析的 JSON 对象')
+  })
 })
 
 describe('scanNarrativeQuality', () => {
@@ -270,6 +287,36 @@ describe('composeAssistantChatPrompt', () => {
     expect(prompt.userPrompt).toContain('当前章节：主角来到宴会。')
     expect(prompt.userPrompt).not.toContain('请续写')
     expect(prompt.userPrompt).not.toContain('请严格只返回一个可解析的 JSON 对象')
+  })
+
+  it('can request an author-thought block for ordinary chat replies', () => {
+    const prompt = composeAssistantChatPrompt({
+      profile,
+      context: { contextText: '', chips: [] },
+      skills: [baseSkill],
+      userInput: '分析这一章节奏问题',
+      presentationMode: 'author_thought_dual_channel'
+    })
+
+    expect(prompt.systemPrompt).toContain('双通道展示协议')
+    expect(prompt.systemPrompt).toContain('作者思路模拟')
+    expect(prompt.systemPrompt).toContain('<<<END_AUTHOR_THOUGHT_BLOCK>>>')
+  })
+
+  it('builds creation-planning chat prompts without draft-generation instructions', () => {
+    const prompt = composeAssistantChatPrompt({
+      profile,
+      context: { contextText: '当前章节：主角来到宴会。', chips: [] },
+      skills: [baseSkill],
+      userInput: '帮我写下一章',
+      assistantMode: 'creation_planning'
+    })
+
+    expect(prompt.systemPrompt).toContain('当前处于创作策划模式')
+    expect(prompt.systemPrompt).toContain('不要输出可直接应用的正文')
+    expect(prompt.systemPrompt).toContain('不要声称已经创建草稿')
+    expect(prompt.systemPrompt).not.toContain('当前处于直接写作模式')
+    expect(prompt.userPrompt).toContain('帮我写下一章')
   })
 })
 

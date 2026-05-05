@@ -106,6 +106,7 @@
 | 全局 AI 账号与 provider 状态 | AI settings / account provider store | AI assistant、Project settings、Gemini CLI service | 作品级配置不得复制或覆盖全局凭据。 |
 | Gemini CLI 状态检测 | main process Gemini CLI service + IPC | renderer account/provider UI | CLI 登录采用终端式流程，不复刻 Google 私有认证。 |
 | AI 草稿确认 | AI assistant draft workflow | editor / assets repositories | 草稿确认前不得写入正文或作品资产。 |
+| AI assistant 展示元数据 | Agent X `/v1/agent/chat` `message.metadata` + SSE `presentation` | renderer message stream、会话恢复、official AI bridge | `authorThought` 仅用于展示/恢复，不得作为正文或资产真理源；客户端正文流不再把 marker block 当作契约。 |
 
 #### 6.2 Release / native module 契约
 

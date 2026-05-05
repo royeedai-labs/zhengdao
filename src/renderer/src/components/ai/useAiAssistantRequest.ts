@@ -22,16 +22,22 @@ import {
   type AssistantIntent
 } from './conversation-mode'
 import {
-  appendAssistantStreamToken,
   completeAssistantStreamMessage,
   createAssistantStreamChunkQueue,
   createPendingAssistantStreamMessage,
   getAssistantStreamEmptyError
 } from './streaming-message'
+import { replaceAssistantStreamContent } from './streaming-message'
 import { toAiChapterDraft, toInlineAiDraft } from './inline-draft'
 import { draftTitle, normalizeAssistantDrafts, withLocalRagChip } from './ai-assistant-helpers'
 import { scanNarrativeQuality } from '@/utils/ai/workflow/quality-filter'
 import { isRemoveAiToneQuickActionInput } from './chapter-quick-actions'
+import {
+  extractAssistantPresentation,
+  stripAssistantPresentationFromPartial,
+  type AssistantPresentationMetadata
+} from '../../../../shared/assistant-presentation'
+import type { AssistantInteractionMode } from './assistant-interaction-mode'
 
 /**
  * SPLIT-006 phase 4 — AI request orchestration hook.
@@ -156,6 +162,7 @@ export interface UseAiAssistantRequestDeps {
   skills: AiSkillTemplate[]
   overrides: AiSkillOverride[]
   assistantIntent: AssistantIntent
+  assistantMode: AssistantInteractionMode
   currentChapter: { id: number; content?: string | null } | null
   volumes: Array<{ id: number }>
   aiAssistantSelectionChapterId: number | null
@@ -365,21 +372,31 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
   ): Promise<void> => {
     const text = (explicitInput ?? deps.input).trim()
     if (!text || deps.loading || !deps.conversationId || !deps.bookId) return
-    const requestIntent = explicitSkill
-      ? deps.assistantIntent
-      : resolveAssistantIntent({
-          skills: deps.skills,
-          userInput: text,
-          selectedText:
-            deps.aiAssistantSelectionChapterId === deps.currentChapter?.id
-              ? deps.aiAssistantSelectionText
-              : '',
-          hasCurrentChapter: Boolean(deps.currentChapter),
-          hasVolumes: deps.volumes.length > 0
-        })
+    const requestIntent =
+      deps.assistantMode === 'creation_planning'
+        ? {
+            mode: 'chat' as const,
+            skillKey: null,
+            confidence: 1,
+            reason: '创作策划模式：仅输出策划建议'
+          }
+        : explicitSkill
+          ? deps.assistantIntent
+          : resolveAssistantIntent({
+              skills: deps.skills,
+              userInput: text,
+              selectedText:
+                deps.aiAssistantSelectionChapterId === deps.currentChapter?.id
+                  ? deps.aiAssistantSelectionText
+                  : '',
+              hasCurrentChapter: Boolean(deps.currentChapter),
+              hasVolumes: deps.volumes.length > 0
+            })
     const skill =
-      explicitSkill ||
-      resolveAssistantSkillSelection(deps.skills, deps.overrides, requestIntent.skillKey)
+      deps.assistantMode === 'creation_planning'
+        ? null
+        : explicitSkill ||
+          resolveAssistantSkillSelection(deps.skills, deps.overrides, requestIntent.skillKey)
     const skillPreflightError = validateSkillBeforeSend(skill)
     if (skillPreflightError) {
       deps.setError(skillPreflightError)
@@ -390,7 +407,7 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
     deps.setInput('')
 
     try {
-      if (isRemoveAiToneQuickActionInput(text)) {
+      if (deps.assistantMode === 'direct_writing' && isRemoveAiToneQuickActionInput(text)) {
         const result = await runRemoveAiToneQuickAction({
           text,
           bookId: deps.bookId,
@@ -447,17 +464,21 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
             profile: deps.profile,
             context: requestContext,
             userInput: text,
-            storyBible
+            storyBible,
+            presentationMode: 'author_thought_dual_channel'
           })
         : composeAssistantChatPrompt({
             profile: deps.profile,
             context: requestContext,
             skills: deps.skills,
             userInput: text,
-            storyBible
+            storyBible,
+            assistantMode: deps.assistantMode,
+            presentationMode: 'author_thought_dual_channel'
           })
       const userMessage = (await window.api.aiAddMessage(deps.conversationId, 'user', text, {
         skill_key: skill?.key ?? null,
+        assistant_mode: deps.assistantMode,
         mode: skill ? 'skill' : 'chat',
         intent_reason: requestIntent.reason,
         intent_confidence: requestIntent.confidence,
@@ -474,9 +495,10 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
       deps.setMessages((current) => [...current, userMessage, pendingMessage])
 
       let streamedContent = ''
+      let streamedPresentation: AssistantPresentationMetadata | undefined
       let streamError = ''
       const streamChunkQueue = createAssistantStreamChunkQueue((token) => {
-        deps.setMessages((current) => appendAssistantStreamToken(current, pendingMessageId, token))
+        deps.setMessages((current) => replaceAssistantStreamContent(current, pendingMessageId, token))
       })
       await aiPromptStream(
         aiConfig,
@@ -485,10 +507,13 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
         {
           onToken: (token) => {
             streamedContent += token
-            streamChunkQueue.push(token)
+            // The backend stream should already hide presentation control
+            // markers, but keep the local strip as a compatibility guard.
+            streamChunkQueue.push(stripAssistantPresentationFromPartial(streamedContent))
           },
-          onComplete: (fullText) => {
+          onComplete: (fullText, metadata) => {
             streamedContent = fullText || streamedContent
+            streamedPresentation = metadata
           },
           onError: (message) => {
             streamError = message
@@ -503,6 +528,8 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
       const stopped = requestAbortController.signal.aborted
 
       if (stopped) {
+        const stoppedPresentation = extractAssistantPresentation(streamedContent)
+        const stoppedContent = stoppedPresentation.content || stripAssistantPresentationFromPartial(streamedContent)
         if (!streamedContent.trim()) {
           deps.setMessages((current) => current.filter((message) => message.id !== pendingMessageId))
           useToastStore.getState().addToast('info', '已停止生成')
@@ -512,11 +539,13 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
         const assistantMessage = (await window.api.aiAddMessage(
           deps.conversationId,
           'assistant',
-          streamedContent,
+          stoppedContent,
           {
             skill_key: skill?.key ?? null,
+            assistant_mode: deps.assistantMode,
             mode: skill ? 'skill' : 'chat',
-            stopped: true
+            stopped: true,
+            ...(stoppedPresentation.authorThought ? { authorThought: stoppedPresentation.authorThought } : {})
           }
         )) as { id: number }
         deps.setMessages((current) =>
@@ -525,8 +554,12 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
               ? {
                   id: assistantMessage.id,
                   role: 'assistant',
-                  content: streamedContent,
-                  metadata: { stopped: true }
+                  content: stoppedContent,
+                  metadata: {
+                    stopped: true,
+                    assistant_mode: deps.assistantMode,
+                    ...(stoppedPresentation.authorThought ? { authorThought: stoppedPresentation.authorThought } : {})
+                  }
                 }
               : message
           )
@@ -547,7 +580,10 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
         deps.setError(streamError)
         return
       }
-      const emptyStreamError = getAssistantStreamEmptyError(streamedContent)
+      const extractedPresentation = extractAssistantPresentation(streamedContent)
+      const finalContent = extractedPresentation.content
+      const authorThought = streamedPresentation?.authorThought || extractedPresentation.authorThought
+      const emptyStreamError = getAssistantStreamEmptyError(finalContent)
       if (emptyStreamError) {
         deps.setMessages((current) =>
           current.map((message) =>
@@ -560,24 +596,27 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
         return
       }
 
-      const qualityIssues = scanNarrativeQuality(streamedContent)
+      const qualityIssues = scanNarrativeQuality(finalContent)
+      const assistantMetadata = {
+        skill_key: skill?.key ?? null,
+        assistant_mode: deps.assistantMode,
+        mode: skill ? 'skill' : 'chat',
+        intent_reason: requestIntent.reason,
+        intent_confidence: requestIntent.confidence,
+        quality_issues: qualityIssues,
+        ...(authorThought ? { authorThought } : {})
+      }
       const assistantMessage = (await window.api.aiAddMessage(
         deps.conversationId,
         'assistant',
-        streamedContent,
-        {
-          skill_key: skill?.key ?? null,
-          mode: skill ? 'skill' : 'chat',
-          intent_reason: requestIntent.reason,
-          intent_confidence: requestIntent.confidence,
-          quality_issues: qualityIssues
-        }
+        finalContent,
+        assistantMetadata
       )) as { id: number }
       await window.api.aiCaptureStoryFacts({
         bookId: deps.bookId,
         sourceType: 'assistant_message',
         sourceRef: String(assistantMessage.id),
-        text: streamedContent,
+        text: finalContent,
         chapterNumber: null
       }).catch(() => null)
       deps.setMessages((current) =>
@@ -585,24 +624,18 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
           current,
           pendingMessageId,
           assistantMessage.id,
-          streamedContent
+          finalContent
         ).map((message) =>
           message.id === assistantMessage.id
             ? {
                 ...message,
-                metadata: {
-                  skill_key: skill?.key ?? null,
-                  mode: skill ? 'skill' : 'chat',
-                  intent_reason: requestIntent.reason,
-                  intent_confidence: requestIntent.confidence,
-                  quality_issues: qualityIssues
-                }
+                metadata: assistantMetadata
               }
             : message
         )
       )
       if (skill) {
-        const parsed = normalizeAssistantDrafts(skill, streamedContent)
+        const parsed = normalizeAssistantDrafts(skill, finalContent)
         const boundDrafts = attachSelectionMetaToDrafts(parsed.drafts, {
           chapterId: deps.aiAssistantSelectionChapterId,
           text: deps.aiAssistantSelectionText,

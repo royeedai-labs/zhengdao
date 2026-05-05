@@ -58,10 +58,22 @@ describe('official AI service', () => {
   it('passes desktop maxTokens to the backend output budget', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      text: async () => JSON.stringify({ message: { content: 'ok' } })
+      text: async () =>
+        JSON.stringify({
+          message: {
+            content: 'ok',
+            metadata: {
+              authorThought: {
+                style: 'author_inner_monologue',
+                title: '作者思路模拟',
+                lines: ['我得先把人物诉求说透。', '我这里不能只给空建议。']
+              }
+            }
+          }
+        })
     })
 
-    await completeOfficialAi(request(4200), 'token')
+    const result = await completeOfficialAi(request(4200), 'token')
 
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
     expect(body).toMatchObject({
@@ -69,6 +81,7 @@ describe('official AI service', () => {
       maxOutputTokens: 4200,
       stream: false
     })
+    expect(result.metadata?.authorThought?.lines).toHaveLength(2)
   })
 
   it('caps streamed official AI output budget before sending the request', async () => {
@@ -92,6 +105,8 @@ describe('official AI service', () => {
     fetchMock.mockResolvedValue(chunkedSseResponse([
       'event: delta\r\n',
       'data: {"text":"甲"}\r\n\r\n',
+      'event: presentation\r\n',
+      'data: {"authorThought":{"style":"author_inner_monologue","title":"作者思路模拟","lines":["我这里要先把目标压实。","我得保住这一段的推进感。"]}}\r\n\r\n',
       'event: done\r\n',
       'data: {}\r\n\r\n'
     ]))
@@ -107,7 +122,13 @@ describe('official AI service', () => {
     await session.done
 
     expect(onToken).toHaveBeenCalledWith('甲')
-    expect(onComplete).toHaveBeenCalledWith('甲')
+    expect(onComplete).toHaveBeenCalledWith('甲', {
+      authorThought: {
+        style: 'author_inner_monologue',
+        title: '作者思路模拟',
+        lines: ['我这里要先把目标压实。', '我得保住这一段的推进感。']
+      }
+    })
     expect(onError).not.toHaveBeenCalled()
   })
 })

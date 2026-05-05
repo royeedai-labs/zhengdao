@@ -4,6 +4,7 @@ import type { AiContextChip, AiSkillTemplate } from '@/utils/ai/assistant-workfl
 import { buildAssistantMessageDisplay } from '../message-display'
 import { SkillFeedbackForm } from '../SkillFeedbackForm'
 import type { QuickActionItem } from './AssistantPanelComposer'
+import { readAuthorThoughtBlock } from '../../../../../shared/assistant-presentation'
 
 /**
  * SPLIT-006 phase 2 — scrollable conversation surface.
@@ -101,6 +102,7 @@ export const MessageStreamArea = forwardRef<HTMLDivElement, MessageStreamAreaPro
 
         {props.messages.map((message) => {
           const display = buildAssistantMessageDisplay(message)
+          const authorThought = readAuthorThoughtBlock(message.metadata?.authorThought)
           const streamingLabel =
             message.role === 'assistant' && message.streaming
               ? message.streamingLabel || 'AI 正在回复...'
@@ -132,6 +134,20 @@ export const MessageStreamArea = forwardRef<HTMLDivElement, MessageStreamAreaPro
                   <Loader2 size={11} className="animate-spin" />
                   <span>{streamingLabel}</span>
                 </div>
+              )}
+              {authorThought && (
+                <details className="mb-3 whitespace-normal rounded-md border border-[var(--accent-border)] bg-[var(--accent-surface)] p-2.5">
+                  <summary className="cursor-pointer list-none text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--accent-secondary)]">
+                    创作取舍 · 展开
+                  </summary>
+                  <div className="mt-2 space-y-1.5 text-xs text-[var(--text-primary)]">
+                    {authorThought.lines.map((line, index) => (
+                      <div key={`${message.id}-thought-${index}`} className="leading-relaxed">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
               {display.kind === 'drafts' ? (
                 <div className="space-y-2 whitespace-normal">

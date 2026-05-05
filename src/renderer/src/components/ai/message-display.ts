@@ -7,6 +7,7 @@ import {
   buildDraftPreviewModel,
   type DraftPreviewModel
 } from './draft-preview'
+import { extractAssistantPresentation } from '../../../../shared/assistant-presentation'
 
 export type AssistantMessageDisplay =
   | {
@@ -55,9 +56,10 @@ function looksLikeStructuredDraft(text: string): boolean {
 }
 
 export function buildAssistantMessageDisplay(message: MessageLike): AssistantMessageDisplay {
-  const text = message.content.trim()
+  const cleanContent = extractAssistantPresentation(message.content).content
+  const text = cleanContent.trim()
   if (message.role !== 'assistant') {
-    return { kind: 'text', text: message.content }
+    return { kind: 'text', text: cleanContent }
   }
 
   if (!looksLikeStructuredDraft(text)) {
@@ -72,7 +74,7 @@ export function buildAssistantMessageDisplay(message: MessageLike): AssistantMes
         }
       }
     }
-    return { kind: 'text', text: message.content }
+    return { kind: 'text', text: cleanContent }
   }
 
   const parsed = parseAssistantDrafts(text)
@@ -86,7 +88,7 @@ export function buildAssistantMessageDisplay(message: MessageLike): AssistantMes
         text: `已生成《${draftTitle(chapterDraft)}》，已切到中间的 AI 章节草稿预览。确认后才会写入小说。`
       }
     }
-    return { kind: 'text', text: message.content }
+    return { kind: 'text', text: cleanContent }
   }
 
   if (parsed.drafts.every((draft) => draft.kind === 'create_chapter')) {

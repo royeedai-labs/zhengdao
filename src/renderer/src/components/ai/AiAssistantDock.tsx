@@ -28,6 +28,11 @@ import { DraftListPanel } from './panel-parts/DraftListPanel'
 import { MessageStreamArea } from './panel-parts/MessageStreamArea'
 import { StoryFactProposalPanel } from './panel-parts/StoryFactProposalPanel'
 import { resolveSeededAssistantSkill } from './conversation-mode'
+import {
+  DEFAULT_ASSISTANT_INTERACTION_MODE,
+  isAssistantInteractionMode,
+  type AssistantInteractionMode
+} from './assistant-interaction-mode'
 import type { StoryFactProposal } from '../../../../shared/story-bible'
 
 type AiMessage = {
@@ -54,6 +59,14 @@ type AiDraftRow = {
   payload: Record<string, unknown>
   status: 'pending' | 'applied' | 'dismissed'
   target_ref?: string
+}
+
+const ASSISTANT_MODE_STORAGE_KEY = 'zhengdao.aiAssistant.interactionMode'
+
+function readStoredAssistantMode(): AssistantInteractionMode {
+  if (typeof window === 'undefined') return DEFAULT_ASSISTANT_INTERACTION_MODE
+  const value = window.localStorage.getItem(ASSISTANT_MODE_STORAGE_KEY)
+  return isAssistantInteractionMode(value) ? value : DEFAULT_ASSISTANT_INTERACTION_MODE
 }
 
 export function AiAssistantPanel() {
@@ -103,6 +116,7 @@ export function AiAssistantPanel() {
   const [conversationListOpen, setConversationListOpen] = useState(false)
   const [enabledContextChipIds, setEnabledContextChipIds] = useState<string[]>([])
   const [providerLabel, setProviderLabel] = useState('未配置')
+  const [assistantMode, setAssistantMode] = useState<AssistantInteractionMode>(readStoredAssistantMode)
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeRequestAbortRef = useRef<AbortController | null>(null)
   const sendCommandRef = useRef<(text: string) => void>(() => {})
@@ -198,6 +212,10 @@ export function AiAssistantPanel() {
   }, [])
 
   useEffect(() => {
+    window.localStorage.setItem(ASSISTANT_MODE_STORAGE_KEY, assistantMode)
+  }, [assistantMode])
+
+  useEffect(() => {
     if (!bookId || !aiAssistantCommand || !conversationId || loading || skills.length === 0) return
     const { id, input: commandInput, autoSend } = aiAssistantCommand
     setSeededSkillKey(null)
@@ -218,6 +236,7 @@ export function AiAssistantPanel() {
     skills,
     overrides,
     assistantIntent,
+    assistantMode,
     currentChapter,
     volumes,
     aiAssistantSelectionChapterId,
@@ -443,6 +462,8 @@ export function AiAssistantPanel() {
             onChange={updateComposerInput}
             onSubmit={submitComposer}
             loading={loading}
+            assistantMode={assistantMode}
+            onAssistantModeChange={setAssistantMode}
             quickActions={quickActions.map((action) => ({
               key: action.key,
               label: action.label,

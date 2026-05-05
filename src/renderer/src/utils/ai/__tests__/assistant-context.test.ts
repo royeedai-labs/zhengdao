@@ -6,6 +6,7 @@ describe('assistant context resolver', () => {
     const context = resolveAssistantContext({ currentBookId: null })
 
     expect(context.surface).toBe('bookshelf')
+    expect(context.title).toBe('AI 起书')
     expect(context.quickActions.map((action) => action.key)).toContain('start_creation')
   })
 
@@ -36,4 +37,3 @@ describe('assistant context resolver', () => {
     expect(wiki.quickActions.map((action) => action.key)).toContain('wiki_entry')
   })
 })
-

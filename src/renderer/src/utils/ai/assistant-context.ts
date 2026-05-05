@@ -9,7 +9,7 @@ export type ResolveAssistantContextInput = {
   requestedSurface?: AssistantSurface | null
 }
 
-const CREATION_PLANNING_TITLE = '创作策划'
+const CREATION_PLANNING_TITLE = 'AI 起书'
 const CREATION_PLANNING_SUBTITLE = '先确定选题、读者、结构、风格、素材和章节安排，再开始写作。'
 
 function surfaceFromModal(modal: ModalType): AssistantSurface | null {

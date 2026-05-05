@@ -32,6 +32,19 @@ interface ClientPlatformFixture {
       }
     }
   }
+  assistant: {
+    nonStreamResponse: {
+      message: {
+        content: string
+        metadata?: {
+          authorThought?: { lines?: string[] }
+        }
+      }
+      metadata?: {
+        authorThought?: { lines?: string[] }
+      }
+    }
+  }
 }
 
 function readClientFixture(): ClientPlatformFixture {
@@ -71,5 +84,15 @@ describe('desktop client contract parity', () => {
     expect(fixture.errors.versionConflict.status).toBe(409)
     expect(fixture.errors.versionConflict.body.code).toBe('VERSION_CONFLICT')
     expect(fixture.errors.versionConflict.body.current?.version).toBeGreaterThan(0)
+  })
+
+  it('recognizes assistant presentation metadata without visible control markers', () => {
+    const fixture = readClientFixture()
+
+    expect(fixture.assistant.nonStreamResponse.message.content).not.toContain('<<<AUTHOR_THOUGHT_BLOCK>>>')
+    expect(fixture.assistant.nonStreamResponse.message.metadata?.authorThought?.lines).toHaveLength(2)
+    expect(fixture.assistant.nonStreamResponse.metadata?.authorThought?.lines).toEqual(
+      fixture.assistant.nonStreamResponse.message.metadata?.authorThought?.lines
+    )
   })
 })

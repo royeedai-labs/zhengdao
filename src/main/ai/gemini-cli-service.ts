@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { spawn as spawnProcess } from 'child_process'
+import type { AssistantPresentationMetadata } from '../../shared/assistant-presentation'
 
 export interface AiBridgeCompleteRequest {
   provider: string
@@ -15,11 +16,12 @@ export interface AiBridgeCompleteRequest {
 export interface AiResponse {
   content: string
   error?: string
+  metadata?: AssistantPresentationMetadata
 }
 
 export interface AiStreamCallbacks {
   onToken: (token: string) => void
-  onComplete: (fullText: string) => void
+  onComplete: (fullText: string, metadata?: AssistantPresentationMetadata) => void
   onError: (error: string) => void
 }
 

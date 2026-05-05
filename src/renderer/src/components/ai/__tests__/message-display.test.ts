@@ -46,6 +46,23 @@ describe('assistant message display', () => {
     })
   })
 
+  it('strips legacy author-thought markers before rendering chat text', () => {
+    expect(
+      buildAssistantMessageDisplay({
+        role: 'assistant',
+        content: [
+          '先确认人物目标。',
+          '<<<AUTHOR_THOUGHT_BLOCK>>>',
+          '{"style":"author_inner_monologue","title":"作者思路模拟","lines":["我先压实动机。","我保留推进感。"]}',
+          '<<<END_AUTHOR_THOUGHT_BLOCK>>>'
+        ].join('\n')
+      })
+    ).toEqual({
+      kind: 'text',
+      text: '先确认人物目标。'
+    })
+  })
+
   it('summarizes chapter drafts instead of rendering long chapter content in chat', () => {
     expect(
       buildAssistantMessageDisplay({

@@ -282,10 +282,15 @@ const api = {
     const handleToken = (_event: unknown, incomingId: string, token: string) => {
       if (incomingId === requestId) callbacks.onToken(token)
     }
-    const handleComplete = (_event: unknown, incomingId: string, content: string) => {
+    const handleComplete = (
+      _event: unknown,
+      incomingId: string,
+      content: string,
+      metadata?: AiResponse['metadata']
+    ) => {
       if (incomingId !== requestId) return
       cleanup()
-      callbacks.onComplete(content)
+      callbacks.onComplete(content, metadata)
     }
     const handleError = (_event: unknown, incomingId: string, error: string) => {
       if (incomingId !== requestId) return
