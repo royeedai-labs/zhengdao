@@ -33,6 +33,10 @@ import ScriptToolbar from '@/components/editor/ScriptToolbar'
 import { collectCharacterIdsFromContent } from '@/utils/character-association'
 import { setActiveEditor } from '@/components/editor/active-editor'
 import { buildAiAssistantSelectionSnapshot } from '@/components/editor/ai-selection'
+import {
+  REMOVE_AI_TONE_CHAPTER_INPUT,
+  REMOVE_AI_TONE_SELECTION_INPUT
+} from '@/components/ai/chapter-quick-actions'
 import { aiInlineDraftKey, createAiInlineDraftExtension } from '@/components/editor/AiInlineDraft'
 import { createSensitiveHighlightExtension } from '@/components/editor/sensitive-highlight'
 import { getLocalDateKey } from '@/utils/daily-workbench'
@@ -1385,6 +1389,17 @@ export default function EditorArea() {
               >
                 AI 续写
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  syncAiAssistantSelection()
+                  openAiAssistant({ input: REMOVE_AI_TONE_CHAPTER_INPUT, autoSend: true })
+                  setContextMenu(null)
+                }}
+                className="w-full px-3 py-1.5 text-left text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] transition"
+              >
+                去 AI 味（本章）
+              </button>
             </>
           ) : (
             <>
@@ -1462,6 +1477,17 @@ export default function EditorArea() {
                 className="w-full px-3 py-1.5 text-left text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] transition"
               >
                 AI 润色改写
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  syncAiAssistantSelection()
+                  openAiAssistant({ input: REMOVE_AI_TONE_SELECTION_INPUT, autoSend: true })
+                  setContextMenu(null)
+                }}
+                className="w-full px-3 py-1.5 text-left text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] transition"
+              >
+                去 AI 味（选区）
               </button>
               <button
                 type="button"

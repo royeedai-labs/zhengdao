@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  BarChart3,
   BookOpen,
   Bot,
   Clapperboard,
@@ -51,6 +52,7 @@ export interface AssistantPanelHeaderProps {
   onOpenTeamManagement: () => void
   onOpenDirectorPanel: () => void
   onOpenVisualStudio: () => void
+  onOpenWritingIntel: () => void
   onOpenMcpSettings: () => void
   onOpenMarketScanDeconstruct: () => void
   onOpenAiSettings: () => void
@@ -70,6 +72,8 @@ function AssistantToolIcon({ id }: { id: AssistantToolActionId }) {
       return <Network size={15} />
     case 'visualStudio':
       return <Image size={15} />
+    case 'writingIntel':
+      return <BarChart3 size={15} />
     case 'marketScanDeconstruct':
       return <Search size={15} />
     case 'mcpSettings':
@@ -116,6 +120,9 @@ export function AssistantPanelHeader(props: AssistantPanelHeaderProps): JSX.Elem
         break
       case 'visualStudio':
         props.onOpenVisualStudio()
+        break
+      case 'writingIntel':
+        props.onOpenWritingIntel()
         break
       case 'marketScanDeconstruct':
         props.onOpenMarketScanDeconstruct()

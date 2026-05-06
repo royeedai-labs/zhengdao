@@ -1,17 +1,22 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   AlertTriangle,
+  BarChart3,
   Bot,
   CalendarDays,
+  Cloud,
   FileCheck2,
   HardDrive,
+  History,
   Loader2,
   RefreshCw,
   Rocket,
+  Save,
   Send,
   ShieldCheck,
   Target
 } from 'lucide-react'
+import { useAuthStore } from '@/stores/auth-store'
 import { useBookStore } from '@/stores/book-store'
 import { useChapterStore } from '@/stores/chapter-store'
 import { useConfigStore } from '@/stores/config-store'
@@ -26,6 +31,13 @@ import {
   type WorkbenchTone
 } from '@/utils/daily-workbench'
 import { resolveProjectDailyGoal } from '@/utils/daily-goal'
+import { hasProEntitlement } from '@/utils/auth-display'
+
+interface SnapshotSummary {
+  id: number
+  created_at: string
+  word_count: number
+}
 
 function toneClass(tone: WorkbenchTone): string {
   switch (tone) {
@@ -93,8 +105,16 @@ export default function DailyWorkbench() {
   const systemDailyGoal = useSettingsStore((s) => s.systemDailyGoal)
   const warningCount = useForeshadowStore((s) => s.getWarningCount())
   const openModal = useUIStore((s) => s.openModal)
+  const chapterSaveStatus = useUIStore((s) => s.chapterSaveStatus)
+  const user = useAuthStore((s) => s.user)
+  const syncing = useAuthStore((s) => s.syncing)
+  const syncEnabled = useAuthStore((s) => s.syncEnabled)
+  const lastBookSyncAt = useAuthStore((s) => s.lastBookSyncAt)
+  const loadBookSyncMeta = useAuthStore((s) => s.loadBookSyncMeta)
+  const syncUploadBook = useAuthStore((s) => s.syncUploadBook)
   const [todayWords, setTodayWords] = useState(0)
   const [streak, setStreak] = useState(0)
+  const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([])
   const [backups, setBackups] = useState<BackupFileSummary[]>([])
   const [backupError, setBackupError] = useState<string | null>(null)
   const [backupBusy, setBackupBusy] = useState(false)
@@ -117,6 +137,28 @@ export default function DailyWorkbench() {
     }
   }, [bookId, currentChapter?.word_count])
 
+  useEffect(() => {
+    void loadBookSyncMeta(bookId ?? null)
+  }, [bookId, loadBookSyncMeta])
+
+  const refreshSnapshots = useCallback(async () => {
+    if (!currentChapter?.id) {
+      setSnapshots([])
+      return
+    }
+
+    try {
+      const rows = (await window.api.getSnapshots(currentChapter.id)) as SnapshotSummary[]
+      setSnapshots(rows)
+    } catch {
+      setSnapshots([])
+    }
+  }, [currentChapter?.id])
+
+  useEffect(() => {
+    void refreshSnapshots()
+  }, [refreshSnapshots])
+
   const refreshBackups = async () => {
     try {
       const rows = (await window.api.backupList()) as BackupFileSummary[]
@@ -137,8 +179,18 @@ export default function DailyWorkbench() {
     streak,
     currentChapterId: currentChapter?.id ?? null,
     currentChapterWords: currentChapter?.word_count ?? 0,
+    saveStatus: chapterSaveStatus,
+    snapshotCount: snapshots.length,
+    latestSnapshotAt: snapshots[0]?.created_at ?? null,
     backups,
-    backupError
+    backupError,
+    cloudSync: {
+      hasAccount: Boolean(user),
+      hasEntitlement: hasProEntitlement(user),
+      syncEnabled,
+      syncing,
+      lastBookSyncAt
+    }
   })
 
   const runLocalBackup = async () => {
@@ -154,6 +206,16 @@ export default function DailyWorkbench() {
       useToastStore.getState().addToast('error', message)
     } finally {
       setBackupBusy(false)
+    }
+  }
+
+  const runCloudBackup = async () => {
+    if (!bookId) return
+    try {
+      await syncUploadBook(bookId)
+      useToastStore.getState().addToast('success', '云备份状态已更新')
+    } catch (error) {
+      useToastStore.getState().addToast('error', error instanceof Error ? error.message : '云备份失败')
     }
   }
 
@@ -177,11 +239,19 @@ export default function DailyWorkbench() {
       </div>
 
       <StatusChip
-        icon={<ShieldCheck size={13} />}
-        label="运行正常"
-        detail={`连续 ${model.streak} 天`}
-        tone="ok"
-        title="代码运行状态正常；此状态不等同于外部备份完成"
+        icon={<Save size={13} />}
+        label={model.save.label}
+        detail={model.save.detail}
+        tone={model.save.tone}
+        title="正文自动保存状态"
+      />
+      <StatusChip
+        icon={<History size={13} />}
+        label={model.snapshot.label}
+        detail={model.snapshot.detail}
+        tone={model.snapshot.tone}
+        onClick={() => openModal('snapshot')}
+        title="查看当前章节快照和可恢复版本"
       />
       <StatusChip
         icon={backupBusy ? <Loader2 size={13} className="animate-spin" /> : <HardDrive size={13} />}
@@ -192,13 +262,37 @@ export default function DailyWorkbench() {
         title="立即创建本地数据库备份"
       />
       <StatusChip
+        icon={syncing ? <Loader2 size={13} className="animate-spin" /> : <Cloud size={13} />}
+        label={model.cloudSync.label}
+        detail={model.cloudSync.detail}
+        tone={model.cloudSync.tone}
+        onClick={bookId && user && hasProEntitlement(user) && !syncing ? () => void runCloudBackup() : undefined}
+        title="官网云备份状态；同步问题不影响本地写作"
+      />
+      <StatusChip
         icon={<AlertTriangle size={13} />}
         label={warningCount > 0 ? `${warningCount} 个风险` : '暂无伏笔风险'}
         detail={warningCount > 0 ? '打开伏笔看板' : '继续写作'}
         tone={warningCount > 0 ? 'warn' : 'muted'}
         onClick={() => openModal('foreshadowBoard')}
       />
+      <StatusChip
+        icon={<ShieldCheck size={13} />}
+        label="事实库"
+        detail={currentChapter ? '写后更新' : '未选章节'}
+        tone="muted"
+        onClick={() => openModal('canonPack')}
+        title="写完章节后维护人物状态、事件、关系、伏笔或引用"
+      />
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => openModal('writingIntel')}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-surface)] px-2 text-[11px] font-semibold text-[var(--accent-secondary)] transition hover:brightness-105"
+          title="打开写作情报中心"
+        >
+          <BarChart3 size={13} /> 情报
+        </button>
         <button
           type="button"
           onClick={() => openModal('authorGrowth', { tab: 'sprint' })}
@@ -249,6 +343,8 @@ export default function DailyWorkbench() {
           type="button"
           onClick={() => {
             void refreshBackups()
+            void refreshSnapshots()
+            void loadBookSyncMeta(bookId ?? null)
           }}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border-primary)] text-[var(--text-muted)] transition hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
           title="刷新工作台状态"

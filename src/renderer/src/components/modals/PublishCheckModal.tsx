@@ -12,6 +12,7 @@ import {
   buildPublishPackage,
   countCnWords,
   htmlToPublishText,
+  PLATFORM_NEUTRAL_RULES,
   type PublishCheckChapter,
   type PublishIssue,
   type PublishCheckScope
@@ -400,7 +401,7 @@ export default function PublishCheckModal() {
                 <StatPill label="字数" value={publishPackage.totalWords.toLocaleString()} />
               </div>
               <div className="mt-3 rounded-md border border-[var(--border-primary)] bg-[var(--surface-primary)] p-3 text-xs text-[var(--text-secondary)]">
-                敏感词、空标题、空正文、章节字数异常
+                {PLATFORM_NEUTRAL_RULES.join('、')}；不接平台投稿 API，不自动改正文。
               </div>
             </div>
 

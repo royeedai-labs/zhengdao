@@ -12,49 +12,51 @@ export interface TourStep {
 export const TOUR_STEPS: TourStep[] = [
   {
     target: 'center',
-    title: '欢迎来到证道',
+    title: '选择题材后再开始',
     description:
-      '为长篇网文作者打造的沉浸式创作工具。让我们快速了解各个功能区域。',
+      '证道会按网文、小说、剧本、学术或公文切换工作流。第一次进入作品，先确认题材、目标读者和本书边界。',
     position: 'center'
   },
   {
-    target: '.sidebar-left',
-    title: '目录与资产',
+    target: '.daily-workbench',
+    title: '第一步：今日写什么',
     description:
-      '以大纲为主管理卷章结构。人物和设定在同一侧栏作为辅助资料，支持拖拽排序。',
-    position: 'right'
+      '每日工作台把日更目标、备份、伏笔风险、审稿和发布检查放在同一行，先完成今天的写作任务。',
+    position: 'bottom'
   },
   {
     target: '.editor-area',
-    title: '沉浸式编辑器',
+    title: '第二步：写正文',
     description:
-      '纯净的码字空间。输入 @ 可引用人物，支持打字机模式、段落聚焦、查找替换。按 F11 进入小黑屋全屏模式。',
+      '正文仍在中央编辑器完成。右键可续写、润色、去 AI 味、分析选段；涉及写入的 AI 结果会先进入草稿篮。',
     position: 'left'
   },
   {
     target: '.sidebar-right',
-    title: 'AI 创作工作台',
-    description: '右侧栏集中承载 AI 会话、上下文和草稿确认。伏笔与灵感可以从顶部更多工具或命令面板打开。',
+    title: '第三步：检查再确认',
+    description:
+      'AI 区顶部的作者任务流串起起书、日更、审稿、去 AI 味、发布、自动导演、视觉资产和拆文。草稿必须由作者确认才会写入。',
     position: 'left'
   },
   {
     target: '.bottom-panel-entry',
-    title: '创世沙盘',
+    title: '第四步：沉淀事实库',
     description:
-      '可视化的心流时间线与爽点心电图。用剧情节点管理故事节奏，避免“毒点连续”。按 Ctrl+` 展开或折叠。',
+      '底部区域承载沙盘、统计、AI 记录和设定概览。写完章节后回看人物、事件、伏笔和引用，保持事实库持续更新。',
     position: 'top'
   },
   {
     target: '.topbar-tools',
-    title: '全局工具',
+    title: '按题材补专业工具',
     description:
-      '角色总库、设定维基、数据中心和项目工具会随窗口宽度折叠。按 Ctrl+K 打开命令面板快速操作。',
+      '顶部工具按作品需要打开角色、设定、项目统计和题材配置。剧本、学术、公文会出现对应的专用入口。',
     position: 'bottom'
   },
   {
     target: 'center',
-    title: '准备就绪！',
-    description: '现在你已了解证道的核心功能。开始你的百万字征程吧！',
+    title: '从一次闭环开始',
+    description:
+      '建议先完成一次“起书方案 → 第一章 → 审稿 → 草稿确认”。这比一次性配置所有功能更接近真实作者工作流。',
     position: 'center'
   }
 ]

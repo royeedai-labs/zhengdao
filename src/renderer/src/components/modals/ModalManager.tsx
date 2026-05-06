@@ -42,6 +42,7 @@ const CanonPackModal = lazy(() => import('./CanonPackModal'))
 const DirectorPanelModal = lazy(() => import('./DirectorPanelModal'))
 const McpSettingsModal = lazy(() => import('./McpSettingsModal'))
 const VisualStudioModal = lazy(() => import('./VisualStudioModal'))
+const WritingIntelModal = lazy(() => import('./WritingIntelModal'))
 const MarketScanDeconstructModal = lazy(() => import('./MarketScanDeconstructModal'))
 
 function renderModal(type: ModalType) {
@@ -86,6 +87,7 @@ function renderModal(type: ModalType) {
     case 'directorPanel': return <DirectorPanelModal />
     case 'visualStudio': return <VisualStudioModal />
     case 'mcpSettings': return <McpSettingsModal />
+    case 'writingIntel': return <WritingIntelModal />
     case 'marketScanDeconstruct': return <MarketScanDeconstructModal />
     default: return null
   }

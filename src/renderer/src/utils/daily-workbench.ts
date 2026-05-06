@@ -26,6 +26,13 @@ export interface DailyWorkbenchInput {
   latestSnapshotAt?: string | null
   backups: BackupFileSummary[]
   backupError?: string | null
+  cloudSync?: {
+    hasAccount: boolean
+    hasEntitlement: boolean
+    syncEnabled: boolean
+    syncing: boolean
+    lastBookSyncAt: string | null
+  }
 }
 
 export interface DailyWorkbenchModel {
@@ -46,6 +53,11 @@ export interface DailyWorkbenchModel {
     detail: string
   }
   localBackup: {
+    tone: WorkbenchTone
+    label: string
+    detail: string
+  }
+  cloudSync: {
     tone: WorkbenchTone
     label: string
     detail: string
@@ -91,7 +103,11 @@ export function buildDailyWorkbenchModel(input: DailyWorkbenchInput): DailyWorkb
   const remainingWords = dailyGoal > 0 ? Math.max(0, dailyGoal - todayWords) : 0
   const progressPercent = dailyGoal > 0 ? Math.min(100, Math.round((todayWords / dailyGoal) * 100)) : 0
   const latestBackup = selectLatestBackup(input.backups)
-  const saveStatus = input.saveStatus ?? createInitialSaveStatus(input.currentChapterId)
+  const candidateSaveStatus = input.saveStatus ?? createInitialSaveStatus(input.currentChapterId)
+  const saveStatus =
+    candidateSaveStatus.chapterId === input.currentChapterId
+      ? candidateSaveStatus
+      : createInitialSaveStatus(input.currentChapterId)
   const snapshotCount = input.snapshotCount ?? 0
 
   let save: DailyWorkbenchModel['save']
@@ -140,6 +156,22 @@ export function buildDailyWorkbenchModel(input: DailyWorkbenchInput): DailyWorkb
           detail: '建议立即备份一次'
         }
 
+  const cloud = input.cloudSync
+  let cloudSync: DailyWorkbenchModel['cloudSync']
+  if (!cloud?.hasAccount) {
+    cloudSync = { tone: 'muted', label: '仅本地写作', detail: '登录后可开启官网云备份' }
+  } else if (!cloud.hasEntitlement) {
+    cloudSync = { tone: 'muted', label: '云备份未开通', detail: 'Free 仍可本地写作和备份' }
+  } else if (cloud.syncing) {
+    cloudSync = { tone: 'warn', label: '云备份中', detail: '正在同步官网云端' }
+  } else if (!cloud.syncEnabled) {
+    cloudSync = { tone: 'warn', label: '云备份关闭', detail: '可在账号设置中开启' }
+  } else if (cloud.lastBookSyncAt) {
+    cloudSync = { tone: 'ok', label: '云端已同步', detail: formatCompactDateTime(cloud.lastBookSyncAt) }
+  } else {
+    cloudSync = { tone: 'warn', label: '等待云备份', detail: '建议手动同步当前作品' }
+  }
+
   return {
     dailyGoal,
     todayWords,
@@ -149,6 +181,7 @@ export function buildDailyWorkbenchModel(input: DailyWorkbenchInput): DailyWorkb
     currentChapterWords: Math.max(0, Math.round(input.currentChapterWords || 0)),
     save,
     snapshot,
-    localBackup
+    localBackup,
+    cloudSync
   }
 }

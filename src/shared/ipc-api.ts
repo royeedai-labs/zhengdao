@@ -232,6 +232,14 @@ export type IpcInvokeChannel =
   | 'team:submitChapterForReview'
   | 'team:decideChapterReview'
 
+  // writingIntel:* — published writing market snapshots and derived insights
+  | 'writingIntel:sources'
+  | 'writingIntel:overview'
+  | 'writingIntel:genreStats'
+  | 'writingIntel:rankings'
+  | 'writingIntel:trends'
+  | 'writingIntel:insights'
+
   // app:* + window:* — auto-updater, native notifications, window chrome
   | 'app:getUpdateState'
   | 'app:getAppVersion'
@@ -358,6 +366,8 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'team:acceptInvitation', 'team:listProjects', 'team:linkProject',
   'team:getChapterLock', 'team:acquireChapterLock', 'team:releaseChapterLock',
   'team:getChapterReview', 'team:submitChapterForReview', 'team:decideChapterReview',
+  'writingIntel:sources', 'writingIntel:overview', 'writingIntel:genreStats',
+  'writingIntel:rankings', 'writingIntel:trends', 'writingIntel:insights',
   'app:getUpdateState', 'app:getAppVersion', 'app:checkForUpdates', 'app:downloadUpdate',
   'app:downloadManualInstallerUpdate', 'app:installDownloadedUpdate', 'app:reloadWindow',
   'window:notify', 'window:setFullScreen', 'window:isFullScreen',

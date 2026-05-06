@@ -9,6 +9,7 @@ import { registerProFeatureIpc } from './ipc/register-pro-feature-ipc'
 import { registerSyncIpc } from './ipc/register-sync-ipc'
 import { registerTeamIpc } from './ipc/register-team-ipc'
 import { registerUpdateIpc } from './ipc/register-update-ipc'
+import { registerWritingIntelIpc } from './ipc/register-writing-intel-ipc'
 
 /**
  * SPLIT-007 — IPC handler entrypoint.
@@ -31,6 +32,7 @@ export function registerIpcHandlers(): void {
   registerMcpIpc()
   registerAuthIpc()
   registerTeamIpc()
+  registerWritingIntelIpc()
   registerUpdateIpc()
   registerFsIpc()
   registerSyncIpc()

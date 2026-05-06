@@ -7,6 +7,7 @@ export type PublishIssueKind =
   | 'sensitive_word'
   | 'word_count_low'
   | 'word_count_high'
+  | 'ai_tone_risk'
 
 export interface PublishCheckChapter {
   id: number
@@ -41,6 +42,26 @@ export interface PublishCheckOptions {
 
 const DEFAULT_LOW_WORD_THRESHOLD = 100
 const DEFAULT_HIGH_WORD_THRESHOLD = 12000
+const AI_TONE_PATTERNS = [
+  '综上所述',
+  '值得注意的是',
+  '不禁让人',
+  '命运的齿轮',
+  '仿佛整个世界',
+  '一股莫名的',
+  '空气中弥漫着',
+  '眼神中闪过一丝',
+  '某种意义上',
+  '毋庸置疑'
+] as const
+
+export const PLATFORM_NEUTRAL_RULES = [
+  '标题与正文完整',
+  '章节字数稳定',
+  '敏感词自查',
+  '发布格式可复制',
+  'AI 味/低质句提示'
+] as const
 
 function decodeHtmlEntities(value: string): string {
   return value
@@ -70,6 +91,10 @@ export function htmlToPublishText(html: string | null | undefined): string {
 
 export function countCnWords(text: string): number {
   return text.replace(/\s/g, '').length
+}
+
+export function detectAiToneRisks(text: string): string[] {
+  return AI_TONE_PATTERNS.filter((pattern) => text.includes(pattern))
 }
 
 export function formatChapterForPublishing(chapter: PublishCheckChapter): string {
@@ -159,6 +184,18 @@ export function buildPublishPackage(
         severity: 'danger',
         word,
         count
+      })
+    }
+
+    const aiToneHits = detectAiToneRisks(body)
+    if (aiToneHits.length > 0) {
+      issues.push({
+        kind: 'ai_tone_risk',
+        chapterId: chapter.id,
+        chapterTitle,
+        message: `AI 味/模板句风险：${aiToneHits.slice(0, 3).map((word) => `「${word}」`).join('、')}`,
+        severity: 'warning',
+        count: aiToneHits.length
       })
     }
   }

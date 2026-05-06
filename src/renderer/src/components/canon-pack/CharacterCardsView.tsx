@@ -17,9 +17,26 @@ interface RelationRow {
   target_id: number
 }
 
+interface AppearanceRow {
+  character_id: number
+  chapter_id: number
+}
+
+interface ChapterMetaRow {
+  id: number
+  title: string
+}
+
+interface VolumeMetaRow {
+  title: string
+  chapters?: ChapterMetaRow[]
+}
+
 interface CharacterCardsApi {
   getCharacters(bookId: number): Promise<CharacterRow[]>
   getRelations(bookId: number): Promise<RelationRow[]>
+  getBookAppearances(bookId: number): Promise<AppearanceRow[]>
+  getVolumesWithChapterMeta(bookId: number): Promise<VolumeMetaRow[]>
 }
 
 interface Props {
@@ -29,6 +46,8 @@ interface Props {
 export default function CharacterCardsView({ bookId }: Props) {
   const [characters, setCharacters] = useState<CharacterRow[]>([])
   const [relations, setRelations] = useState<RelationRow[]>([])
+  const [appearances, setAppearances] = useState<AppearanceRow[]>([])
+  const [chapterTitles, setChapterTitles] = useState<Map<number, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const addToast = useToastStore((s) => s.addToast)
 
@@ -38,10 +57,23 @@ export default function CharacterCardsView({ bookId }: Props) {
       setLoading(true)
       try {
         const api = window.api as unknown as CharacterCardsApi
-        const [chars, rels] = await Promise.all([api.getCharacters(bookId), api.getRelations(bookId)])
+        const [chars, rels, appearanceRows, volumeRows] = await Promise.all([
+          api.getCharacters(bookId),
+          api.getRelations(bookId),
+          api.getBookAppearances(bookId),
+          api.getVolumesWithChapterMeta(bookId)
+        ])
         if (cancelled) return
         setCharacters(chars || [])
         setRelations(rels || [])
+        setAppearances(appearanceRows || [])
+        const titles = new Map<number, string>()
+        for (const volume of volumeRows || []) {
+          for (const chapter of volume.chapters || []) {
+            titles.set(chapter.id, `${volume.title} / ${chapter.title}`)
+          }
+        }
+        setChapterTitles(titles)
       } catch (err) {
         if (!cancelled) addToast('error', `加载角色卡失败: ${(err as Error).message ?? err}`)
       } finally {
@@ -62,6 +94,16 @@ export default function CharacterCardsView({ bookId }: Props) {
     })
     return counts
   }, [relations])
+
+  const appearanceMap = useMemo(() => {
+    const map = new Map<number, AppearanceRow[]>()
+    appearances.forEach((appearance) => {
+      const rows = map.get(appearance.character_id) || []
+      rows.push(appearance)
+      map.set(appearance.character_id, rows)
+    })
+    return map
+  }, [appearances])
 
   if (loading) {
     return (
@@ -85,6 +127,11 @@ export default function CharacterCardsView({ bookId }: Props) {
         {characters.map((character) => {
           const customFields = character.custom_fields || {}
           const aliases = Array.isArray(customFields.aliases) ? customFields.aliases.slice(0, 3) : []
+          const characterAppearances = appearanceMap.get(character.id) || []
+          const latestChapters = characterAppearances
+            .slice(-3)
+            .map((appearance) => chapterTitles.get(appearance.chapter_id))
+            .filter((title): title is string => Boolean(title))
           return (
             <article
               key={character.id}
@@ -104,9 +151,22 @@ export default function CharacterCardsView({ bookId }: Props) {
                     {character.faction && <span>{character.faction}</span>}
                     {character.status && <span>{character.status}</span>}
                     <span>关系 {relationCounts.get(character.id) || 0}</span>
+                    <span>出场 {characterAppearances.length}</span>
                   </div>
                 </div>
               </div>
+              {latestChapters.length > 0 && (
+                <div className="mt-3 rounded border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-2 py-1.5">
+                  <div className="text-[10px] text-[var(--text-muted)]">最近出场章节</div>
+                  <div className="mt-1 space-y-0.5">
+                    {latestChapters.map((title) => (
+                      <div key={`${character.id}-${title}`} className="truncate text-[11px] text-[var(--text-secondary)]">
+                        {title}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {aliases.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1">
                   {aliases.map((alias) => (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPublishPackage,
+  detectAiToneRisks,
   formatChapterForPublishing,
   htmlToPublishText
 } from '../publish-check'
@@ -49,5 +50,19 @@ describe('publish check package', () => {
     )
     expect(pkg.issues).toHaveLength(1)
     expect(pkg.issues[0]).toMatchObject({ kind: 'word_count_high', severity: 'warning' })
+  })
+
+  it('flags likely AI template phrases as platform-neutral publish warnings', () => {
+    expect(detectAiToneRisks('命运的齿轮开始转动，空气中弥漫着不安。')).toEqual(['命运的齿轮', '空气中弥漫着'])
+
+    const pkg = buildPublishPackage(
+      'chapter',
+      [{ id: 1, title: '第三章', content: '<p>命运的齿轮开始转动。</p>', word_count: 12 }],
+      [],
+      { lowWordThreshold: 0 }
+    )
+
+    expect(pkg.issues).toHaveLength(1)
+    expect(pkg.issues[0]).toMatchObject({ kind: 'ai_tone_risk', severity: 'warning' })
   })
 })

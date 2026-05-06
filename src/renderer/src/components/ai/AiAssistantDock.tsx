@@ -13,7 +13,12 @@ import {
   type AiWorkProfile
 } from '@/utils/ai/assistant-workflow'
 import { pickConversationAfterDelete } from './conversation-list'
-import { buildChapterEditorQuickActions } from './chapter-quick-actions'
+import {
+  buildChapterEditorQuickActions,
+  REMOVE_AI_TONE_CHAPTER_INPUT,
+  REMOVE_AI_TONE_SELECTION_INPUT
+} from './chapter-quick-actions'
+import { buildDraftQualityCheckPrompt } from './draft-quality-loop'
 import { DEFAULT_CONTINUE_INPUT } from './inline-draft'
 import { BookshelfCreationAssistantPanel } from './book-creation/BookshelfCreationAssistantPanel'
 import { formatProviderLabel } from './ai-assistant-helpers'
@@ -23,6 +28,7 @@ import { useAiAssistantData } from './useAiAssistantData'
 import { useAiAssistantRequest } from './useAiAssistantRequest'
 import { AssistantPanelComposer } from './panel-parts/AssistantPanelComposer'
 import { AssistantPanelHeader } from './panel-parts/AssistantPanelHeader'
+import { AuthorWorkflowRail, type AuthorWorkflowAction } from './panel-parts/AuthorWorkflowRail'
 import { ConversationListDropdown } from './panel-parts/ConversationListDropdown'
 import { DraftListPanel } from './panel-parts/DraftListPanel'
 import { MessageStreamArea } from './panel-parts/MessageStreamArea'
@@ -371,6 +377,67 @@ export function AiAssistantPanel() {
           input: action.input
         }))
   const showStarterActions = messages.length === 0 || (resolvedPanelContext.surface === 'chapter_editor' && currentChapterIsBlank)
+  const workflowActions: AuthorWorkflowAction[] = [
+    {
+      id: 'bookPlan',
+      label: '起书',
+      title: '整理作品蓝图、题材和核心资产',
+      onClick: () => openModal('bookOverview')
+    },
+    {
+      id: 'daily',
+      label: '日更',
+      title: '打开今日冲刺和写作目标',
+      onClick: () => openModal('authorGrowth', { tab: 'sprint' })
+    },
+    {
+      id: 'chapterReview',
+      label: '审稿',
+      title: currentChapter ? '打开本章审稿台' : '请先打开章节',
+      disabled: !currentChapter,
+      onClick: () => openModal('chapterReview')
+    },
+    {
+      id: 'deslop',
+      label: hasCurrentSelection ? '选区去 AI 味' : '本章去 AI 味',
+      title: currentChapter || hasCurrentSelection ? '检查 AI 味并生成替换草稿' : '请先打开章节或选中文本',
+      disabled: !currentChapter && !hasCurrentSelection,
+      onClick: () => {
+        setSeededSkillKey(null)
+        void send(undefined, hasCurrentSelection ? REMOVE_AI_TONE_SELECTION_INPUT : REMOVE_AI_TONE_CHAPTER_INPUT)
+      }
+    },
+    {
+      id: 'publishCheck',
+      label: '发布',
+      title: '打开发布前检查包',
+      onClick: () => openModal('publishCheck')
+    },
+    {
+      id: 'director',
+      label: '自动导演',
+      title: '打开 Pro 自动导演',
+      onClick: () => openModal('directorPanel')
+    },
+    {
+      id: 'visual',
+      label: '视觉资产',
+      title: '管理封面、人物图和章节场景图',
+      onClick: () => openModal('visualStudio')
+    },
+    {
+      id: 'intel',
+      label: '情报',
+      title: '打开写作情报中心',
+      onClick: () => openModal('writingIntel')
+    },
+    {
+      id: 'deconstruct',
+      label: '拆文',
+      title: '打开授权样本拆文工作台',
+      onClick: () => openModal('marketScanDeconstruct')
+    }
+  ]
   return (
         <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg-secondary)]">
           <AssistantPanelHeader
@@ -391,6 +458,7 @@ export function AiAssistantPanel() {
             onOpenTeamManagement={() => openModal('teamManagement')}
             onOpenDirectorPanel={() => openModal('directorPanel')}
             onOpenVisualStudio={() => openModal('visualStudio')}
+            onOpenWritingIntel={() => openModal('writingIntel')}
             onOpenMcpSettings={() => openModal('mcpSettings')}
             onOpenMarketScanDeconstruct={() => openModal('marketScanDeconstruct')}
             onOpenAiSettings={() => openModal('aiSettings')}
@@ -406,6 +474,8 @@ export function AiAssistantPanel() {
             onSelect={(conversationId) => void refreshConversation(conversationId)}
             onDelete={(conversationId) => void deleteConversation(conversationId)}
           />
+
+          <AuthorWorkflowRail actions={workflowActions} />
 
           <MessageStreamArea
             ref={scrollRef}
@@ -448,6 +518,10 @@ export function AiAssistantPanel() {
               drafts={drafts}
               onApply={(draft) => void applyDraft(draft)}
               onDismiss={(draftId) => void markDraft(draftId, 'dismissed')}
+              onCheckQuality={(draft) => {
+                setSeededSkillKey(null)
+                void send(undefined, buildDraftQualityCheckPrompt(draft))
+              }}
             />
 
             {error && (

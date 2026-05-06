@@ -1,5 +1,6 @@
-import { Check, ClipboardCheck, Trash2 } from 'lucide-react'
+import { Check, ClipboardCheck, ScanText, ShieldCheck, Trash2 } from 'lucide-react'
 import { buildDraftPreviewModel } from '../draft-preview'
+import { buildDraftQualityLoopModel } from '../draft-quality-loop'
 
 /**
  * SPLIT-006 phase 2 — draft basket panel.
@@ -23,6 +24,7 @@ export interface DraftListPanelProps {
   drafts: DraftListPanelDraft[]
   onApply: (draft: DraftListPanelDraft) => void
   onDismiss: (draftId: number) => void
+  onCheckQuality?: (draft: DraftListPanelDraft) => void
 }
 
 export function DraftListPanel(props: DraftListPanelProps): JSX.Element | null {
@@ -35,6 +37,7 @@ export function DraftListPanel(props: DraftListPanelProps): JSX.Element | null {
       </div>
       {props.drafts.map((draft) => {
         const preview = buildDraftPreviewModel(draft)
+        const quality = buildDraftQualityLoopModel(draft)
         return (
           <div
             key={draft.id}
@@ -65,8 +68,39 @@ export function DraftListPanel(props: DraftListPanelProps): JSX.Element | null {
                     ))}
                   </div>
                 )}
+                <div className="mt-2 rounded border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-2 py-1.5">
+                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-[var(--text-secondary)]">
+                    <ShieldCheck size={12} className="text-[var(--accent-secondary)]" />
+                    {quality.title}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {quality.steps.map((step) => (
+                      <span
+                        key={`${draft.id}-${step.label}`}
+                        className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                          step.status === 'done'
+                            ? 'border-[var(--success-border)] bg-[var(--success-surface)] text-[var(--success-primary)]'
+                            : 'border-[var(--border-secondary)] bg-[var(--surface-secondary)] text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="flex shrink-0 gap-1">
+                {props.onCheckQuality && (
+                  <button
+                    type="button"
+                    onClick={() => props.onCheckQuality?.(draft)}
+                    disabled={!quality.canInspect}
+                    title={quality.canInspect ? '先检查风格、一致性和应用风险' : '该草稿没有可检查文本'}
+                    className="rounded border border-[var(--accent-border)] p-1.5 text-[var(--accent-secondary)] hover:bg-[var(--accent-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ScanText size={13} />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => props.onApply(draft)}

@@ -232,6 +232,7 @@ export type ModalType =
   | 'directorPanel'
   | 'visualStudio'
   | 'mcpSettings'
+  | 'writingIntel'
   | 'marketScanDeconstruct'
 
 export interface GenrePreset {

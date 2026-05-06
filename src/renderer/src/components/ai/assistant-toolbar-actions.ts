@@ -4,6 +4,7 @@ export type AssistantToolActionId =
   | 'directorPanel'
   | 'canonPack'
   | 'visualStudio'
+  | 'writingIntel'
   | 'marketScanDeconstruct'
   | 'mcpSettings'
   | 'citationsManager'
@@ -56,6 +57,12 @@ export const ASSISTANT_TOOL_ACTIONS: AssistantToolAction[] = [
     id: 'visualStudio',
     label: '视觉资产',
     title: '视觉资产',
+    group: 'creation-tools'
+  },
+  {
+    id: 'writingIntel',
+    label: '写作情报',
+    title: '写作情报中心',
     group: 'creation-tools'
   },
   {

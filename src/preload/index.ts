@@ -12,6 +12,7 @@ import type { McpServerInput, McpWriteRejectionInput } from '../shared/mcp'
 import type { SkillFeedbackPayload, SkillFeedbackSubmitResult } from '../shared/skill-feedback'
 import type { TeamInvitationRole } from '../shared/team-collaboration'
 import type { VisualGenerateInput } from '../shared/visual'
+import type { WritingIntelQuery } from '../shared/writing-intel'
 import type { Genre } from '../shared/genre'
 import type { DesktopTitlebarOverlayColors } from '../shared/window-shell'
 import type { CaptureStoryFactsInput, StoryFactProposalStatus } from '../shared/story-bible'
@@ -442,6 +443,21 @@ const api = {
   visual: {
     generate: (input: VisualGenerateInput) => ipcRenderer.invoke('visual:generate', input),
     listAssets: (bookId: number) => ipcRenderer.invoke('visual:listAssets', bookId)
+  },
+
+  writingIntel: {
+    sources: (query?: Pick<WritingIntelQuery, 'platform' | 'limit'>) =>
+      ipcRenderer.invoke('writingIntel:sources', query),
+    overview: (query?: Pick<WritingIntelQuery, 'platform' | 'limit'>) =>
+      ipcRenderer.invoke('writingIntel:overview', query),
+    genreStats: (query?: WritingIntelQuery) =>
+      ipcRenderer.invoke('writingIntel:genreStats', query),
+    rankings: (query?: WritingIntelQuery) =>
+      ipcRenderer.invoke('writingIntel:rankings', query),
+    trends: (query?: WritingIntelQuery) =>
+      ipcRenderer.invoke('writingIntel:trends', query),
+    insights: (query?: WritingIntelQuery) =>
+      ipcRenderer.invoke('writingIntel:insights', query)
   },
 
   mcp: {

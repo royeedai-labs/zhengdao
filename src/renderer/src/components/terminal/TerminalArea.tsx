@@ -20,6 +20,11 @@ type TerminalMetrics = {
   pendingDrafts: number
   appliedDrafts: number
   dismissedDrafts: number
+  draftApplyRate: number
+  draftDismissRate: number
+  firstUsefulMinutes: number | null
+  draftActiveDays7: number
+  draftActiveDays30: number
   recentDrafts: Array<{ id: number; title: string; status: string; created_at?: string }>
 }
 
@@ -33,6 +38,11 @@ const EMPTY_METRICS: TerminalMetrics = {
   pendingDrafts: 0,
   appliedDrafts: 0,
   dismissedDrafts: 0,
+  draftApplyRate: 0,
+  draftDismissRate: 0,
+  firstUsefulMinutes: null,
+  draftActiveDays7: 0,
+  draftActiveDays30: 0,
   recentDrafts: []
 }
 
@@ -51,6 +61,29 @@ function numberOrZero(value: unknown): number {
 
 function safeArray<T = Record<string, unknown>>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []
+}
+
+function parseTime(value: string | undefined): number | null {
+  if (!value) return null
+  const time = new Date(value.replace(' ', 'T')).getTime()
+  return Number.isFinite(time) ? time : null
+}
+
+function activeDaysWithin(rows: Array<{ created_at?: string }>, days: number): number {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  const keys = new Set<string>()
+  for (const row of rows) {
+    const time = parseTime(row.created_at)
+    if (time == null || time < cutoff) continue
+    keys.add(toLocalDateString(new Date(time)))
+  }
+  return keys.size
+}
+
+function minutesLabel(value: number | null): string {
+  if (value == null) return '暂无'
+  if (value < 60) return `${value} 分钟`
+  return `${Math.round(value / 60)} 小时`
 }
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -116,6 +149,17 @@ export default function TerminalArea() {
         if (cancelled) return
         const monthRows = safeArray<{ word_count?: number }>(monthStats)
         const draftRows = safeArray<{ id: number; title?: string; status?: string; created_at?: string }>(drafts)
+        const appliedDrafts = draftRows.filter((draft) => draft.status === 'applied')
+        const dismissedDrafts = draftRows.filter((draft) => draft.status === 'dismissed')
+        const decidedDrafts = appliedDrafts.length + dismissedDrafts.length
+        const firstDraftTime = draftRows
+          .map((draft) => parseTime(draft.created_at))
+          .filter((time): time is number => time != null)
+          .sort((a, b) => a - b)[0]
+        const firstAppliedTime = appliedDrafts
+          .map((draft) => parseTime(draft.created_at))
+          .filter((time): time is number => time != null)
+          .sort((a, b) => a - b)[0]
 
         setMetrics({
           loading: false,
@@ -125,8 +169,16 @@ export default function TerminalArea() {
           streak: numberOrZero((achievementStats as { streak?: unknown } | null)?.streak),
           conversations: safeArray(conversations).length,
           pendingDrafts: draftRows.filter((draft) => draft.status === 'pending').length,
-          appliedDrafts: draftRows.filter((draft) => draft.status === 'applied').length,
-          dismissedDrafts: draftRows.filter((draft) => draft.status === 'dismissed').length,
+          appliedDrafts: appliedDrafts.length,
+          dismissedDrafts: dismissedDrafts.length,
+          draftApplyRate: decidedDrafts > 0 ? Math.round((appliedDrafts.length / decidedDrafts) * 100) : 0,
+          draftDismissRate: decidedDrafts > 0 ? Math.round((dismissedDrafts.length / decidedDrafts) * 100) : 0,
+          firstUsefulMinutes:
+            firstDraftTime != null && firstAppliedTime != null
+              ? Math.max(0, Math.round((firstAppliedTime - firstDraftTime) / 60000))
+              : null,
+          draftActiveDays7: activeDaysWithin(draftRows, 7),
+          draftActiveDays30: activeDaysWithin(draftRows, 30),
           recentDrafts: draftRows.slice(0, 5).map((draft) => ({
             id: draft.id,
             title: draft.title?.trim() || '未命名草稿',
@@ -227,6 +279,13 @@ export default function TerminalArea() {
               <MetricCard label="待处理" value={metrics.loading ? '...' : metrics.pendingDrafts} />
               <MetricCard label="已采纳" value={metrics.loading ? '...' : metrics.appliedDrafts} />
               <MetricCard label="已忽略" value={metrics.loading ? '...' : metrics.dismissedDrafts} />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <MetricCard label="采纳率" value={metrics.loading ? '...' : `${metrics.draftApplyRate}%`} hint="已决策草稿" />
+              <MetricCard label="忽略率" value={metrics.loading ? '...' : `${metrics.draftDismissRate}%`} hint="已决策草稿" />
+              <MetricCard label="首次可用" value={metrics.loading ? '...' : minutesLabel(metrics.firstUsefulMinutes)} hint="首草稿到首采纳" />
+              <MetricCard label="7 天复用" value={metrics.loading ? '...' : `${metrics.draftActiveDays7} 天`} hint="AI 草稿活跃" />
+              <MetricCard label="30 天复用" value={metrics.loading ? '...' : `${metrics.draftActiveDays30} 天`} hint="AI 草稿活跃" />
             </div>
             <div className="mt-3 rounded-md border border-[var(--border-primary)] bg-[var(--bg-secondary)]">
               <div className="border-b border-[var(--border-primary)] px-3 py-2 text-[11px] font-semibold text-[var(--text-primary)]">

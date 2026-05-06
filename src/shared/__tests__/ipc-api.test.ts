@@ -33,8 +33,8 @@ describe('IPC channel registry', () => {
 
   it('every invoke channel uses a colon-separated namespace prefix', () => {
     const allowedPrefixes = new Set([
-      'db', 'book', 'ai', 'director', 'visual', 'mcp', 'auth', 'team', 'app', 'window', 'sync',
-      'backup', 'data', 'fs', 'dialog', 'export'
+      'db', 'book', 'ai', 'director', 'visual', 'mcp', 'auth', 'team', 'writingIntel', 'app', 'window',
+      'sync', 'backup', 'data', 'fs', 'dialog', 'export'
     ])
     for (const ch of IPC_INVOKE_CHANNELS) {
       const [prefix] = ch.split(':')
@@ -71,6 +71,7 @@ describe('IPC channel registry', () => {
       mcp: 9,
       auth: 7,
       team: 16,
+      writingIntel: 6,
       app: 7,
       window: 6,
       sync: 4,
