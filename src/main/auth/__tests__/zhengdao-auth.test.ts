@@ -2,15 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   openExternal: vi.fn(),
-  execFile: vi.fn(),
   fetch: vi.fn(),
   appState: new Map<string, string>()
-}))
-
-type ExecFileCallback = (error: Error | null, stdout?: string, stderr?: string) => void
-
-vi.mock('node:child_process', () => ({
-  execFile: mocks.execFile
 }))
 
 vi.mock('electron', () => ({
@@ -29,12 +22,14 @@ vi.mock('../../database/app-state-repo', () => ({
   })
 }))
 
-function mockDesktopStartResponse(body: { state: string; loginUrl?: string }): void {
-  mocks.fetch.mockResolvedValueOnce({
-    ok: true,
-    status: 200,
-    text: async () => JSON.stringify(body)
-  } as Response)
+const accountUser = {
+  id: 'user-1',
+  email: 'author@example.com',
+  role: 'user',
+  tier: 'pro',
+  pro: true,
+  pointsBalance: 100,
+  emailVerified: true
 }
 
 async function createAuth() {
@@ -42,56 +37,20 @@ async function createAuth() {
   return new ZhengdaoAuth()
 }
 
-function expectedBrowserOpenCommand(url: string): { file: string; args: string[] } {
-  if (process.platform === 'win32') return { file: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', url] }
-  return { file: 'xdg-open', args: [url] }
+function mockJsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(body)
+  } as Response
 }
 
-function mockDefaultBrowserPlist(bundleId = 'com.google.chrome'): string {
-  return JSON.stringify({
-    LSHandlers: [
-      {
-        LSHandlerURLScheme: 'https',
-        LSHandlerRoleAll: bundleId
-      }
-    ]
-  })
-}
-
-function expectBrowserOpen(loginUrl: string): void {
-  if (process.platform === 'darwin') {
-    expect(mocks.execFile).toHaveBeenCalledWith(
-      '/usr/bin/plutil',
-      expect.arrayContaining(['-convert', 'json', '-o', '-']),
-      expect.any(Function)
-    )
-    expect(mocks.execFile).toHaveBeenCalledWith(
-      '/usr/bin/osascript',
-      [
-        '-e',
-        `tell application id "com.google.chrome" to open location "${loginUrl}"`,
-        '-e',
-        'tell application id "com.google.chrome" to activate'
-      ],
-      expect.any(Function)
-    )
-    return
-  }
-
-  const expected = expectedBrowserOpenCommand(loginUrl)
-  expect(mocks.execFile).toHaveBeenCalledWith(expected.file, expected.args, expect.any(Function))
-}
-
-describe('ZhengdaoAuth login', () => {
+describe('ZhengdaoAuth account credentials', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
     mocks.openExternal.mockReset()
     mocks.openExternal.mockResolvedValue(undefined)
-    mocks.execFile.mockReset()
-    mocks.execFile.mockImplementation((_file: string, _args: string[], callback: ExecFileCallback) => {
-      callback(null, _file === '/usr/bin/plutil' ? mockDefaultBrowserPlist() : '', '')
-    })
     mocks.fetch.mockReset()
     mocks.appState.clear()
     delete process.env.ZHENGDAO_WEBSITE_URL
@@ -99,89 +58,78 @@ describe('ZhengdaoAuth login', () => {
     vi.stubGlobal('fetch', mocks.fetch)
   })
 
-  it('opens the backend desktop login URL in the system browser and stores the pending state', async () => {
-    const loginUrl = 'https://agent.xiangweihu.com/login?client=desktop&desktop_state=state-1'
-    mockDesktopStartResponse({ state: 'state-1', loginUrl })
+  it('logs in with email/password and stores the token and refreshed user', async () => {
+    mocks.fetch
+      .mockResolvedValueOnce(mockJsonResponse({ token: 'session-token', user: accountUser }))
+      .mockResolvedValueOnce(mockJsonResponse({ user: { ...accountUser, pointsBalance: 120 } }))
 
-    const result = await (await createAuth()).login()
+    const result = await (await createAuth()).login({ email: 'author@example.com', password: 'password123' })
 
-    expect(result).toEqual({ ok: true, loginUrl })
-    expect(mocks.appState.get('zhengdao_auth_pending_state')).toBe('state-1')
-    expectBrowserOpen(loginUrl)
-    expect(mocks.openExternal).not.toHaveBeenCalled()
+    expect(result).toEqual({ ok: true, user: { ...accountUser, pointsBalance: 120 } })
+    expect(mocks.fetch).toHaveBeenNthCalledWith(
+      1,
+      'https://agent.xiangweihu.com/api/v1/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'author@example.com', password: 'password123' })
+      })
+    )
+    expect(mocks.appState.get('zhengdao_auth_token')).toBe('session-token')
+    expect(JSON.parse(mocks.appState.get('zhengdao_auth_user') ?? '{}')).toMatchObject({ pointsBalance: 120 })
   })
 
-  it('rewrites a loopback login URL to the configured official website when the API is not local', async () => {
-    mockDesktopStartResponse({
-      state: 'state-prod',
-      loginUrl: 'http://localhost:3000/login?client=desktop&desktop_state=state-prod'
+  it('returns a user-facing error for invalid credentials', async () => {
+    mocks.fetch.mockResolvedValueOnce(mockJsonResponse({ message: 'invalid credentials' }, 401))
+
+    const result = await (await createAuth()).login({ email: 'author@example.com', password: 'wrong-password' })
+
+    expect(result).toEqual({ ok: false, error: '邮箱或密码不正确' })
+    expect(mocks.appState.has('zhengdao_auth_token')).toBe(false)
+  })
+
+  it('sends a registration code without storing auth state', async () => {
+    mocks.fetch.mockResolvedValueOnce(mockJsonResponse({ ok: true, devVerificationCode: '123456' }))
+
+    const result = await (await createAuth()).sendRegistrationCode('author@example.com')
+
+    expect(result).toEqual({ ok: true, devVerificationCode: '123456' })
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      'https://agent.xiangweihu.com/api/v1/auth/register/code',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'author@example.com' })
+      })
+    )
+    expect(mocks.appState.has('zhengdao_auth_token')).toBe(false)
+  })
+
+  it('registers with email code and password, then stores the session', async () => {
+    mocks.fetch
+      .mockResolvedValueOnce(mockJsonResponse({ token: 'registered-token', user: accountUser }))
+      .mockResolvedValueOnce(mockJsonResponse({ user: accountUser }))
+
+    const result = await (await createAuth()).register({
+      email: 'author@example.com',
+      password: 'password123',
+      code: '123456'
     })
 
-    const result = await (await createAuth()).login()
-
-    const expected = 'https://agent.xiangweihu.com/login?client=desktop&desktop_state=state-prod'
-    expect(result).toEqual({ ok: true, loginUrl: expected })
-    expectBrowserOpen(expected)
-  })
-
-  it('keeps loopback login URLs for local desktop auth development', async () => {
-    process.env.ZHENGDAO_WEBSITE_URL = 'http://localhost:3000'
-    process.env.ZHENGDAO_API_URL = 'http://localhost:8787/v1'
-    const loginUrl = 'http://localhost:3000/login?client=desktop&desktop_state=state-local'
-    mockDesktopStartResponse({ state: 'state-local', loginUrl })
-
-    const result = await (await createAuth()).login()
-
-    expect(result).toEqual({ ok: true, loginUrl })
-    expectBrowserOpen(loginUrl)
-  })
-
-  it('falls back to a desktop login URL when the backend omits one', async () => {
-    mockDesktopStartResponse({ state: 'state-fallback' })
-
-    const result = await (await createAuth()).login()
-
-    const expected = 'https://agent.xiangweihu.com/login?client=desktop&desktop_state=state-fallback'
-    expect(result).toEqual({ ok: true, loginUrl: expected })
-    expectBrowserOpen(expected)
-  })
-
-  it('falls back to Electron shell when the system browser command fails', async () => {
-    const loginUrl = 'https://agent.xiangweihu.com/login?client=desktop&desktop_state=state-1'
-    mockDesktopStartResponse({ state: 'state-1', loginUrl })
-    mocks.execFile.mockImplementation((_file: string, _args: string[], callback: ExecFileCallback) => {
-      if (_file === '/usr/bin/plutil') {
-        callback(null, mockDefaultBrowserPlist(), '')
-        return
-      }
-      callback(new Error('open failed'))
-    })
-
-    const result = await (await createAuth()).login()
-
-    expect(result).toEqual({ ok: true, loginUrl })
-    expect(mocks.openExternal).toHaveBeenCalledWith(loginUrl, { activate: true, logUsage: true })
+    expect(result).toEqual({ ok: true, user: accountUser })
+    expect(mocks.fetch).toHaveBeenNthCalledWith(
+      1,
+      'https://agent.xiangweihu.com/api/v1/auth/register',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'author@example.com', password: 'password123', code: '123456' })
+      })
+    )
+    expect(mocks.appState.get('zhengdao_auth_token')).toBe('registered-token')
   })
 
   it('clears cached auth state when the stored token is rejected', async () => {
     mocks.appState.set('zhengdao_auth_token', 'expired-token')
-    mocks.appState.set(
-      'zhengdao_auth_user',
-      JSON.stringify({
-        id: 'user-1',
-        email: 'author@example.com',
-        role: 'user',
-        tier: 'pro',
-        pro: true,
-        pointsBalance: 100,
-        emailVerified: true
-      })
-    )
-    mocks.fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      text: async () => JSON.stringify({ message: 'missing or invalid token' })
-    } as Response)
+    mocks.appState.set('zhengdao_auth_user', JSON.stringify(accountUser))
+    mocks.fetch.mockResolvedValueOnce(mockJsonResponse({ message: 'missing or invalid token' }, 401))
 
     const user = await (await createAuth()).getUser()
 

@@ -17,7 +17,7 @@ const MAX_OFFICIAL_AI_OUTPUT_TOKENS = 6000
 
 async function readOfficialAiError(response: Response): Promise<string> {
   const text = await response.text()
-  if (response.status === 401) return '登录状态已过期，请重新关联证道账号后使用官方 AI'
+  if (response.status === 401) return '登录状态已过期，请重新登录证道账号后使用官方 AI'
   if (!text) return `证道官方 AI 请求失败 (${response.status})`
   try {
     const payload = JSON.parse(text) as { message?: unknown }
@@ -58,7 +58,7 @@ async function apiRequest<T>(path: string, token: string, options: RequestInit =
   }
   if (!response.ok) {
     const message = response.status === 401
-      ? '登录状态已过期，请重新关联证道账号后使用官方 AI'
+      ? '登录状态已过期，请重新登录证道账号后使用官方 AI'
       : typeof payload === 'object' && payload && 'message' in payload
         ? String((payload as { message?: string }).message)
         : text

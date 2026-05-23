@@ -205,8 +205,10 @@ export type IpcInvokeChannel =
   | 'mcp:buildCanonContext'
   | 'mcp:rejectWriteRequest'
 
-  // auth:* — Zhengdao OAuth (registerAuthIpc)
+  // auth:* — Zhengdao account credentials (registerAuthIpc)
   | 'auth:login'
+  | 'auth:sendRegistrationCode'
+  | 'auth:register'
   | 'auth:getUser'
   | 'auth:logout'
   | 'auth:getAccessToken'
@@ -359,7 +361,8 @@ export const IPC_INVOKE_CHANNELS: readonly IpcInvokeChannel[] = [
   'mcp:listServers', 'mcp:saveServer', 'mcp:deleteServer', 'mcp:listLinks',
   'mcp:linkCanon', 'mcp:unlinkCanon', 'mcp:listAudit', 'mcp:buildCanonContext',
   'mcp:rejectWriteRequest',
-  'auth:login', 'auth:getUser', 'auth:logout', 'auth:getAccessToken',
+  'auth:login', 'auth:sendRegistrationCode', 'auth:register',
+  'auth:getUser', 'auth:logout', 'auth:getAccessToken',
   'auth:openUpgradePage', 'auth:openAccountPage', 'auth:openCommunityFeedbackPage',
   'team:listMine', 'team:create', 'team:listMembers', 'team:removeMember',
   'team:listInvitations', 'team:createInvitation', 'team:revokeInvitation',

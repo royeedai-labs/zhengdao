@@ -64,4 +64,38 @@ describe('auth store official sync defaults', () => {
     expect(getAppState).toHaveBeenCalledWith('zhengdao_sync_enabled')
     expect(getAppState).not.toHaveBeenCalledWith('google_sync_enabled')
   })
+
+  it('stores the returned user after direct email login succeeds', async () => {
+    const authLogin = vi.fn(async () => ({ ok: true, user: proUser }))
+    vi.stubGlobal('window', {
+      api: {
+        authLogin
+      }
+    })
+
+    const result = await useAuthStore.getState().login({ email: 'u1@example.test', password: 'password123' })
+
+    expect(result).toEqual({ ok: true, user: proUser })
+    expect(authLogin).toHaveBeenCalledWith({ email: 'u1@example.test', password: 'password123' })
+    expect(useAuthStore.getState().user).toEqual(proUser)
+  })
+
+  it('stores the returned user after client-side registration succeeds', async () => {
+    const authRegister = vi.fn(async () => ({ ok: true, user: proUser }))
+    vi.stubGlobal('window', {
+      api: {
+        authRegister
+      }
+    })
+
+    const result = await useAuthStore.getState().register({
+      email: 'u1@example.test',
+      password: 'password123',
+      code: '123456'
+    })
+
+    expect(result).toEqual({ ok: true, user: proUser })
+    expect(authRegister).toHaveBeenCalledWith({ email: 'u1@example.test', password: 'password123', code: '123456' })
+    expect(useAuthStore.getState().user).toEqual(proUser)
+  })
 })

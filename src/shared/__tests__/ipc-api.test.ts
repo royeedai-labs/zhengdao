@@ -69,7 +69,7 @@ describe('IPC channel registry', () => {
       director: 12,
       visual: 2,
       mcp: 9,
-      auth: 7,
+      auth: 9,
       team: 16,
       writingIntel: 6,
       app: 7,

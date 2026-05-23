@@ -1,109 +1,8 @@
-import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { shell } from 'electron'
 import * as appStateRepo from '../database/app-state-repo'
 
 const WEBSITE_URL = (process.env.ZHENGDAO_WEBSITE_URL || 'https://agent.xiangweihu.com').replace(/\/$/, '')
 const API_BASE = (process.env.ZHENGDAO_API_URL || `${WEBSITE_URL}/api/v1`).replace(/\/$/, '')
-
-function execFileAsync(file: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    execFile(file, args, (error, stdout, stderr) => {
-      if (error) reject(error)
-      else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') })
-    })
-  })
-}
-
-function getBrowserOpenCommand(url: string): { file: string; args: string[] } {
-  if (process.platform === 'win32') return { file: 'rundll32.exe', args: ['url.dll,FileProtocolHandler', url] }
-  return { file: 'xdg-open', args: [url] }
-}
-
-function escapeAppleScriptString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
-
-async function getDefaultMacBrowserBundleId(): Promise<string | null> {
-  const plistPath = join(homedir(), 'Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist')
-  if (!existsSync(plistPath)) return null
-
-  const { stdout } = await execFileAsync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plistPath])
-  const parsed = JSON.parse(stdout) as {
-    LSHandlers?: Array<{
-      LSHandlerURLScheme?: string
-      LSHandlerRoleAll?: string
-    }>
-  }
-  const handlers = parsed.LSHandlers ?? []
-  const handler =
-    handlers.find((item) => item.LSHandlerURLScheme === 'https' && item.LSHandlerRoleAll) ??
-    handlers.find((item) => item.LSHandlerURLScheme === 'http' && item.LSHandlerRoleAll)
-  return handler?.LSHandlerRoleAll ?? null
-}
-
-async function openMacUrlInDefaultBrowser(url: string): Promise<void> {
-  const bundleId = await getDefaultMacBrowserBundleId()
-  if (!bundleId) {
-    await execFileAsync('/usr/bin/open', [url])
-    return
-  }
-
-  const escapedBundleId = escapeAppleScriptString(bundleId)
-  const escapedUrl = escapeAppleScriptString(url)
-  await execFileAsync('/usr/bin/osascript', [
-    '-e',
-    `tell application id "${escapedBundleId}" to open location "${escapedUrl}"`,
-    '-e',
-    `tell application id "${escapedBundleId}" to activate`
-  ])
-}
-
-function isLoopbackUrl(rawUrl: string): boolean {
-  try {
-    const { hostname } = new URL(rawUrl)
-    const normalized = hostname.replace(/^\[|\]$/g, '')
-    return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1'
-  } catch {
-    return false
-  }
-}
-
-function buildDesktopLoginUrl(state: string): string {
-  const url = new URL('/login', `${WEBSITE_URL}/`)
-  url.searchParams.set('client', 'desktop')
-  url.searchParams.set('desktop_state', state)
-  return url.toString()
-}
-
-function resolveDesktopLoginUrl(session: { state: string; loginUrl?: string }): string {
-  if (!session.loginUrl) return buildDesktopLoginUrl(session.state)
-
-  try {
-    const url = new URL(session.loginUrl)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return buildDesktopLoginUrl(session.state)
-    if (isLoopbackUrl(session.loginUrl) && !isLoopbackUrl(API_BASE)) return buildDesktopLoginUrl(session.state)
-    return url.toString()
-  } catch {
-    return buildDesktopLoginUrl(session.state)
-  }
-}
-
-async function openDesktopLoginInBrowser(loginUrl: string): Promise<void> {
-  try {
-    if (process.platform === 'darwin') {
-      await openMacUrlInDefaultBrowser(loginUrl)
-      return
-    }
-    const command = getBrowserOpenCommand(loginUrl)
-    await execFileAsync(command.file, command.args)
-  } catch (error) {
-    console.warn('[Auth] System browser opener failed, falling back to Electron shell:', error)
-    await shell.openExternal(loginUrl, { activate: true, logUsage: true })
-  }
-}
 
 export interface ZhengdaoUser {
   id: string
@@ -115,6 +14,24 @@ export interface ZhengdaoUser {
   pointsBalance: number
   emailVerified: boolean
 }
+
+export interface ZhengdaoAuthCredentials {
+  email: string
+  password: string
+}
+
+export interface ZhengdaoRegisterInput extends ZhengdaoAuthCredentials {
+  code: string
+  displayName?: string
+}
+
+export type ZhengdaoAuthResult =
+  | { ok: true; user: ZhengdaoUser }
+  | { ok: false; error: string }
+
+export type ZhengdaoRegistrationCodeResult =
+  | { ok: true; devVerificationCode?: string }
+  | { ok: false; error: string }
 
 class ZhengdaoAuthRequestError extends Error {
   constructor(
@@ -145,6 +62,16 @@ function isAuthExpiredError(error: unknown): error is ZhengdaoAuthRequestError {
   return error instanceof ZhengdaoAuthRequestError && error.status === 401
 }
 
+function requestErrorMessage(status: number, path: string, message: string): string {
+  if (status === 401 && path === '/auth/login') return '邮箱或密码不正确'
+  if (status === 401) return '登录状态已过期，请重新登录'
+  if (status === 403 && /email not verified/i.test(message)) return '邮箱尚未验证，请先完成邮箱验证码验证'
+  if (status === 409 && /email already registered/i.test(message)) return '邮箱已注册，请直接登录'
+  if (status === 400 && /invalid or expired code/i.test(message)) return '验证码无效或已过期'
+  if (status === 503 && /SMTP not configured/i.test(message)) return '邮件服务暂不可用，请稍后重试'
+  return message || `证道账号请求失败 (${status})`
+}
+
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -159,25 +86,45 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
     const message = typeof payload === 'object' && payload && 'message' in payload
       ? String((payload as { message?: string }).message)
       : text
-    throw new ZhengdaoAuthRequestError(
-      res.status,
-      res.status === 401 ? '登录状态已过期，请重新关联证道账号' : message || `证道账号请求失败 (${res.status})`
-    )
+    throw new ZhengdaoAuthRequestError(res.status, requestErrorMessage(res.status, path, message))
   }
   return payload
 }
 
 export class ZhengdaoAuth {
-  async login(): Promise<{ ok: boolean; loginUrl?: string; error?: string }> {
+  async login(input: ZhengdaoAuthCredentials): Promise<ZhengdaoAuthResult> {
     try {
-      const session = await apiRequest<{ state: string; loginUrl: string }>('/auth/desktop/start', {
+      const response = await apiRequest<{ token: string; user: ZhengdaoUser }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({})
+        body: JSON.stringify(input)
       })
-      appStateRepo.setAppState(KEYS.pendingState, session.state)
-      const loginUrl = resolveDesktopLoginUrl(session)
-      await openDesktopLoginInBrowser(loginUrl)
-      return { ok: true, loginUrl }
+      const user = await this.persistSession(response.token, response.user)
+      return { ok: true, user }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
+  async sendRegistrationCode(email: string): Promise<ZhengdaoRegistrationCodeResult> {
+    try {
+      const response = await apiRequest<{ ok: true; devVerificationCode?: string }>('/auth/register/code', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      })
+      return response
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
+  async register(input: ZhengdaoRegisterInput): Promise<ZhengdaoAuthResult> {
+    try {
+      const response = await apiRequest<{ token: string; user: ZhengdaoUser }>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(input)
+      })
+      const user = await this.persistSession(response.token, response.user)
+      return { ok: true, user }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -258,5 +205,12 @@ export class ZhengdaoAuth {
     })
     appStateRepo.setAppState(KEYS.user, JSON.stringify(res.user))
     return res.user
+  }
+
+  private async persistSession(token: string, fallbackUser: ZhengdaoUser): Promise<ZhengdaoUser> {
+    appStateRepo.setAppState(KEYS.token, token)
+    appStateRepo.deleteAppState(KEYS.pendingState)
+    appStateRepo.setAppState(KEYS.user, JSON.stringify(fallbackUser))
+    return (await this.refreshUser(token).catch(() => null)) ?? fallbackUser
   }
 }

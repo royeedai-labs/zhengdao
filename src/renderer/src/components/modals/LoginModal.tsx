@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import {
   ArrowUpRight,
   BadgeCheck,
   Cloud,
   Coins,
+  KeyRound,
   LogIn,
+  Mail,
   X,
   Loader2,
   MessageSquareText,
   RefreshCw,
+  ShieldCheck,
   UserRound
 } from 'lucide-react'
 import { useUIStore } from '@/stores/ui-store'
@@ -23,6 +26,8 @@ export function AccountSyncSettings() {
   const syncEnabled = useAuthStore((s) => s.syncEnabled)
   const loadUser = useAuthStore((s) => s.loadUser)
   const login = useAuthStore((s) => s.login)
+  const sendRegistrationCode = useAuthStore((s) => s.sendRegistrationCode)
+  const register = useAuthStore((s) => s.register)
   const logout = useAuthStore((s) => s.logout)
   const syncUploadBook = useAuthStore((s) => s.syncUploadBook)
   const syncAllBooks = useAuthStore((s) => s.syncAllBooks)
@@ -36,12 +41,21 @@ export function AccountSyncSettings() {
   const [cloudList, setCloudList] = useState<Array<{ id: string; name: string; modifiedTime: string }>>([])
   const [cloudLoading, setCloudLoading] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [registrationCodeSent, setRegistrationCodeSent] = useState(false)
   const displayName = getUserDisplayName(user)
   const tierLabel = getUserTierLabel(user)
   const hasPro = hasProEntitlement(user)
   const showFreeUpgradePrompt = user && !hasPro
+  const trimmedEmail = email.trim()
+  const canSendRegistrationCode = !loading && trimmedEmail.length > 0
+  const canSubmitLogin = !loading && trimmedEmail.length > 0 && password.length >= 8
+  const canSubmitRegister = !loading && trimmedEmail.length > 0 && password.length >= 8 && verificationCode.length === 6
 
-  async function loadCloudFiles() {
+  const loadCloudFiles = useCallback(async () => {
     if (!hasProEntitlement(useAuthStore.getState().user)) {
       setCloudList([])
       return
@@ -59,7 +73,7 @@ export function AccountSyncSettings() {
     } finally {
       setCloudLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     void (async () => {
@@ -68,26 +82,62 @@ export function AccountSyncSettings() {
       if (!tok || !hasProEntitlement(useAuthStore.getState().user)) return
       await loadCloudFiles()
     })()
-  }, [loadUser])
+  }, [loadCloudFiles, loadUser])
 
   useEffect(() => {
     return window.api.onAuthUpdated((incoming) => {
       const nextUser = incoming as Parameters<typeof applyAuthUpdate>[0]
       applyAuthUpdate(nextUser)
       void loadUser()
-      setSyncMsg(hasProEntitlement(nextUser) ? '证道账号已关联，云端能力已可用。' : '证道账号已关联，升级 Pro 后可使用云端能力。')
+      setSyncMsg(hasProEntitlement(nextUser) ? '证道账号已登录，云端能力已可用。' : '证道账号已登录，升级 Pro 后可使用云端能力。')
       if (hasProEntitlement(nextUser)) void loadCloudFiles()
     })
-  }, [applyAuthUpdate, loadUser])
+  }, [applyAuthUpdate, loadCloudFiles, loadUser])
 
-  const handleLogin = async () => {
-    setSyncMsg(null)
-    const result = await login()
-    if (!result.ok) {
-      setSyncMsg(result.error || '无法打开证道网页登录，请检查网络后重试')
+  const handleSendRegistrationCode = async () => {
+    if (!trimmedEmail) {
+      setSyncMsg('请先填写邮箱')
       return
     }
-    setSyncMsg('已打开证道网页登录。完成登录后会自动回到桌面端。')
+    setSyncMsg(null)
+    const result = await sendRegistrationCode(trimmedEmail)
+    if (!result.ok) {
+      setSyncMsg(result.error || '验证码发送失败')
+      return
+    }
+    setRegistrationCodeSent(true)
+    setVerificationCode('')
+    setSyncMsg(result.devVerificationCode ? `开发验证码 ${result.devVerificationCode}` : '验证码已发送，请检查邮箱')
+  }
+
+  const handleAuthSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || password.length < 8) {
+      setSyncMsg('请输入邮箱和至少 8 位密码')
+      return
+    }
+    if (authMode === 'register' && verificationCode.length !== 6) {
+      setSyncMsg('请输入 6 位邮箱验证码')
+      return
+    }
+
+    setSyncMsg(null)
+    const result = authMode === 'login'
+      ? await login({ email: trimmedEmail, password })
+      : await register({ email: trimmedEmail, password, code: verificationCode })
+    if (!result.ok) {
+      setSyncMsg(result.error || (authMode === 'login' ? '登录失败' : '注册失败'))
+      return
+    }
+
+    setPassword('')
+    setVerificationCode('')
+    setRegistrationCodeSent(false)
+    await loadUser()
+    const nextUser = result.user ?? useAuthStore.getState().user
+    setSyncMsg(hasProEntitlement(nextUser) ? '证道账号已登录，云端能力已可用。' : '证道账号已登录，升级 Pro 后可使用云端能力。')
+    if (hasProEntitlement(nextUser)) void loadCloudFiles()
   }
 
   const handleSyncNow = async () => {
@@ -138,6 +188,14 @@ export function AccountSyncSettings() {
     await window.api.authOpenCommunityFeedbackPage()
   }
 
+  const switchAuthMode = (nextMode: 'login' | 'register') => {
+    setAuthMode(nextMode)
+    setPassword('')
+    setVerificationCode('')
+    setRegistrationCodeSent(false)
+    setSyncMsg(null)
+  }
+
   return (
     <div className="space-y-4">
       {user && (
@@ -175,15 +233,114 @@ export function AccountSyncSettings() {
         <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-4">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[var(--accent-surface)] text-[var(--accent-secondary)]">
-              {loading ? <Loader2 size={22} className="animate-spin" /> : <UserRound size={22} />}
+              {loading ? <Loader2 size={22} className="animate-spin" /> : <KeyRound size={22} />}
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-[var(--text-primary)]">未登录证道账号</div>
               <div className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                登录后会显示邮箱、会员、点数、云备份和官网账户中心入口。
+                直接使用邮箱和密码登录。新账号在下方填写验证码和密码后完成注册。
               </div>
             </div>
           </div>
+
+          <form className="mt-4 space-y-3" onSubmit={(event) => void handleAuthSubmit(event)}>
+            <div className="grid grid-cols-2 gap-1 rounded-md bg-[var(--bg-tertiary)] p-1">
+              <button
+                type="button"
+                onClick={() => switchAuthMode('login')}
+                className={`rounded px-3 py-2 text-xs font-semibold transition ${
+                  authMode === 'login'
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                登录
+              </button>
+              <button
+                type="button"
+                onClick={() => switchAuthMode('register')}
+                className={`rounded px-3 py-2 text-xs font-semibold transition ${
+                  authMode === 'register'
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                注册
+              </button>
+            </div>
+
+            <label className="block">
+              <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)]">
+                <Mail size={12} />
+                邮箱
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setSyncMsg(null)
+                  setRegistrationCodeSent(false)
+                  setVerificationCode('')
+                }}
+                autoComplete="email"
+                className="w-full rounded-md border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+                placeholder="email@example.com"
+              />
+            </label>
+
+            {authMode === 'register' && (
+              <label className="block">
+                <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)]">
+                  <ShieldCheck size={12} />
+                  邮箱验证码
+                </span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    autoComplete="one-time-code"
+                    className="min-w-0 flex-1 rounded-md border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2 text-center font-mono text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+                    placeholder="6 位验证码"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSendRegistrationCode()}
+                    disabled={!canSendRegistrationCode}
+                    className="shrink-0 rounded-md border border-[var(--border-secondary)] bg-[var(--bg-primary)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--bg-tertiary)] disabled:opacity-40"
+                  >
+                    {registrationCodeSent ? '重发验证码' : '发送验证码'}
+                  </button>
+                </div>
+              </label>
+            )}
+
+            <label className="block">
+              <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)]">
+                <KeyRound size={12} />
+                密码
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+                className="w-full rounded-md border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]"
+                placeholder="至少 8 位密码"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={authMode === 'login' ? !canSubmitLogin : !canSubmitRegister}
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--accent-primary)] px-4 py-2.5 text-xs font-bold text-[var(--accent-contrast)] transition hover:bg-[var(--accent-secondary)] disabled:opacity-40"
+            >
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <LogIn size={15} />}
+              {authMode === 'login' ? '登录' : '注册并登录'}
+            </button>
+          </form>
         </div>
       )}
 
@@ -296,7 +453,7 @@ export function AccountSyncSettings() {
       )}
 
       <div className="flex items-center justify-end gap-3">
-        {user ? (
+        {user && (
           <>
             <button
               type="button"
@@ -329,16 +486,6 @@ export function AccountSyncSettings() {
               退出登录
             </button>
           </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void handleLogin()}
-            disabled={loading}
-            className="px-4 py-1.5 text-xs bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-40 text-[var(--accent-contrast)] rounded flex items-center gap-1 transition"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />}
-            关联证道账号
-          </button>
         )}
       </div>
     </div>

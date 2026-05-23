@@ -147,6 +147,6 @@ describe('official AI service', () => {
     })
     await session.done
 
-    expect(onError).toHaveBeenCalledWith('登录状态已过期，请重新关联证道账号后使用官方 AI')
+    expect(onError).toHaveBeenCalledWith('登录状态已过期，请重新登录证道账号后使用官方 AI')
   })
 })

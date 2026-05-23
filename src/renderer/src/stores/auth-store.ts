@@ -13,8 +13,24 @@ export interface ZhengdaoUser {
 
 interface AuthLoginResult {
   ok: boolean
-  loginUrl?: string
+  user?: ZhengdaoUser
   error?: string
+}
+
+interface AuthRegistrationCodeResult {
+  ok: boolean
+  devVerificationCode?: string
+  error?: string
+}
+
+interface AuthCredentials {
+  email: string
+  password: string
+}
+
+interface AuthRegisterInput extends AuthCredentials {
+  code: string
+  displayName?: string
 }
 
 const SYNC_TOGGLE_KEY = 'zhengdao_sync_enabled'
@@ -32,7 +48,9 @@ interface AuthStore {
 
   loadUser: () => Promise<void>
   loadBookSyncMeta: (bookId: number | null) => Promise<void>
-  login: () => Promise<AuthLoginResult>
+  login: (input: AuthCredentials) => Promise<AuthLoginResult>
+  sendRegistrationCode: (email: string) => Promise<AuthRegistrationCodeResult>
+  register: (input: AuthRegisterInput) => Promise<AuthLoginResult>
   logout: () => Promise<void>
   syncUploadBook: (bookId: number) => Promise<void>
   syncAllBooks: () => Promise<void>
@@ -77,11 +95,31 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  login: async () => {
+  login: async (input) => {
     set({ loading: true })
     try {
-      const result = (await window.api.authLogin()) as AuthLoginResult
-      if (!result.ok) return result
+      const result = (await window.api.authLogin(input)) as AuthLoginResult
+      if (result.ok && result.user) set({ user: result.user })
+      return result
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  sendRegistrationCode: async (email) => {
+    set({ loading: true })
+    try {
+      return (await window.api.authSendRegistrationCode(email)) as AuthRegistrationCodeResult
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  register: async (input) => {
+    set({ loading: true })
+    try {
+      const result = (await window.api.authRegister(input)) as AuthLoginResult
+      if (result.ok && result.user) set({ user: result.user })
       return result
     } finally {
       set({ loading: false })

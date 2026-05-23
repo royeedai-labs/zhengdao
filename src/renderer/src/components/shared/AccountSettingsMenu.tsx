@@ -32,7 +32,6 @@ export default function AccountSettingsMenu({
   const user = useAuthStore((s) => s.user)
   const loading = useAuthStore((s) => s.loading)
   const loadUser = useAuthStore((s) => s.loadUser)
-  const login = useAuthStore((s) => s.login)
   const logout = useAuthStore((s) => s.logout)
   const applyAuthUpdate = useAuthStore((s) => s.applyAuthUpdate)
   const openModal = useUIStore((s) => s.openModal)
@@ -66,13 +65,9 @@ export default function AccountSettingsMenu({
     openModal('appSettings', tab ? { tab } : undefined)
   }
 
-  const handleLogin = async () => {
-    const result = await login()
-    if (!result.ok) {
-      useToastStore.getState().addToast('error', result.error || '无法打开证道网页登录')
-      return
-    }
-    useToastStore.getState().addToast('success', '已打开证道官网关联登录')
+  const handleLogin = () => {
+    setOpen(false)
+    openModal('login')
   }
 
   const handleLogout = async () => {
@@ -156,7 +151,7 @@ export default function AccountSettingsMenu({
           ) : (
             <button
               type="button"
-              onClick={() => void handleLogin()}
+              onClick={handleLogin}
               disabled={loading}
               className="block w-full cursor-pointer border-b border-[var(--border-primary)] bg-[var(--bg-primary)] p-3 text-left transition hover:bg-[var(--bg-tertiary)] disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -178,7 +173,7 @@ export default function AccountSettingsMenu({
               <button
                 role="menuitem"
                 type="button"
-                onClick={() => void handleLogin()}
+                onClick={handleLogin}
                 disabled={loading}
                 className={`${menuItemClass} disabled:cursor-not-allowed disabled:opacity-50`}
               >

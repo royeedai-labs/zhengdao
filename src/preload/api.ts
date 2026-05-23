@@ -256,7 +256,10 @@ export const api = {
   updateAnnotation: (id: number, content: string) => ipcRenderer.invoke('db:updateAnnotation', id, content),
   deleteAnnotation: (id: number) => ipcRenderer.invoke('db:deleteAnnotation', id),
 
-  authLogin: () => ipcRenderer.invoke('auth:login'),
+  authLogin: (input: { email: string; password: string }) => ipcRenderer.invoke('auth:login', input),
+  authSendRegistrationCode: (email: string) => ipcRenderer.invoke('auth:sendRegistrationCode', email),
+  authRegister: (input: { email: string; password: string; code: string; displayName?: string }) =>
+    ipcRenderer.invoke('auth:register', input),
   authGetUser: () => ipcRenderer.invoke('auth:getUser'),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   authGetAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
