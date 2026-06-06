@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   ArrowUpRight,
@@ -231,7 +231,7 @@ export default function WritingIntelModal() {
   const hasIntelData = (overview?.genreStats.length ?? 0) > 0 || rankings.length > 0 || trends.length > 0
   const staleSnapshot = isSnapshotStale(latestSnapshot?.capturedAt)
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -265,11 +265,11 @@ export default function WritingIntelModal() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [board, category, channel, platform])
 
   useEffect(() => {
     void refresh()
-  }, [platform, board, channel, category])
+  }, [refresh])
 
   useEffect(() => {
     if (!categoryOptions.includes(category)) setCategory('')

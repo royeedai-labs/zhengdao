@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   AlertTriangle,
   BarChart3,
@@ -37,6 +37,10 @@ interface SnapshotSummary {
   id: number
   created_at: string
   word_count: number
+}
+
+async function loadSnapshots(chapterId: number): Promise<SnapshotSummary[]> {
+  return window.api.getSnapshots(chapterId) as Promise<SnapshotSummary[]>
 }
 
 function toneClass(tone: WorkbenchTone): string {
@@ -118,6 +122,7 @@ export default function DailyWorkbench() {
   const [backups, setBackups] = useState<BackupFileSummary[]>([])
   const [backupError, setBackupError] = useState<string | null>(null)
   const [backupBusy, setBackupBusy] = useState(false)
+  const currentChapterId = currentChapter?.id ?? null
 
   useEffect(() => {
     if (!bookId) return
@@ -141,23 +146,43 @@ export default function DailyWorkbench() {
     void loadBookSyncMeta(bookId ?? null)
   }, [bookId, loadBookSyncMeta])
 
-  const refreshSnapshots = useCallback(async () => {
-    if (!currentChapter?.id) {
+  useEffect(() => {
+    if (!currentChapterId) {
+      setSnapshots([])
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const rows = await loadSnapshots(currentChapterId)
+        if (!cancelled) {
+          setSnapshots(rows)
+        }
+      } catch {
+        if (!cancelled) {
+          setSnapshots([])
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentChapterId])
+
+  const refreshSnapshots = async () => {
+    if (!currentChapterId) {
       setSnapshots([])
       return
     }
 
     try {
-      const rows = (await window.api.getSnapshots(currentChapter.id)) as SnapshotSummary[]
-      setSnapshots(rows)
+      setSnapshots(await loadSnapshots(currentChapterId))
     } catch {
       setSnapshots([])
     }
-  }, [currentChapter?.id])
-
-  useEffect(() => {
-    void refreshSnapshots()
-  }, [refreshSnapshots])
+  }
 
   const refreshBackups = async () => {
     try {
@@ -177,7 +202,7 @@ export default function DailyWorkbench() {
     dailyGoal: resolveProjectDailyGoal(config, systemDailyGoal),
     todayWords,
     streak,
-    currentChapterId: currentChapter?.id ?? null,
+    currentChapterId,
     currentChapterWords: currentChapter?.word_count ?? 0,
     saveStatus: chapterSaveStatus,
     snapshotCount: snapshots.length,

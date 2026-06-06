@@ -29,7 +29,7 @@ import {
   type AiAssistantPanelRect
 } from '@/components/ai/panel-layout'
 import { createInitialSaveStatus } from '../utils/daily-workbench'
-import type { AiAssistantOpenOptions, AiChapterDraft, InlineAiDraft, UIStore } from './ui-store-types'
+import type { UIStore } from './ui-store-types'
 
 export type { AiChapterDraft, InlineAiDraft } from './ui-store-types'
 
