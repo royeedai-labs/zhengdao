@@ -28,12 +28,13 @@ function htmlToPlainText(value: string): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
 function contentSummary(value: unknown): string {
-  const text = textValue(value)
+  const text = textValue(value).replace(/&nbsp;/gi, ' ').trim()
   if (!text) return ''
   return /<\/?[a-z][^>]*>/i.test(text) ? htmlToPlainText(text) : text
 }

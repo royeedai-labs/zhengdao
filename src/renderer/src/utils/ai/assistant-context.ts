@@ -1,5 +1,6 @@
 import type { ModalType } from '@/types'
 import type { AssistantSurface, ResolvedAssistantContext } from '../../../../shared/ai-book-creation'
+import { buildBookPlanningInput, buildDraftTransferInput } from './planning-report'
 
 export type ResolveAssistantContextInput = {
   currentBookId: number | null
@@ -73,8 +74,30 @@ export function resolveAssistantContext(input: ResolveAssistantContextInput): Re
         title: 'AI 创作助手 · 作品总览',
         description: '适合做全书规划、阶段复盘、结构检查和下一步计划。',
         quickActions: [
-          { key: 'book_plan', label: '规划后续剧情', input: '基于当前作品状态，帮我规划后续剧情推进。' },
-          { key: 'book_review', label: '复盘全书结构', input: '请复盘当前作品结构，指出主线、人物和节奏风险。' }
+          {
+            key: 'book_plan',
+            label: '规划后续剧情',
+            input: buildBookPlanningInput('plan'),
+            targetMode: 'creation_planning'
+          },
+          {
+            key: 'book_review',
+            label: '复盘全书结构',
+            input: buildBookPlanningInput('review'),
+            targetMode: 'creation_planning'
+          },
+          {
+            key: 'create_plot_node',
+            label: '转剧情节点草稿',
+            input: buildDraftTransferInput('plot_node'),
+            targetMode: 'direct_writing'
+          },
+          {
+            key: 'create_foreshadowing',
+            label: '转伏笔草稿',
+            input: buildDraftTransferInput('foreshadowing'),
+            targetMode: 'direct_writing'
+          }
         ]
       }
     case 'characters':

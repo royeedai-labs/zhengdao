@@ -39,8 +39,8 @@ export interface MessageStreamAreaProps {
   starterFooter: string
   quickActions: QuickActionItem[]
   skills: AiSkillTemplate[]
-  onSeedSkill: (skill: AiSkillTemplate, input: string | undefined) => void
-  onPrefillInput: (input: string) => void
+  onSeedSkill: (skill: AiSkillTemplate, input: string | undefined, action?: QuickActionItem) => void
+  onPrefillInput: (input: string, action?: QuickActionItem) => void
   onRunQuickAction?: (action: QuickActionItem) => void
   onToggleContextChip?: (chipId: string) => void
   children?: React.ReactNode
@@ -69,11 +69,11 @@ export const MessageStreamArea = forwardRef<HTMLDivElement, MessageStreamAreaPro
                     type="button"
                     disabled={(!skill && !actionInput) || action.disabled}
                     onClick={() => {
-                      if (skill) props.onSeedSkill(skill, actionInput)
+                      if (skill) props.onSeedSkill(skill, actionInput, action)
                       else if (action.key === 'remove_ai_tone' && actionInput && props.onRunQuickAction) {
                         props.onRunQuickAction(action)
                       }
-                      else if (actionInput) props.onPrefillInput(actionInput)
+                      else if (actionInput) props.onPrefillInput(actionInput, action)
                     }}
                     className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-primary)] p-2 text-left transition hover:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50"
                   >

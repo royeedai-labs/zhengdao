@@ -16,9 +16,34 @@ export const REMOVE_AI_TONE_SELECTION_INPUT =
 export const REMOVE_AI_TONE_CHAPTER_INPUT =
   '使用 layer2.deslop Skill 对当前章节正文做"去 AI 味"扫描；保护数字 / 命令 / 引用 / BibTeX / 公式不动；输出 issues + rewritten + secondPassAudit。改写后的草稿进草稿篮等待我确认。'
 
+export const PRO_QUALITY_REVIEW_INPUT =
+  '使用 layer2.chapter-review-pro 做 Pro 质量复盘：结构风险、爽点/毒点、人物一致性、伏笔回收和可执行修改建议。不可直接改正文。'
+
 export function isRemoveAiToneQuickActionInput(value: string | null | undefined): boolean {
   const text = String(value || '').trim()
   return text === REMOVE_AI_TONE_SELECTION_INPUT || text === REMOVE_AI_TONE_CHAPTER_INPUT
+}
+
+export function isProQualityReviewQuickActionInput(value: string | null | undefined): boolean {
+  return String(value || '').trim() === PRO_QUALITY_REVIEW_INPUT
+}
+
+export function buildRemoveAiToneSendOptions(): {
+  assistantMode: 'direct_writing'
+  sourcePlanMessageId: null
+} {
+  return {
+    assistantMode: 'direct_writing',
+    sourcePlanMessageId: null
+  }
+}
+
+export function canRunRemoveAiTone(input: {
+  currentChapter: { content?: string | null } | null
+  hasSelection: boolean
+}): boolean {
+  if (!input.currentChapter) return false
+  return input.hasSelection || !isBlankChapterContent(input.currentChapter.content)
 }
 
 export type ChapterQuickAction = {
@@ -27,6 +52,7 @@ export type ChapterQuickAction = {
   description: string
   disabled?: boolean
   input?: string
+  targetMode?: 'creation_planning' | 'direct_writing'
 }
 
 export function isBlankChapterContent(content: string | null | undefined): boolean {
@@ -61,6 +87,7 @@ export function buildChapterEditorQuickActions(input: {
 }): ChapterQuickAction[] {
   const blankChapter = input.currentChapter ? isBlankChapterContent(input.currentChapter.content) : false
   const firstChapter = input.currentChapter ? isFirstChapter(input.currentChapter, input.volumes) : false
+  const removeAiToneAvailable = canRunRemoveAiTone(input)
 
   return [
     {
@@ -82,7 +109,15 @@ export function buildChapterEditorQuickActions(input: {
       key: 'review_chapter',
       label: '审核本章',
       description: '检查节奏、毒点、伏笔和人物一致性。',
-      disabled: !input.currentChapter
+      disabled: !input.currentChapter || blankChapter
+    },
+    {
+      key: 'pro_quality_review',
+      label: 'Pro 质量复盘',
+      description: '调用 layer2.chapter-review-pro；不可用时回退本地审稿。',
+      disabled: !input.currentChapter || blankChapter,
+      input: PRO_QUALITY_REVIEW_INPUT,
+      targetMode: 'direct_writing'
     },
     {
       // CG-A1 — 去 AI 味（5 题材独立 prompt）。
@@ -92,8 +127,9 @@ export function buildChapterEditorQuickActions(input: {
       label: input.hasSelection ? '去 AI 味（选区）' : '去 AI 味（本章）',
       description:
         '扫描并修复 AI 写作痕迹：5 题材独立 prompt + 保护数字 / 命令 / 引用 / 公式不动 + 二次回读。',
-      disabled: !input.currentChapter && !input.hasSelection,
-      input: input.hasSelection ? REMOVE_AI_TONE_SELECTION_INPUT : REMOVE_AI_TONE_CHAPTER_INPUT
+      disabled: !removeAiToneAvailable,
+      input: input.hasSelection ? REMOVE_AI_TONE_SELECTION_INPUT : REMOVE_AI_TONE_CHAPTER_INPUT,
+      targetMode: 'direct_writing'
     }
   ]
 }

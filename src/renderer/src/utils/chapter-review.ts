@@ -12,6 +12,11 @@ export const CHAPTER_REVIEW_SECTIONS = [
 
 export type ChapterReviewSection = (typeof CHAPTER_REVIEW_SECTIONS)[number]
 
+export interface ChapterReviewAvailabilityInput {
+  currentChapter: { content?: string | null } | null
+  chapterText?: string | null
+}
+
 export interface ChapterReviewPromptInput {
   chapterTitle: string
   chapterText: string
@@ -19,6 +24,25 @@ export interface ChapterReviewPromptInput {
   foreshadowingsText: string
   plotNodesText: string
   userFocus?: string
+}
+
+function plainTextFromChapterContent(value: string | null | undefined): string {
+  return String(value || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+}
+
+export function getChapterReviewUnavailableReason(
+  input: ChapterReviewAvailabilityInput
+): string | null {
+  if (!input.currentChapter) return '请先打开章节'
+  const chapterText = (input.chapterText ?? plainTextFromChapterContent(input.currentChapter.content)).trim()
+  if (!chapterText) return '当前章节正文为空，无法审稿'
+  return null
 }
 
 export function buildChapterReviewPrompt(input: ChapterReviewPromptInput): {

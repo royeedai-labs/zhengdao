@@ -118,4 +118,34 @@ describe('toAiChapterDraft', () => {
       })
     ).toBeNull()
   })
+
+  it('keeps non-breaking-space-only chapter drafts out of the main editor preview', () => {
+    expect(
+      toAiChapterDraft({
+        id: 22,
+        kind: 'create_chapter',
+        title: '空章节',
+        payload: {
+          kind: 'create_chapter',
+          title: '空章节',
+          content: '<p>&nbsp;</p>'
+        }
+      })
+    ).toBeNull()
+  })
+
+  it('keeps plain non-breaking-space entities out of the main editor chapter preview', () => {
+    expect(
+      toAiChapterDraft({
+        id: 23,
+        kind: 'create_chapter',
+        title: '空章节',
+        payload: {
+          kind: 'create_chapter',
+          title: '空章节',
+          content: '&nbsp;'
+        }
+      })
+    ).toBeNull()
+  })
 })

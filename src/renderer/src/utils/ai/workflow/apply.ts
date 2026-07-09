@@ -10,6 +10,18 @@ import type { AiDraftPayload, AiTextDraftApplicationPlan } from './types'
  * editor reaches for the result and applies it via a single API call.
  */
 
+function visibleText(value: string): string {
+  const text = value.replace(/&nbsp;/gi, ' ').trim()
+  if (!/<[a-z][\s\S]*>/i.test(text)) return text
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+}
+
 export function planTextDraftApplication(
   draft: AiDraftPayload,
   currentChapterId: number | null
@@ -17,7 +29,7 @@ export function planTextDraftApplication(
   if (draft.kind !== 'insert_text' && draft.kind !== 'replace_text') return null
 
   const content = String(draft.content || '')
-  if (!nonEmpty(content)) {
+  if (!visibleText(content)) {
     return {
       kind: 'invalid',
       error: draft.kind === 'insert_text' ? '草稿正文为空' : '替换正文为空'

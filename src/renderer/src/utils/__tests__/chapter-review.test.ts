@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CHAPTER_REVIEW_SECTIONS,
   buildChapterReviewPrompt,
+  getChapterReviewUnavailableReason,
   extractReviewAssetDrafts,
   hasAllReviewSections,
   normalizeReviewReport
@@ -27,6 +28,20 @@ describe('chapter review helpers', () => {
     const normalized = normalizeReviewReport('这一章节奏偏慢。')
     expect(hasAllReviewSections(normalized)).toBe(true)
     expect(normalized).toContain('## 原始报告')
+  })
+
+  it('reports chapter review availability before opening a useless run path', () => {
+    expect(getChapterReviewUnavailableReason({ currentChapter: null })).toBe('请先打开章节')
+    expect(
+      getChapterReviewUnavailableReason({
+        currentChapter: { content: '<p><br /></p>' }
+      })
+    ).toBe('当前章节正文为空，无法审稿')
+    expect(
+      getChapterReviewUnavailableReason({
+        currentChapter: { content: '<p>林雪推门入场。</p>' }
+      })
+    ).toBeNull()
   })
 
   it('extracts only supported asset drafts from review output', () => {

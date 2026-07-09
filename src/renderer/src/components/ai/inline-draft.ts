@@ -54,6 +54,7 @@ function htmlToPlainText(value: string): string {
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
@@ -65,7 +66,10 @@ export function toAiChapterDraft(
   if (draft.kind !== 'create_chapter') return null
   const title = textValue(draft.payload.title) || draft.title || 'AI 新章节'
   const rawContent = textValue(draft.payload.content || draft.payload.body)
-  const content = /<\/?[a-z][^>]*>/i.test(rawContent) ? htmlToPlainText(rawContent) : rawContent
+  const normalizedContent = rawContent.replace(/&nbsp;/gi, ' ').trim()
+  const content = /<\/?[a-z][^>]*>/i.test(normalizedContent)
+    ? htmlToPlainText(normalizedContent)
+    : normalizedContent
   if (!content) return null
   const volumeId = Number(draft.payload.volume_id || draft.payload.volumeId)
   return {

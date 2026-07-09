@@ -15,15 +15,28 @@ function textValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function meaningfulText(value: unknown): string {
+  const text = textValue(value).replace(/&nbsp;/gi, ' ').trim()
+  if (!text) return ''
+  if (!/<[a-z][\s\S]*>/i.test(text)) return text
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+}
+
 function payloadText(draft: DraftListPanelDraft): string {
   const payload = draft.payload || {}
   return (
-    textValue(payload.content) ||
-    textValue(payload.text) ||
-    textValue(payload.summary) ||
-    textValue(payload.description) ||
-    textValue(payload.title) ||
-    textValue(payload.name)
+    meaningfulText(payload.content) ||
+    meaningfulText(payload.text) ||
+    meaningfulText(payload.summary) ||
+    meaningfulText(payload.description) ||
+    meaningfulText(payload.title) ||
+    meaningfulText(payload.name)
   )
 }
 
@@ -63,4 +76,14 @@ export function buildDraftQualityCheckPrompt(draft: DraftListPanelDraft): string
     '草稿内容：',
     excerpt || '（该草稿没有可检查的文本内容）'
   ].join('\n')
+}
+
+export function buildDraftQualityCheckSendOptions(): {
+  assistantMode: 'direct_writing'
+  sourcePlanMessageId: null
+} {
+  return {
+    assistantMode: 'direct_writing',
+    sourcePlanMessageId: null
+  }
 }

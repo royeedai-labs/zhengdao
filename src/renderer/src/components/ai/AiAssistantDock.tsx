@@ -7,6 +7,7 @@ import { usePlotStore } from '@/stores/plot-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useWikiStore } from '@/stores/wiki-store'
 import { getResolvedGlobalAiConfig } from '@/utils/ai'
+import { getChapterReviewUnavailableReason } from '@/utils/chapter-review'
 import {
   type AiSkillOverride,
   type AiSkillTemplate,
@@ -15,10 +16,12 @@ import {
 import { pickConversationAfterDelete } from './conversation-list'
 import {
   buildChapterEditorQuickActions,
+  buildRemoveAiToneSendOptions,
+  canRunRemoveAiTone,
   REMOVE_AI_TONE_CHAPTER_INPUT,
   REMOVE_AI_TONE_SELECTION_INPUT
 } from './chapter-quick-actions'
-import { buildDraftQualityCheckPrompt } from './draft-quality-loop'
+import { buildDraftQualityCheckPrompt, buildDraftQualityCheckSendOptions } from './draft-quality-loop'
 import { DEFAULT_CONTINUE_INPUT } from './inline-draft'
 import { BookshelfCreationAssistantPanel } from './book-creation/BookshelfCreationAssistantPanel'
 import { formatProviderLabel } from './ai-assistant-helpers'
@@ -26,7 +29,7 @@ import { applyAiDraft } from './assistant-draft-application'
 import { useAiAssistantContext } from './useAiAssistantContext'
 import { useAiAssistantData } from './useAiAssistantData'
 import { useAiAssistantRequest } from './useAiAssistantRequest'
-import { AssistantPanelComposer } from './panel-parts/AssistantPanelComposer'
+import { AssistantPanelComposer, type QuickActionItem } from './panel-parts/AssistantPanelComposer'
 import { AssistantPanelHeader } from './panel-parts/AssistantPanelHeader'
 import { AuthorWorkflowRail, type AuthorWorkflowAction } from './panel-parts/AuthorWorkflowRail'
 import { ConversationListDropdown } from './panel-parts/ConversationListDropdown'
@@ -39,6 +42,7 @@ import {
   isAssistantInteractionMode,
   type AssistantInteractionMode
 } from './assistant-interaction-mode'
+import { findLatestPlanningReportMessageId, shouldLinkPlanningDraftSource } from './planning-actions'
 import type { StoryFactProposal } from '../../../../shared/story-bible'
 
 type AiMessage = {
@@ -117,6 +121,8 @@ export function AiAssistantPanel() {
   const [profile, setProfile] = useState<AiWorkProfile | null>(null)
   const [input, setInput] = useState('')
   const [seededSkillKey, setSeededSkillKey] = useState<string | null>(null)
+  const [seededAssistantMode, setSeededAssistantMode] = useState<AssistantInteractionMode | null>(null)
+  const [seededSourcePlanMessageId, setSeededSourcePlanMessageId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conversationListOpen, setConversationListOpen] = useState(false)
@@ -263,6 +269,8 @@ export function AiAssistantPanel() {
   useEffect(() => {
     sendCommandRef.current = (text) => {
       setSeededSkillKey(null)
+      setSeededAssistantMode(null)
+      setSeededSourcePlanMessageId(null)
       void send(undefined, text)
     }
   })
@@ -271,17 +279,31 @@ export function AiAssistantPanel() {
 
   const updateComposerInput = (value: string) => {
     setSeededSkillKey(null)
+    setSeededAssistantMode(null)
+    setSeededSourcePlanMessageId(null)
     setInput(value)
   }
 
   const submitComposer = () => {
     const seededSkill = resolveSeededAssistantSkill(skills, seededSkillKey)
+    const nextMode = seededAssistantMode
+    const sourcePlanMessageId = seededSourcePlanMessageId
     setSeededSkillKey(null)
-    void send(seededSkill)
+    setSeededAssistantMode(null)
+    setSeededSourcePlanMessageId(null)
+    void send(seededSkill, undefined, {
+      assistantMode: nextMode ?? undefined,
+      sourcePlanMessageId
+    })
   }
 
-  const seedQuickAction = (skill: AiSkillTemplate, actionInput?: string) => {
+  const seedQuickAction = (skill: AiSkillTemplate, actionInput?: string, action?: QuickActionItem) => {
     setSeededSkillKey(skill.key)
+    setSeededAssistantMode(action?.targetMode ?? null)
+    setSeededSourcePlanMessageId(
+      action && shouldLinkPlanningDraftSource(action) ? findLatestPlanningReportMessageId(messages) : null
+    )
+    if (action?.targetMode) setAssistantMode(action.targetMode)
     if (actionInput) {
       setInput(actionInput)
     } else if (skill.key === 'continue_writing') {
@@ -293,6 +315,16 @@ export function AiAssistantPanel() {
     } else {
       setInput('')
     }
+  }
+
+  const prefillQuickActionInput = (value: string, action?: QuickActionItem) => {
+    setSeededSkillKey(null)
+    setSeededAssistantMode(action?.targetMode ?? null)
+    setSeededSourcePlanMessageId(
+      action && shouldLinkPlanningDraftSource(action) ? findLatestPlanningReportMessageId(messages) : null
+    )
+    if (action?.targetMode) setAssistantMode(action.targetMode)
+    setInput(value)
   }
 
   const markDraft = async (draftId: number, status: 'applied' | 'dismissed') => {
@@ -382,9 +414,15 @@ export function AiAssistantPanel() {
           label: action.label,
           description: resolvedPanelContext.description,
           disabled: Boolean(action.disabled),
-          input: action.input
+          input: action.input,
+          targetMode: action.targetMode
         }))
   const showStarterActions = messages.length === 0 || (resolvedPanelContext.surface === 'chapter_editor' && currentChapterIsBlank)
+  const canRunDeslopWorkflow = canRunRemoveAiTone({
+    currentChapter,
+    hasSelection: hasCurrentSelection
+  })
+  const chapterReviewUnavailableReason = getChapterReviewUnavailableReason({ currentChapter })
   const workflowActions: AuthorWorkflowAction[] = [
     {
       id: 'bookPlan',
@@ -401,18 +439,28 @@ export function AiAssistantPanel() {
     {
       id: 'chapterReview',
       label: '审稿',
-      title: currentChapter ? '打开本章审稿台' : '请先打开章节',
-      disabled: !currentChapter,
+      title: chapterReviewUnavailableReason || '打开本章审稿台',
+      disabled: Boolean(chapterReviewUnavailableReason),
       onClick: () => openModal('chapterReview')
     },
     {
       id: 'deslop',
       label: hasCurrentSelection ? '选区去 AI 味' : '本章去 AI 味',
-      title: currentChapter || hasCurrentSelection ? '检查 AI 味并生成替换草稿' : '请先打开章节或选中文本',
-      disabled: !currentChapter && !hasCurrentSelection,
+      title: canRunDeslopWorkflow
+        ? '检查 AI 味并生成替换草稿'
+        : currentChapterIsBlank
+          ? '当前章节正文为空，请先写入正文或选中文本'
+          : '请先打开章节或选中文本',
+      disabled: !canRunDeslopWorkflow,
       onClick: () => {
         setSeededSkillKey(null)
-        void send(undefined, hasCurrentSelection ? REMOVE_AI_TONE_SELECTION_INPUT : REMOVE_AI_TONE_CHAPTER_INPUT)
+        setSeededAssistantMode(null)
+        setSeededSourcePlanMessageId(null)
+        void send(
+          undefined,
+          hasCurrentSelection ? REMOVE_AI_TONE_SELECTION_INPUT : REMOVE_AI_TONE_CHAPTER_INPUT,
+          buildRemoveAiToneSendOptions()
+        )
       }
     },
     {
@@ -502,18 +550,23 @@ export function AiAssistantPanel() {
               label: action.label,
               description: action.description,
               disabled: Boolean(action.disabled),
-              input: (action as { input?: string }).input
+              input: (action as { input?: string }).input,
+              targetMode: action.targetMode
             }))}
             skills={skills}
-            onSeedSkill={(skill, input) => seedQuickAction(skill, input)}
-            onPrefillInput={(input) => {
-              setSeededSkillKey(null)
-              setInput(input)
-            }}
+            onSeedSkill={(skill, input, action) => seedQuickAction(skill, input, action)}
+            onPrefillInput={(input, action) => prefillQuickActionInput(input, action)}
             onRunQuickAction={(action) => {
               if (!action.input) return
               setSeededSkillKey(null)
-              void send(undefined, action.input)
+              setSeededAssistantMode(null)
+              setSeededSourcePlanMessageId(null)
+              void send(undefined, action.input, {
+                assistantMode: action.targetMode,
+                sourcePlanMessageId: shouldLinkPlanningDraftSource(action)
+                  ? findLatestPlanningReportMessageId(messages)
+                  : null
+              })
             }}
             onToggleContextChip={(chipId) =>
               setEnabledContextChipIds((ids) =>
@@ -534,7 +587,13 @@ export function AiAssistantPanel() {
               onDismiss={(draftId) => void markDraft(draftId, 'dismissed')}
               onCheckQuality={(draft) => {
                 setSeededSkillKey(null)
-                void send(undefined, buildDraftQualityCheckPrompt(draft))
+                setSeededAssistantMode(null)
+                setSeededSourcePlanMessageId(null)
+                void send(
+                  undefined,
+                  buildDraftQualityCheckPrompt(draft),
+                  buildDraftQualityCheckSendOptions()
+                )
               }}
             />
 
@@ -558,14 +617,12 @@ export function AiAssistantPanel() {
               label: action.label,
               description: action.description,
               disabled: Boolean(action.disabled),
-              input: (action as { input?: string }).input
+              input: (action as { input?: string }).input,
+              targetMode: action.targetMode
             }))}
             skills={skills}
-            onSeedSkill={(skill, input) => seedQuickAction(skill, input)}
-            onPrefillInput={(input) => {
-              setSeededSkillKey(null)
-              setInput(input)
-            }}
+            onSeedSkill={(skill, input, action) => seedQuickAction(skill, input, action)}
+            onPrefillInput={(input, action) => prefillQuickActionInput(input, action)}
           />
 
         </div>

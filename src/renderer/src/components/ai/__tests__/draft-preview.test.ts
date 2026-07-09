@@ -55,4 +55,36 @@ describe('buildDraftPreviewModel', () => {
       { label: '节点类型', value: 'main' }
     ])
   })
+
+  it('does not render non-breaking-space-only HTML as draft summary text', () => {
+    const preview = buildDraftPreviewModel({
+      id: 3,
+      kind: 'create_chapter',
+      title: '空章节草稿',
+      payload: {
+        kind: 'create_chapter',
+        title: '空章节草稿',
+        content: '<p>&nbsp;</p>'
+      },
+      status: 'pending'
+    })
+
+    expect(preview.summary).toBe('')
+  })
+
+  it('does not render plain non-breaking-space entities as draft summary text', () => {
+    const preview = buildDraftPreviewModel({
+      id: 4,
+      kind: 'create_chapter',
+      title: '空章节草稿',
+      payload: {
+        kind: 'create_chapter',
+        title: '空章节草稿',
+        content: '&nbsp;'
+      },
+      status: 'pending'
+    })
+
+    expect(preview.summary).toBe('')
+  })
 })

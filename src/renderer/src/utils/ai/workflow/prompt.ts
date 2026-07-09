@@ -3,6 +3,7 @@ import type { AiAssistantContext, AiSkillTemplate, AiWorkProfile } from './types
 import type { StoryBibleSnapshot } from '../../../../../shared/story-bible'
 import { buildAuthorThoughtProtocolInstruction } from '../../../../../shared/assistant-presentation'
 import { narrativeQualityPromptRules } from './quality-filter'
+import { buildPlanningReportInstruction } from '../planning-report'
 
 /**
  * SPLIT-008 — prompt assembly.
@@ -88,7 +89,8 @@ export function composeAssistantChatPrompt(input: {
           '你是证道的 AI 创作助手，当前处于创作策划模式。',
           '本轮只做创作策划：拆目标、读者预期、结构、节奏、素材缺口、风险和下一步确认点。',
           '不要输出可直接应用的正文、章节 JSON、角色/设定/伏笔资产 JSON，也不要声称已经创建草稿、章节或小说资产。',
-          '如果用户要求“直接写”，先给出写作方案、取舍理由和建议确认点，提醒可切换到“直接写作”生成草稿。'
+          '如果用户要求“直接写”，先给出写作方案、取舍理由和建议确认点，提醒可切换到“直接写作”生成草稿。',
+          buildPlanningReportInstruction()
         ].join('\n')
       : [
           '你是证道的 AI 创作助手，当前处于直接写作模式，兼容普通对话和自动识别模式。',

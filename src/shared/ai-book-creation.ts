@@ -20,6 +20,7 @@ export type ResolvedAssistantContext = {
     label: string
     input: string
     disabled?: boolean
+    targetMode?: 'creation_planning' | 'direct_writing'
   }>
 }
 

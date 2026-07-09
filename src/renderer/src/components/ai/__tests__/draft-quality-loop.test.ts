@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildDraftQualityCheckPrompt, buildDraftQualityLoopModel } from '../draft-quality-loop'
+import {
+  buildDraftQualityCheckPrompt,
+  buildDraftQualityCheckSendOptions,
+  buildDraftQualityLoopModel
+} from '../draft-quality-loop'
 
 describe('draft quality loop', () => {
   it('marks deslop drafts as already checked for AI tone', () => {
@@ -15,6 +19,30 @@ describe('draft quality loop', () => {
     expect(model.canInspect).toBe(true)
   })
 
+  it('does not offer quality inspection for empty editor HTML drafts', () => {
+    const model = buildDraftQualityLoopModel({
+      id: 4,
+      kind: 'create_chapter',
+      title: '空章节草稿',
+      payload: { content: '<p><br /></p>' },
+      status: 'pending'
+    })
+
+    expect(model.canInspect).toBe(false)
+  })
+
+  it('does not offer quality inspection for plain non-breaking-space entity drafts', () => {
+    const model = buildDraftQualityLoopModel({
+      id: 5,
+      kind: 'create_chapter',
+      title: '空章节草稿',
+      payload: { content: '&nbsp;' },
+      status: 'pending'
+    })
+
+    expect(model.canInspect).toBe(false)
+  })
+
   it('builds a bounded inspection prompt from draft content', () => {
     const prompt = buildDraftQualityCheckPrompt({
       id: 2,
@@ -27,5 +55,12 @@ describe('draft quality loop', () => {
     expect(prompt).toContain('草稿篮 #2')
     expect(prompt.length).toBeLessThan(5600)
     expect(prompt).toContain('已截断')
+  })
+
+  it('sends draft quality checks through direct writing without planning provenance', () => {
+    expect(buildDraftQualityCheckSendOptions()).toEqual({
+      assistantMode: 'direct_writing',
+      sourcePlanMessageId: null
+    })
   })
 })

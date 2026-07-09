@@ -30,6 +30,7 @@ import {
   type BackupFileSummary,
   type WorkbenchTone
 } from '@/utils/daily-workbench'
+import { getChapterReviewUnavailableReason } from '@/utils/chapter-review'
 import { resolveProjectDailyGoal } from '@/utils/daily-goal'
 import { hasProEntitlement } from '@/utils/auth-display'
 
@@ -217,6 +218,7 @@ export default function DailyWorkbench() {
       lastBookSyncAt
     }
   })
+  const chapterReviewUnavailableReason = getChapterReviewUnavailableReason({ currentChapter })
 
   const runLocalBackup = async () => {
     setBackupBusy(true)
@@ -348,9 +350,9 @@ export default function DailyWorkbench() {
         <button
           type="button"
           onClick={() => openModal('chapterReview')}
-          disabled={!currentChapter}
+          disabled={Boolean(chapterReviewUnavailableReason)}
           className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--accent-border)] bg-[var(--accent-surface)] px-2 text-[11px] font-semibold text-[var(--accent-secondary)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
-          title="步骤 1：打开本章审稿台"
+          title={chapterReviewUnavailableReason || '步骤 1：打开本章审稿台'}
         >
           <span className="font-mono text-[10px] opacity-70">1</span>
           <Bot size={13} /> 审稿

@@ -31,13 +31,21 @@ import { replaceAssistantStreamContent } from './streaming-message'
 import { toAiChapterDraft, toInlineAiDraft } from './inline-draft'
 import { draftTitle, normalizeAssistantDrafts, withLocalRagChip } from './ai-assistant-helpers'
 import { scanNarrativeQuality } from '@/utils/ai/workflow/quality-filter'
-import { isRemoveAiToneQuickActionInput } from './chapter-quick-actions'
+import {
+  isBlankChapterContent,
+  isProQualityReviewQuickActionInput,
+  isRemoveAiToneQuickActionInput
+} from './chapter-quick-actions'
 import {
   extractAssistantPresentation,
   stripAssistantPresentationFromPartial,
   type AssistantPresentationMetadata
 } from '../../../../shared/assistant-presentation'
 import type { AssistantInteractionMode } from './assistant-interaction-mode'
+import {
+  DESKTOP_PLANNING_REPORT_VERSION,
+  withPlanningDraftSource
+} from './planning-actions'
 
 /**
  * SPLIT-006 phase 4 — AI request orchestration hook.
@@ -119,11 +127,25 @@ export interface RemoveAiToneQuickActionApi {
   aiCreateDraft: (data: Record<string, unknown>) => Promise<AiDraftRow>
 }
 
+export interface ChapterReviewProQuickActionApi {
+  aiAddMessage: (
+    conversationId: number,
+    role: 'user' | 'assistant' | 'system',
+    content: string,
+    metadata?: unknown
+  ) => Promise<AiAssistantMessage | { id: number }>
+  aiExecuteSkill: (
+    skillId: string,
+    input: Record<string, unknown>,
+    options?: { modelHint?: 'fast' | 'balanced' | 'heavy' }
+  ) => Promise<ChapterReviewProSkillResult>
+}
+
 export interface RemoveAiToneQuickActionInput {
   text: string
   bookId: number
   conversationId: number
-  currentChapter: { id: number; content?: string | null } | null
+  currentChapter: { id: number; title?: string | null; content?: string | null } | null
   selectionChapterId: number | null
   selectionText: string
   selectionFrom: number | null
@@ -134,11 +156,94 @@ export interface RemoveAiToneQuickActionInput {
   api: RemoveAiToneQuickActionApi
 }
 
+export interface ChapterReviewProQuickActionInput {
+  text: string
+  bookId: number
+  conversationId: number
+  currentChapter: { id: number; title?: string | null; content?: string | null } | null
+  api: ChapterReviewProQuickActionApi
+}
+
 export interface RemoveAiToneQuickActionResult {
   userMessage: AiAssistantMessage | { id: number }
   assistantMessage: AiAssistantMessage | { id: number }
   draft: AiDraftRow
   output: RemoveAiToneSkillOutput
+}
+
+type ChapterReviewProSkillOutput = {
+  projectId?: string
+  chapterReviews?: Array<{
+    chapterId?: string
+    structureOverall?: number
+    thrillScore?: number
+    poisonScore?: number
+    riskLevel?: 'low' | 'medium' | 'high'
+    diagnosis?: string
+    highlights?: string[]
+    risks?: string[]
+    recommendations?: string[]
+  }>
+  summary?: {
+    scannedChapters?: number
+    weakStructure?: number
+    highPoison?: number
+    lowThrill?: number
+  }
+}
+
+type ChapterReviewProSkillResult = {
+  runId?: string
+  output?: unknown
+  modelUsed?: string
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    costUsd: number
+  }
+  error?: string
+  code?: string
+}
+
+export interface ChapterReviewProQuickActionResult {
+  fallbackToLocalReview: boolean
+  fallbackReason?: string
+  userMessage?: AiAssistantMessage | { id: number }
+  assistantMessage?: AiAssistantMessage | { id: number }
+  output?: ChapterReviewProSkillOutput
+}
+
+export function getChapterReviewProFallbackError(reason: string | undefined): string | null {
+  if (reason === 'missing_chapter') return '请先打开目标章节，再使用“Pro 质量复盘”。'
+  if (reason === 'empty_chapter') return '当前章节正文为空，无法进行 Pro 质量复盘。'
+  return null
+}
+
+export function getAssistantSkillPreflightError(input: {
+  skillKey?: string | null
+  currentChapter?: { id: number; content?: string | null } | null
+  aiAssistantSelectionChapterId?: number | null
+  aiAssistantSelectionText?: string | null
+}): string | null {
+  if (!input.skillKey) return null
+  if (
+    input.skillKey === 'polish_text' &&
+    !(
+      input.aiAssistantSelectionChapterId === input.currentChapter?.id &&
+      input.aiAssistantSelectionText?.trim()
+    )
+  ) {
+    return '请先在编辑器中选中要润色的正文，再使用“润色改写”。'
+  }
+  if (input.skillKey === 'continue_writing' && !input.currentChapter) {
+    return '请先打开目标章节，再使用“续写正文”。'
+  }
+  if (input.skillKey === 'review_chapter') {
+    if (!input.currentChapter) return '请先打开目标章节，再使用“审核本章”。'
+    if (isBlankChapterContent(input.currentChapter.content)) return '当前章节正文为空，无法审核本章。'
+  }
+  return null
 }
 
 export interface AiDraftRow {
@@ -184,8 +289,80 @@ export interface UseAiAssistantRequestDeps {
 }
 
 export interface UseAiAssistantRequestReturn {
-  send: (explicitSkill?: AiSkillTemplate, explicitInput?: string) => Promise<void>
+  send: (
+    explicitSkill?: AiSkillTemplate,
+    explicitInput?: string,
+    options?: {
+      assistantMode?: AssistantInteractionMode
+      sourcePlanMessageId?: number | null
+    }
+  ) => Promise<void>
   validateSkillBeforeSend: (skill: AiSkillTemplate | null) => string | null
+}
+
+export async function runChapterReviewProQuickAction(
+  input: ChapterReviewProQuickActionInput
+): Promise<ChapterReviewProQuickActionResult> {
+  if (!input.currentChapter) {
+    return { fallbackToLocalReview: true, fallbackReason: 'missing_chapter' }
+  }
+
+  const plainText = plainTextFromChapterContent(input.currentChapter.content || '').trim()
+  if (!plainText) {
+    return { fallbackToLocalReview: true, fallbackReason: 'empty_chapter' }
+  }
+  const skillResult = await input.api.aiExecuteSkill(
+    'layer2.chapter-review-pro',
+    {
+      projectId: `book-${input.bookId}`,
+      chapters: [
+        {
+          id: `chapter-${input.currentChapter.id}`,
+          title: input.currentChapter.title || `章节 ${input.currentChapter.id}`,
+          order: 0,
+          content: plainText
+        }
+      ],
+      genre: 'other'
+    },
+    { modelHint: 'balanced' }
+  )
+
+  if (skillResult.error) {
+    return {
+      fallbackToLocalReview: true,
+      fallbackReason: skillResult.code || skillResult.error
+    }
+  }
+
+  const output = (skillResult.output || {}) as ChapterReviewProSkillOutput
+  const userMessage = await input.api.aiAddMessage(input.conversationId, 'user', input.text, {
+    skill_key: 'pro_quality_review',
+    skill_id: 'layer2.chapter-review-pro',
+    mode: 'skill',
+    intent_reason: 'Pro 质量复盘 quick action',
+    intent_confidence: 1
+  })
+  const assistantMessage = await input.api.aiAddMessage(
+    input.conversationId,
+    'assistant',
+    formatChapterReviewProAssistantMessage(output),
+    {
+      skill_key: 'pro_quality_review',
+      skill_id: 'layer2.chapter-review-pro',
+      skill_run_id: skillResult.runId || null,
+      model_used: skillResult.modelUsed || null,
+      usage: skillResult.usage || null,
+      mode: 'skill'
+    }
+  )
+
+  return {
+    fallbackToLocalReview: false,
+    userMessage,
+    assistantMessage,
+    output
+  }
 }
 
 export async function runRemoveAiToneQuickAction(
@@ -321,13 +498,13 @@ function coerceSkillGenre(value: string | null | undefined): string {
 }
 
 function plainTextFromChapterContent(value: string): string {
-  if (!/<[a-z][\s\S]*>/i.test(value)) return value
-  return value
+  const text = value.replace(/&nbsp;/gi, ' ')
+  if (!/<[a-z][\s\S]*>/i.test(text)) return text
+  return text
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
 }
 
 function formatRemoveAiToneAssistantMessage(output: RemoveAiToneSkillOutput, rewritten: string): string {
@@ -345,35 +522,71 @@ function formatRemoveAiToneAssistantMessage(output: RemoveAiToneSkillOutput, rew
     .join('\n')
 }
 
+function formatChapterReviewProAssistantMessage(output: ChapterReviewProSkillOutput): string {
+  const review = output.chapterReviews?.[0]
+  const summary = output.summary
+  const riskLabel =
+    review?.riskLevel === 'high'
+      ? '高'
+      : review?.riskLevel === 'medium'
+        ? '中'
+        : review?.riskLevel === 'low'
+          ? '低'
+          : '未评分'
+  return [
+    '## Pro 质量复盘',
+    summary
+      ? `扫描章节 ${summary.scannedChapters ?? 0} 个；结构薄弱 ${summary.weakStructure ?? 0} 个；高毒点 ${summary.highPoison ?? 0} 个；低爽点 ${summary.lowThrill ?? 0} 个。`
+      : '已完成 Pro 质量复盘。',
+    '',
+    '## 结构风险',
+    review?.diagnosis || '未返回结构诊断。',
+    `综合结构分：${review?.structureOverall ?? '未评分'}；风险等级：${riskLabel}`,
+    '',
+    '## 爽点 / 毒点',
+    `爽点分：${review?.thrillScore ?? '未评分'}；毒点分：${review?.poisonScore ?? '未评分'}。`,
+    formatList(review?.highlights, '亮点'),
+    formatList(review?.risks, '风险'),
+    '',
+    '## 可执行修改建议',
+    formatList(review?.recommendations, '建议'),
+    '',
+    '所有改写仍需你在草稿篮或编辑器中确认后才会写入正文。'
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function formatList(items: string[] | undefined, fallback: string): string {
+  const values = (items || []).map((item) => item.trim()).filter(Boolean)
+  if (values.length === 0) return `- 暂无${fallback}`
+  return values.map((item) => `- ${item}`).join('\n')
+}
+
 export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAssistantRequestReturn {
   const validateSkillBeforeSend = (skill: AiSkillTemplate | null): string | null => {
-    if (!skill) return null
-    if (
-      skill.key === 'polish_text' &&
-      !(
-        deps.aiAssistantSelectionChapterId === deps.currentChapter?.id &&
-        deps.aiAssistantSelectionText.trim()
-      )
-    ) {
-      return '请先在编辑器中选中要润色的正文，再使用“润色改写”。'
-    }
-    if (skill.key === 'continue_writing' && !deps.currentChapter) {
-      return '请先打开目标章节，再使用“续写正文”。'
-    }
-    if (skill.key === 'review_chapter' && !deps.currentChapter) {
-      return '请先打开目标章节，再使用“审核本章”。'
-    }
-    return null
+    return getAssistantSkillPreflightError({
+      skillKey: skill?.key,
+      currentChapter: deps.currentChapter,
+      aiAssistantSelectionChapterId: deps.aiAssistantSelectionChapterId,
+      aiAssistantSelectionText: deps.aiAssistantSelectionText
+    })
   }
 
   const send = async (
     explicitSkill?: AiSkillTemplate,
-    explicitInput?: string
+    explicitInput?: string,
+    options?: {
+      assistantMode?: AssistantInteractionMode
+      sourcePlanMessageId?: number | null
+    }
   ): Promise<void> => {
     const text = (explicitInput ?? deps.input).trim()
     if (!text || deps.loading || !deps.conversationId || !deps.bookId) return
-    const requestIntent =
-      deps.assistantMode === 'creation_planning'
+    const effectiveAssistantMode = options?.assistantMode ?? deps.assistantMode
+    const sourcePlanMessageId = options?.sourcePlanMessageId ?? null
+    let requestIntent =
+      effectiveAssistantMode === 'creation_planning'
         ? {
             mode: 'chat' as const,
             skillKey: null,
@@ -392,8 +605,8 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
               hasCurrentChapter: Boolean(deps.currentChapter),
               hasVolumes: deps.volumes.length > 0
             })
-    const skill =
-      deps.assistantMode === 'creation_planning'
+    let skill =
+      effectiveAssistantMode === 'creation_planning'
         ? null
         : explicitSkill ||
           resolveAssistantSkillSelection(deps.skills, deps.overrides, requestIntent.skillKey)
@@ -407,7 +620,38 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
     deps.setInput('')
 
     try {
-      if (deps.assistantMode === 'direct_writing' && isRemoveAiToneQuickActionInput(text)) {
+      if (effectiveAssistantMode === 'direct_writing' && isProQualityReviewQuickActionInput(text)) {
+        const result = await runChapterReviewProQuickAction({
+          text,
+          bookId: deps.bookId,
+          conversationId: deps.conversationId,
+          currentChapter: deps.currentChapter,
+          api: window.api
+        })
+        if (!result.fallbackToLocalReview && result.userMessage && result.assistantMessage) {
+          deps.setMessages((current) => [
+            ...current,
+            result.userMessage as AiAssistantMessage,
+            result.assistantMessage as AiAssistantMessage
+          ])
+          await deps.refreshConversation(deps.conversationId)
+          return
+        }
+        const fallbackError = getChapterReviewProFallbackError(result.fallbackReason)
+        if (fallbackError) {
+          deps.setError(fallbackError)
+          return
+        }
+        requestIntent = {
+          mode: 'skill',
+          skillKey: 'review_chapter',
+          confidence: 0.88,
+          reason: `Pro 质量复盘不可用，回退本地审稿：${result.fallbackReason || 'unknown'}`
+        }
+        skill = resolveAssistantSkillSelection(deps.skills, deps.overrides, 'review_chapter')
+      }
+
+      if (effectiveAssistantMode === 'direct_writing' && isRemoveAiToneQuickActionInput(text)) {
         const result = await runRemoveAiToneQuickAction({
           text,
           bookId: deps.bookId,
@@ -473,16 +717,24 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
             skills: deps.skills,
             userInput: text,
             storyBible,
-            assistantMode: deps.assistantMode,
+            assistantMode: effectiveAssistantMode,
             presentationMode: 'author_thought_dual_channel'
           })
+      const planningMetadata =
+        !skill && effectiveAssistantMode === 'creation_planning'
+          ? { planning_report_version: DESKTOP_PLANNING_REPORT_VERSION }
+          : {}
+      const sourcePlanMetadata = sourcePlanMessageId
+        ? { source_plan_message_id: sourcePlanMessageId }
+        : {}
       const userMessage = (await window.api.aiAddMessage(deps.conversationId, 'user', text, {
         skill_key: skill?.key ?? null,
-        assistant_mode: deps.assistantMode,
+        assistant_mode: effectiveAssistantMode,
         mode: skill ? 'skill' : 'chat',
         intent_reason: requestIntent.reason,
         intent_confidence: requestIntent.confidence,
-        context_chips: requestContext.chips
+        context_chips: requestContext.chips,
+        ...sourcePlanMetadata
       })) as AiAssistantMessage
       const pendingMessageId = -Date.now()
       const streamingLabel =
@@ -542,9 +794,11 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
           stoppedContent,
           {
             skill_key: skill?.key ?? null,
-            assistant_mode: deps.assistantMode,
+            assistant_mode: effectiveAssistantMode,
             mode: skill ? 'skill' : 'chat',
             stopped: true,
+            ...planningMetadata,
+            ...sourcePlanMetadata,
             ...(stoppedPresentation.authorThought ? { authorThought: stoppedPresentation.authorThought } : {})
           }
         )) as { id: number }
@@ -557,7 +811,9 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
                   content: stoppedContent,
                   metadata: {
                     stopped: true,
-                    assistant_mode: deps.assistantMode,
+                    assistant_mode: effectiveAssistantMode,
+                    ...planningMetadata,
+                    ...sourcePlanMetadata,
                     ...(stoppedPresentation.authorThought ? { authorThought: stoppedPresentation.authorThought } : {})
                   }
                 }
@@ -599,11 +855,13 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
       const qualityIssues = scanNarrativeQuality(finalContent)
       const assistantMetadata = {
         skill_key: skill?.key ?? null,
-        assistant_mode: deps.assistantMode,
+        assistant_mode: effectiveAssistantMode,
         mode: skill ? 'skill' : 'chat',
         intent_reason: requestIntent.reason,
         intent_confidence: requestIntent.confidence,
         quality_issues: qualityIssues,
+        ...planningMetadata,
+        ...sourcePlanMetadata,
         ...(authorThought ? { authorThought } : {})
       }
       const assistantMessage = (await window.api.aiAddMessage(
@@ -647,13 +905,14 @@ export function useAiAssistantRequest(deps: UseAiAssistantRequestDeps): UseAiAss
             draft.kind === 'insert_text' || draft.kind === 'create_chapter'
               ? { ...draft, retry_input: text }
               : draft
+          const payloadWithSource = withPlanningDraftSource(payload, sourcePlanMessageId)
           const createdDraft = (await window.api.aiCreateDraft({
             book_id: deps.bookId,
             conversation_id: deps.conversationId,
             message_id: assistantMessage.id,
-            kind: payload.kind,
-            title: draftTitle(payload),
-            payload,
+            kind: payloadWithSource.kind,
+            title: draftTitle(payloadWithSource),
+            payload: payloadWithSource,
             target_ref: deps.currentChapter ? `chapter:${deps.currentChapter.id}` : ''
           })) as AiDraftRow
           const inlineDraft = toInlineAiDraft(createdDraft, deps.currentChapter?.id, text)

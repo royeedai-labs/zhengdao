@@ -24,6 +24,7 @@ export interface QuickActionItem {
   description: string
   disabled: boolean
   input?: string
+  targetMode?: AssistantInteractionMode
 }
 
 export interface AssistantPanelComposerProps {
@@ -36,8 +37,8 @@ export interface AssistantPanelComposerProps {
   onAssistantModeChange: (mode: AssistantInteractionMode) => void
   quickActions: QuickActionItem[]
   skills: AiSkillTemplate[]
-  onSeedSkill: (skill: AiSkillTemplate, input: string | undefined) => void
-  onPrefillInput: (input: string) => void
+  onSeedSkill: (skill: AiSkillTemplate, input: string | undefined, action?: QuickActionItem) => void
+  onPrefillInput: (input: string, action?: QuickActionItem) => void
 }
 
 export function AssistantPanelComposer(props: AssistantPanelComposerProps): JSX.Element {
@@ -75,8 +76,8 @@ export function AssistantPanelComposer(props: AssistantPanelComposerProps): JSX.
               type="button"
               disabled={(!skill && !actionInput) || action.disabled || props.loading}
               onClick={() => {
-                if (skill) props.onSeedSkill(skill, actionInput)
-                else if (actionInput) props.onPrefillInput(actionInput)
+                if (skill) props.onSeedSkill(skill, actionInput, action)
+                else if (actionInput) props.onPrefillInput(actionInput, action)
               }}
               className="truncate rounded border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-2 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent-secondary)] disabled:cursor-not-allowed disabled:opacity-45"
               title={action.description}

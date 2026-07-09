@@ -4,6 +4,8 @@ import {
   REMOVE_AI_TONE_CHAPTER_INPUT,
   REMOVE_AI_TONE_SELECTION_INPUT,
   START_FIRST_CHAPTER_INPUT,
+  buildRemoveAiToneSendOptions,
+  canRunRemoveAiTone,
   buildChapterEditorQuickActions,
   isBlankChapterContent
 } from '../chapter-quick-actions'
@@ -74,6 +76,30 @@ describe('chapter quick actions', () => {
     })
   })
 
+  it('does not offer Pro quality review on a blank chapter', () => {
+    const ch = chapter({ id: 8, title: '第八章 · 待写', content: '<p></p>' })
+    const actions = buildChapterEditorQuickActions({
+      currentChapter: ch,
+      volumes: [volume([ch])],
+      hasSelection: false
+    })
+
+    const proReview = actions.find((a) => a.key === 'pro_quality_review')
+    expect(proReview?.disabled).toBe(true)
+  })
+
+  it('does not offer local chapter review on a blank chapter', () => {
+    const ch = chapter({ id: 8, title: '第八章 · 待写', content: '<p><br /></p>' })
+    const actions = buildChapterEditorQuickActions({
+      currentChapter: ch,
+      volumes: [volume([ch])],
+      hasSelection: false
+    })
+
+    const review = actions.find((a) => a.key === 'review_chapter')
+    expect(review?.disabled).toBe(true)
+  })
+
   it('switches deslop label + input when the user has an active selection', () => {
     const ch = chapter({ id: 7, content: '<p>正文</p>' })
     const actions = buildChapterEditorQuickActions({
@@ -97,5 +123,34 @@ describe('chapter quick actions', () => {
     })
     const removeTone = actions.find((a) => a.key === 'remove_ai_tone')
     expect(removeTone?.disabled).toBe(true)
+  })
+
+  it('disables chapter-mode deslop when the current chapter is blank', () => {
+    const ch = chapter({ id: 9, title: '第九章 · 空章', content: '<p><br /></p>' })
+    const actions = buildChapterEditorQuickActions({
+      currentChapter: ch,
+      volumes: [volume([ch])],
+      hasSelection: false
+    })
+
+    const removeTone = actions.find((a) => a.key === 'remove_ai_tone')
+    expect(removeTone?.disabled).toBe(true)
+  })
+
+  it('keeps workflow deslop availability aligned with blank chapter state', () => {
+    const blank = chapter({ id: 9, title: '第九章 · 空章', content: '<p><br /></p>' })
+    const written = chapter({ id: 10, title: '第十章 · 雨夜', content: '<p>林雪推门入场。</p>' })
+
+    expect(canRunRemoveAiTone({ currentChapter: blank, hasSelection: false })).toBe(false)
+    expect(canRunRemoveAiTone({ currentChapter: blank, hasSelection: true })).toBe(true)
+    expect(canRunRemoveAiTone({ currentChapter: written, hasSelection: false })).toBe(true)
+    expect(canRunRemoveAiTone({ currentChapter: null, hasSelection: false })).toBe(false)
+  })
+
+  it('sends deslop workflow actions through direct writing without planning provenance', () => {
+    expect(buildRemoveAiToneSendOptions()).toEqual({
+      assistantMode: 'direct_writing',
+      sourcePlanMessageId: null
+    })
   })
 })

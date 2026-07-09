@@ -12,6 +12,7 @@ import {
   CHAPTER_REVIEW_SECTIONS,
   buildChapterReviewPrompt,
   extractReviewAssetDrafts,
+  getChapterReviewUnavailableReason,
   normalizeReviewReport
 } from '@/utils/chapter-review'
 import { stripHtmlToText } from '@/utils/html-to-text'
@@ -50,11 +51,15 @@ export default function ChapterReviewModal() {
   const [draftsSent, setDraftsSent] = useState(false)
 
   const chapterText = useMemo(() => stripHtmlToText(currentChapter?.content || '').trim(), [currentChapter?.content])
+  const chapterReviewUnavailableReason = getChapterReviewUnavailableReason({
+    currentChapter,
+    chapterText
+  })
 
   const runReview = async () => {
     if (!bookId || !currentChapter) return
-    if (!chapterText) {
-      useToastStore.getState().addToast('warning', '本章暂无正文，无法审稿')
+    if (chapterReviewUnavailableReason) {
+      useToastStore.getState().addToast('warning', chapterReviewUnavailableReason)
       return
     }
 
@@ -185,7 +190,8 @@ export default function ChapterReviewModal() {
 
             <button
               type="button"
-              disabled={!currentChapter || loading}
+              disabled={Boolean(chapterReviewUnavailableReason) || loading}
+              title={chapterReviewUnavailableReason || '开始审稿'}
               onClick={() => void runReview()}
               className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--accent-contrast)] transition hover:bg-[var(--accent-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
             >

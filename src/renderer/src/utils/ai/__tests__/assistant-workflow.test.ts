@@ -342,6 +342,11 @@ describe('composeAssistantChatPrompt', () => {
     expect(prompt.systemPrompt).toContain('当前处于创作策划模式')
     expect(prompt.systemPrompt).toContain('不要输出可直接应用的正文')
     expect(prompt.systemPrompt).toContain('不要声称已经创建草稿')
+    expect(prompt.systemPrompt).toContain('## 目标确认')
+    expect(prompt.systemPrompt).toContain('## 下一步推进')
+    expect(prompt.systemPrompt).toContain('## 结构风险')
+    expect(prompt.systemPrompt).toContain('## 可采纳草稿建议')
+    expect(prompt.systemPrompt).toContain('## 质量检查清单')
     expect(prompt.systemPrompt).not.toContain('当前处于直接写作模式')
     expect(prompt.userPrompt).toContain('帮我写下一章')
   })
@@ -565,6 +570,63 @@ describe('attachSelectionMetaToDrafts', () => {
 })
 
 describe('planTextDraftApplication', () => {
+  it('refuses to insert empty editor HTML', () => {
+    expect(
+      planTextDraftApplication(
+        { kind: 'insert_text', content: '<p><br /></p>' },
+        9
+      )
+    ).toEqual({
+      kind: 'invalid',
+      error: '草稿正文为空'
+    })
+  })
+
+  it('refuses to insert text that only contains a non-breaking-space entity', () => {
+    expect(planTextDraftApplication({ kind: 'insert_text', content: '&nbsp;' }, 9)).toEqual({
+      kind: 'invalid',
+      error: '草稿正文为空'
+    })
+  })
+
+  it('refuses to replace with empty editor HTML', () => {
+    expect(
+      planTextDraftApplication(
+        {
+          kind: 'replace_text',
+          content: '<p><br /></p>',
+          selection_chapter_id: 9,
+          selection_from: 2,
+          selection_to: 4,
+          original_text: '原文'
+        },
+        9
+      )
+    ).toEqual({
+      kind: 'invalid',
+      error: '替换正文为空'
+    })
+  })
+
+  it('refuses to replace text with a non-breaking-space entity', () => {
+    expect(
+      planTextDraftApplication(
+        {
+          kind: 'replace_text',
+          content: '&nbsp;',
+          selection_chapter_id: 9,
+          selection_from: 2,
+          selection_to: 4,
+          original_text: '原文'
+        },
+        9
+      )
+    ).toEqual({
+      kind: 'invalid',
+      error: '替换正文为空'
+    })
+  })
+
   it('refuses to replace text when the draft is not anchored to a source selection', () => {
     expect(
       planTextDraftApplication(

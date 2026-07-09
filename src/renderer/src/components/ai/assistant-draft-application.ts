@@ -102,6 +102,23 @@ export interface ApplyAiDraftDeps {
   confirm?: (message: string) => boolean
 }
 
+function visibleTextFromDraftContent(value: unknown): string {
+  const text = String(value || '').replace(/&nbsp;/gi, ' ').trim()
+  if (!text) return ''
+  if (!/<[a-z][\s\S]*>/i.test(text)) return text
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim()
+}
+
+function visibleSummaryFromDraftContent(value: unknown): string {
+  return visibleTextFromDraftContent(value).replace(/\n{2,}/g, '\n').trim()
+}
+
 export async function applyAiDraft(
   draft: ApplyAiDraftRow,
   deps: ApplyAiDraftDeps
@@ -212,12 +229,12 @@ export async function applyAiDraft(
           volumeId = fallbackVolume.id
         }
         const content = String(payload.content || payload.body || '').trim()
-        if (!content) throw new Error('章节正文为空')
+        if (!visibleTextFromDraftContent(content)) throw new Error('章节正文为空')
         const chapter = await deps.createChapter(
           volumeId,
           String(payload.title || draft.title || 'AI 新章节'),
           ensureHtmlContent(content),
-          String(payload.summary || '').trim()
+          visibleSummaryFromDraftContent(payload.summary || '')
         )
         await deps.selectChapter(chapter.id)
         break
@@ -228,36 +245,42 @@ export async function applyAiDraft(
           const ok = confirmFn('当前章节已有摘要。确定用这条 AI 摘要覆盖吗？')
           if (!ok) return
         }
-        const summary = String(payload.summary || payload.content || '').trim()
+        const summary = visibleSummaryFromDraftContent(payload.summary || payload.content || '')
         if (!summary) throw new Error('摘要内容为空')
         await deps.updateChapterSummary(deps.currentChapter.id, summary)
         break
       }
       case 'create_character': {
+        const name = visibleTextFromDraftContent(payload.name || payload.title || draft.title || '')
+        if (!name) throw new Error('角色名为空')
         await deps.createCharacter({
           book_id: deps.bookId,
-          name: String(payload.name || draft.title || 'AI 角色'),
+          name,
           faction: String(payload.faction || 'neutral'),
           status: String(payload.status || 'active'),
-          description: String(payload.description || payload.content || ''),
+          description: visibleTextFromDraftContent(payload.description || payload.content || ''),
           custom_fields: (payload.custom_fields || {}) as Record<string, string>
         })
         break
       }
       case 'create_wiki_entry': {
+        const content = visibleTextFromDraftContent(payload.content || payload.description || payload.text || '')
+        if (!content) throw new Error('设定内容为空')
         await deps.createWikiEntry({
           book_id: deps.bookId,
           category: String(payload.category || 'AI 设定'),
           title: String(payload.title || draft.title || 'AI 设定'),
-          content: String(payload.content || '')
+          content
         })
         break
       }
       case 'create_plot_node': {
+        const description = visibleTextFromDraftContent(payload.description || payload.content || payload.text || '')
+        if (!description) throw new Error('剧情节点说明为空')
         await deps.createPlotNode({
           book_id: deps.bookId,
           title: String(payload.title || draft.title || 'AI 剧情节点'),
-          description: String(payload.description || payload.content || ''),
+          description,
           chapter_number: Number(payload.chapter_number || 0),
           score: Math.max(-5, Math.min(5, Number(payload.score || 0))),
           node_type: payload.node_type === 'branch' ? 'branch' : 'main'
@@ -265,10 +288,12 @@ export async function applyAiDraft(
         break
       }
       case 'create_foreshadowing': {
+        const text = visibleTextFromDraftContent(payload.text || payload.content || payload.description || '')
+        if (!text) throw new Error('伏笔内容为空')
         await deps.createForeshadowing({
           book_id: deps.bookId,
           chapter_id: deps.currentChapter?.id,
-          text: String(payload.text || payload.content || draft.title || 'AI 伏笔'),
+          text,
           expected_chapter: payload.expected_chapter == null ? null : Number(payload.expected_chapter),
           expected_word_count:
             payload.expected_word_count == null ? null : Number(payload.expected_word_count),
